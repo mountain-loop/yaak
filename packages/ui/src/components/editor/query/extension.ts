@@ -76,10 +76,13 @@ const highlight = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 );
 
-/** The field paths whose values the term at `pos` would offer: its field's, or its map's keys */
-function pathsAt(text: string, pos: number): string[] {
+/**
+ * The field paths whose values the term at `pos` would offer: its field's, a quoted value with
+ * spaces included, or its map's keys
+ */
+export function pathsAt(text: string, pos: number): string[] {
   const before = text.slice(0, pos);
-  const value = /@([A-Za-z0-9_.-]+):[^\s()]*$/.exec(before);
+  const value = /@([A-Za-z0-9_.-]+):(?:"(?:[^"\\]|\\.)*|[^\s()"]*)$/.exec(before);
   if (value?.[1] != null) return [value[1].toLowerCase()];
   const key = /@([A-Za-z0-9_.-]+)\.[A-Za-z0-9_-]*$/.exec(before);
   if (key?.[1] != null) return [key[1].toLowerCase()];

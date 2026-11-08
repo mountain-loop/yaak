@@ -25,8 +25,9 @@ import {
   WINDOW_SIZE,
   windowFromPage,
 } from "./flowWindow";
-import { activeQuery, type FlowQuery } from "./query";
+import { activeQuery, countsBackFromNow, type FlowQuery } from "./query";
 import { listen, rpc } from "./rpc";
+import { changesFor } from "./searchChanges";
 import {
   ALL_ID,
   APPS_ID,
@@ -47,6 +48,8 @@ const FLUSH_MS = 100;
 const RECOUNT_MS = 1000;
 /** How often the database is read for new flows while another process owns the engine */
 const POLL_MS = 1000;
+/** How often a search counting back from now is read again, as flows age in and out of it */
+const AGE_REFRESH_MS = 15_000;
 /** How often the engine's owner is checked while it is another process */
 const OWNER_POLL_MS = 2000;
 
@@ -268,7 +271,7 @@ export const loadOlderFlowsAtom = atom(null, async (get, set) => {
     const merge = (win: FlowWindow) => {
       if (win.flows[0]?.id !== first.id) return win;
       const merged = prependOlder(win, withoutRemoved(res.flows), PAGE_SIZE);
-      const kept = search == null ? changes : changesFor(search, merged, changes);
+      const kept = search == null ? changes : changesOf(search, merged, changes);
       // Counted when they first applied.
       return { ...applyChanges(merged, kept), total: merged.total };
     };
@@ -285,35 +288,13 @@ export const loadOlderFlowsAtom = atom(null, async (get, set) => {
   }
 });
 
-/**
- * The changes a search's window `win` takes: flows the backend matched against the search as it
- * sent their events, and every deletion. A flow it holds that no longer matches, such as a
- * pending flow that completed under `@is:pending`, leaves it. A flow matched against another
- * search, sent as the search changed or read from the database while another process owns the
- * engine, is matched again there, and joins or leaves when the answer comes.
- */
-function changesFor(
+/** `changesFor`, with flows matched against another search sent to be matched again */
+function changesOf(
   search: Pick<SearchWindow, "key" | "query">,
   win: FlowWindow,
   changes: ModelPayload[],
 ): ModelPayload[] {
-  const unknown: ModelPayload[] = [];
-  let held: Set<string> | null = null;
-  const kept: ModelPayload[] = [];
-  for (const c of changes) {
-    if (c.change.type === "delete") {
-      kept.push(c);
-    } else if (c.search?.key !== search.key) {
-      unknown.push(c);
-    } else if (c.search.matches) {
-      kept.push(c);
-    } else {
-      held ??= new Set(win.flows.map((f) => f.id));
-      if (held.has(c.model.id)) kept.push({ ...c, change: { type: "delete" } });
-    }
-  }
-  if (unknown.length > 0) matchLater(search, unknown);
-  return kept;
+  return changesFor(search.key, win, changes, (unknown) => matchLater(search, unknown));
 }
 
 /** The store `syncFlows` keeps, for answers that come after the changes they are for */
@@ -343,7 +324,7 @@ function matchLater(search: Pick<SearchWindow, "key" | "query">, changes: ModelP
           const held = newer.get(c.model.id);
           return held == null || held <= c.model.updatedAt;
         });
-        const next = applyChanges(s.win, changesFor(s, s.win, current));
+        const next = applyChanges(s.win, changesOf(s, s.win, current));
         return { ...s, win: following ? trimWindow(next) : next };
       });
     })
@@ -382,7 +363,7 @@ export function syncFlows(store: Store) {
       if (s == null) return s;
       // A matching flow written after the page's snapshot would otherwise be missed.
       if (s.loading) return { ...s, buffered: [...s.buffered, ...changes] };
-      const next = applyChanges(s.win, changesFor(s, s.win, changes));
+      const next = applyChanges(s.win, changesOf(s, s.win, changes));
       return { ...s, win: following ? trimWindow(next) : next };
     });
     const selected = store.get(selectedFlowAtom);
@@ -467,10 +448,12 @@ export function syncFlows(store: Store) {
   });
 
   // Loads again rather than only emptying, for a flow written between the clear and the event.
+  // Saved searches too, which could not be read while the database was locked.
   listen("flows_cleared", () => {
     store.set(emptyFlowsAtom);
     pending = [];
     load();
+    loadSaved();
   });
 
   // The oldest flows, swept to keep the capture under its size limit: dropped wherever they
@@ -524,7 +507,7 @@ export function syncFlows(store: Store) {
    * Loads the first page of `query`'s flows into a window of its own, or drops it for null. The
    * backend matches the flows written from now on against it, and their events say so.
    */
-  function loadSearch(query: FlowQuery | null) {
+  function loadSearch(query: FlowQuery | null, keepRows = false) {
     if (query == null) {
       store.set(searchWindowAtom, null);
       void rpc("watch_query", { key: "" }).catch(() => {});
@@ -533,7 +516,9 @@ export function syncFlows(store: Store) {
     // Unique to this load, so a slower answer to an earlier one with the same query, such as
     // one read before a clear, is dropped.
     const key = `${++searchLoads}:${JSON.stringify(query)}`;
-    store.set(searchWindowAtom, { key, query, win: emptyWindow, loading: true, buffered: [] });
+    // Read again, it keeps showing its rows until the new ones are in.
+    const win = (keepRows ? store.get(searchWindowAtom)?.win : null) ?? emptyWindow;
+    store.set(searchWindowAtom, { key, query, win, loading: true, buffered: [] });
     void rpc("watch_query", { key, query: query.query, hideSystem: query.hideSystem }).catch(
       (err) => console.warn("Failed to watch the search", err),
     );
@@ -542,7 +527,7 @@ export function syncFlows(store: Store) {
         if (s?.key !== key) return s;
         // Applied again over the page: a flow already in it is replaced, not added.
         const base = page ?? s.win;
-        const win = applyChanges(base, changesFor(s, base, s.buffered));
+        const win = applyChanges(base, changesOf(s, base, s.buffered));
         return {
           ...s,
           win: page == null ? win : { ...win, total: page.total },
@@ -584,6 +569,14 @@ export function syncFlows(store: Store) {
   store.sub(hideSystemAtom, () => {
     if (loaded) recount();
   });
+
+  // A search counting back from now, `@time:<5m`, is read again while it is shown and the list
+  // follows new traffic, so flows leave it and join it as they age.
+  setInterval(() => {
+    const s = store.get(searchWindowAtom);
+    if (s == null || s.loading || !store.get(followingAtom)) return;
+    if (countsBackFromNow(s.query.query)) loadSearch(s.query, true);
+  }, AGE_REFRESH_MS);
 
   let activeKey = JSON.stringify(store.get(activeQueryAtom));
   store.sub(activeQueryAtom, () => {

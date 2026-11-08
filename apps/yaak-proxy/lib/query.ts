@@ -103,3 +103,40 @@ export function widerQueries(text: string): string[] {
   });
   return [...out];
 }
+
+/**
+ * The search has a `@time` term that counts back from now, `@time:<5m`, so which flows it covers
+ * changes as time passes, not only as flows are written
+ */
+export function countsBackFromNow(text: string): boolean {
+  let found = false;
+  const walk = (node: Node) => {
+    switch (node.type) {
+      case "And":
+      case "Or":
+        for (const c of node.children) walk(c);
+        break;
+      case "Not":
+        walk(node.node);
+        break;
+      case "Field":
+        if (
+          node.path.length === 1 &&
+          node.path[0]?.toLowerCase() === "time" &&
+          (node.value.type === "compare" || node.value.type === "range")
+        ) {
+          found = true;
+        }
+        break;
+      default:
+    }
+  };
+  const root = parseQuery(text);
+  if (root != null) walk(root);
+  return found;
+}
+
+/** `text` to sit beside other terms as one: in parentheses when it is an `OR` at its top */
+export function asOneTerm(text: string): string {
+  return parseQuery(text)?.type === "Or" ? `(${text})` : text;
+}

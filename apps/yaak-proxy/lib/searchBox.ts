@@ -1,6 +1,7 @@
 import type { Completion } from "@codemirror/autocomplete";
 import type { QueryDiagnostic, SavedQuery } from "@yaakapp-internal/proxy-lib";
 import type { QueryProblem } from "@yaakapp-internal/ui/editor";
+import { asOneTerm } from "./query";
 import { rpc } from "./rpc";
 
 /** How long values read for completion are offered before they are read again */
@@ -60,14 +61,14 @@ export async function searchProblems(text: string): Promise<QueryProblem[]> {
 
 /**
  * Saved searches whose names hold the word being typed, each replacing it with its search. One
- * with `OR` in it goes in parentheses, so it stays one group beside the box's other terms.
+ * with `OR` at its top goes in parentheses, so it stays one group beside the box's other terms.
  */
 export function savedCompletions(saved: SavedQuery[], typed: string): Completion[] {
   const needle = typed.toLowerCase();
   return saved
     .filter((s) => s.name.toLowerCase().includes(needle))
     .map((s) => {
-      const insert = /\sOR\s/.test(s.query) ? `(${s.query})` : s.query;
+      const insert = asOneTerm(s.query);
       return {
         label: s.name,
         detail: s.query,

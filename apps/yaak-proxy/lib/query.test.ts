@@ -1,5 +1,14 @@
 import { describe, expect, test } from "vite-plus/test";
-import { activeQuery, fieldTerm, pathTerm, termKeys, widerQueries } from "./query";
+import {
+  activeQuery,
+  asOneTerm,
+  countsBackFromNow,
+  fieldTerm,
+  pathTerm,
+  termKeys,
+  widerQueries,
+} from "./query";
+import { savedCompletions } from "./searchBox";
 
 describe("terms", () => {
   test("quote values that need it", () => {
@@ -62,6 +71,30 @@ describe("widerQueries", () => {
       "-(a OR b) c",
       "(@status:4xx OR @status:5xx) c",
       "(@status:4xx OR @status:5xx) -(a OR b)",
+    ]);
+  });
+});
+
+describe("countsBackFromNow", () => {
+  test("is a @time comparison or range, which ages", () => {
+    expect(countsBackFromNow("@time:<5m")).toBe(true);
+    expect(countsBackFromNow("x -(@time:[1h TO 2h] OR y)")).toBe(true);
+    expect(countsBackFromNow("@time:2026-11-07")).toBe(false);
+    expect(countsBackFromNow("@status:<500 time")).toBe(false);
+  });
+});
+
+describe("saved searches as completions", () => {
+  test("keep an OR at their top in one group, however it is spaced", () => {
+    expect(asOneTerm("@status:4xx OR @status:5xx")).toBe("(@status:4xx OR @status:5xx)");
+    expect(asOneTerm("(@status:4xx)OR(@status:5xx)")).toBe("((@status:4xx)OR(@status:5xx))");
+    expect(asOneTerm("(a OR b) c")).toBe("(a OR b) c");
+    const saved = [
+      { id: "1", name: "Errors", query: "(@status:4xx)OR(@status:5xx)", sortOrder: 0 },
+      { id: "2", name: "Stripe", query: "@host:*.stripe.com", sortOrder: 1 },
+    ];
+    expect(savedCompletions(saved, "err").map((c) => c.apply)).toEqual([
+      "((@status:4xx)OR(@status:5xx))",
     ]);
   });
 });
