@@ -118,9 +118,8 @@ fn number_condition(value: &FieldValue, units: &[Unit]) -> Condition {
             text_condition(value)
         }
         FieldValue::Exists => Condition::IsNumber,
-        FieldValue::Compare { op, number } => {
-            to_base(number, units).map_or(Condition::Never, |target| Condition::Compare(*op, target))
-        }
+        FieldValue::Compare { op, number } => to_base(number, units)
+            .map_or(Condition::Never, |target| Condition::Compare(*op, target)),
         FieldValue::Range { low, high } => match (to_base(low, units), to_base(high, units)) {
             (Some(low), Some(high)) => Condition::Range(low, high),
             _ => Condition::Never,
@@ -182,11 +181,13 @@ pub fn format_number(n: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parse;
     use crate::ast::Node;
+    use crate::parse;
 
     fn condition(kind: FieldKind, input: &str) -> Condition {
-        let Some(Node::Field { value, .. }) = parse(input) else { panic!("not a field") };
+        let Some(Node::Field { value, .. }) = parse(input) else {
+            panic!("not a field")
+        };
         Condition::new(&kind, &value)
     }
 

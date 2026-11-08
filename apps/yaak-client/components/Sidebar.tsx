@@ -850,18 +850,27 @@ function setSidebarFilterText(text: string) {
   jotaiStore.set(sidebarFilterAtom, { text, key: `${Math.random()}` });
 }
 
-/** The fields `getItemFields` fills in. Bare words match `getItemText` by word prefix */
-const sidebarFilterColumns = [
-  "method",
-  "url",
-  "name",
-  "type",
-  "folder",
-  "grpc_service",
-  "grpc_method",
+/**
+ * The fields `getItemFields` fills in, each with what it is and a term using it, as completion
+ * shows them. Bare words match `getItemText` by word prefix
+ */
+const sidebarFilterFields: [name: string, info: string, example: string][] = [
+  ["method", "GET, POST, …", "@method:post"],
+  ["url", "Request URL", "@url:*/users*"],
+  ["name", "Request name", '@name:"Get user"'],
+  ["type", "http, grpc or ws", "@type:grpc"],
+  ["folder", "Parent folder", "@folder:auth"],
+  ["grpc_service", "gRPC service", "@grpc_service:*Greeter"],
+  ["grpc_method", "gRPC method", "@grpc_method:SayHello"],
 ];
+const sidebarFilterColumns = sidebarFilterFields.map(([name]) => name);
 const sidebarFilterSchema: Schema = {
-  fields: sidebarFilterColumns.map((name) => ({ name, kind: { type: "text" } })),
+  fields: sidebarFilterFields.map(([name, info, example]) => ({
+    name,
+    kind: { type: "text" },
+    info,
+    example,
+  })),
   freeText: "fuzzy",
 };
 

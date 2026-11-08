@@ -17,8 +17,8 @@ use rusqlite::types::{Value, ValueRef};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::{OnceLock, PoisonError, RwLock};
-use yaak_database::ModelChangeEvent;
 use ts_rs::TS;
+use yaak_database::ModelChangeEvent;
 use yaak_query::{
     CompareOp, Condition, DocValue, DocValues, Document, FieldDef, FieldKind, FieldValue, FreeText,
     Matcher, Node, NumberLiteral, Schema, Span, Unit, Utf16Offsets, contains_ignore_case,
@@ -27,7 +27,16 @@ use yaak_query::{
 
 /// The flags `@is:` takes, in the order completion offers them.
 pub const FLAGS: &[&str] = &[
-    "error", "pending", "system", "tunnelled", "saved", "read", "loop", "ws", "sse", "grpc",
+    "error",
+    "pending",
+    "system",
+    "tunnelled",
+    "saved",
+    "read",
+    "loop",
+    "ws",
+    "sse",
+    "grpc",
 ];
 
 /// Flags `@is:` will take once flows have what they need. Valid, matching nothing.
@@ -44,47 +53,56 @@ pub fn schema() -> &'static Schema {
     static SCHEMA: OnceLock<Schema> = OnceLock::new();
     SCHEMA.get_or_init(|| {
         let units = |units: &[(&str, f64)]| FieldKind::Number {
-            units: units.iter().map(|(name, factor)| Unit { name: (*name).into(), factor: *factor }).collect(),
+            units: units
+                .iter()
+                .map(|(name, factor)| Unit { name: (*name).into(), factor: *factor })
+                .collect(),
         };
         // As the app shows sizes: a kilobyte is 1000 bytes.
         let bytes = || units(&[("b", 1.0), ("kb", 1e3), ("mb", 1e6), ("gb", 1e9)]);
-        let field = |name: &str, kind: FieldKind, info: &str| FieldDef {
+        // Each with what it is and a term using it, as completion shows them
+        let field = |name: &str, kind: FieldKind, info: &str, example: &str| FieldDef {
             name: name.into(),
             kind,
             map: false,
             info: Some(info.into()),
+            example: (!example.is_empty()).then(|| example.into()),
         };
-        let map = |name: &str, info: &str| FieldDef { map: true, ..field(name, FieldKind::Text, info) };
-        let text = FieldKind::Text;
+        let map = |name: &str, info: &str, example: &str| FieldDef {
+            map: true,
+            ..field(name, FieldKind::Text, info, example)
+        };
+        let text = || FieldKind::Text;
         let number = || FieldKind::Number { units: vec![] };
+        let ms = || units(&[("ms", 1.0), ("s", 1e3), ("m", 6e4)]);
         Schema::new(
             vec![
-                field("host", text.clone(), "Host"),
-                field("path", text.clone(), "Path"),
-                field("method", text.clone(), "Method"),
-                field("status", number(), "Status"),
-                field("type", text.clone(), "Content type"),
-                field("app", text.clone(), "App"),
-                field("is", text.clone(), "Flag"),
-                map("header", "Header"),
-                map("req.header", "Request header"),
-                map("res.header", "Response header"),
-                field("size", bytes(), "Response size"),
-                field("req.size", bytes(), "Request size"),
-                field("res.size", bytes(), "Response size"),
-                field("duration", units(&[("ms", 1.0), ("s", 1e3), ("m", 6e4)]), "Duration"),
-                field("time", units(TIME_UNITS), "Started, ago"),
-                field("url", text.clone(), "URL"),
-                map("query", "Query parameter"),
-                field("scheme", text.clone(), "Scheme"),
-                field("port", number(), "Port"),
-                field("proto", text.clone(), "Protocol"),
-                field("id", number(), "Flow number"),
-                field("cwd", text.clone(), "Working directory"),
-                field("pid", number(), "Process id"),
-                field("body", text.clone(), "Not yet"),
-                field("req.body", text.clone(), "Not yet"),
-                field("res.body", text, "Not yet"),
+                field("host", text(), "Host, wildcards allowed", "@host:*.github.com"),
+                field("path", text(), "URL path, /* for below", "@path:/v1/*"),
+                field("method", text(), "GET, POST, …", "@method:post"),
+                field("status", number(), "Response status", "@status:4xx  @status:>=400"),
+                field("type", text(), "Content type", "@type:json"),
+                field("app", text(), "App or program", "@app:Slack"),
+                field("is", text(), "error, pending, system, …", "@is:error  -@is:system"),
+                map("header", "A header on either side", "@header.content-type:json"),
+                map("req.header", "A request header", "@req.header.accept:*"),
+                map("res.header", "A response header", "@res.header.x-cache:hit"),
+                field("size", bytes(), "Response body size", "@size:>100kb"),
+                field("req.size", bytes(), "Request body size", "@req.size:>1kb"),
+                field("res.size", bytes(), "Response body size", "@res.size:<1mb"),
+                field("duration", ms(), "Total time", "@duration:>500ms"),
+                field("time", units(TIME_UNITS), "When the flow started", "@time:<5m"),
+                field("url", text(), "The whole URL", "@url:*token=*"),
+                map("query", "A query parameter", "@query.page:2"),
+                field("scheme", text(), "http or https", "@scheme:https"),
+                field("port", number(), "Port", "@port:8080"),
+                field("proto", text(), "h1, h2, ws, sse, grpc", "@proto:h2"),
+                field("id", number(), "Flow number", "@id:>1200"),
+                field("cwd", text(), "Working folder", "@cwd:myapp"),
+                field("pid", number(), "Process id", "@pid:4121"),
+                field("body", text(), "Not yet", ""),
+                field("req.body", text(), "Not yet", ""),
+                field("res.body", text(), "Not yet", ""),
             ],
             FreeText::Substring,
         )
@@ -262,7 +280,9 @@ fn prepare(node: &Node, now: DateTime<Utc>, issues: &mut Vec<Issue>) -> Node {
                     span: *span,
                 },
                 // Named whole, as the sidebar names them: a part needs wildcards
-                ("host" | "scheme" | "app" | "cwd", FieldValue::Text { text, .. }) if !text.is_empty() => {
+                ("host" | "scheme" | "app" | "cwd", FieldValue::Text { text, .. })
+                    if !text.is_empty() =>
+                {
                     with(FieldValue::Wildcard { pattern: text.clone() })
                 }
                 ("is", FieldValue::Text { text, .. }) if !text.is_empty() => {
@@ -715,7 +735,12 @@ pub fn url_query(url: &str) -> Vec<(String, String)> {
 }
 
 /// What bare words search: the URL, the method, the status and the content type.
-pub fn flow_text(url: &str, method: &str, status: Option<i64>, content_type: Option<&str>) -> String {
+pub fn flow_text(
+    url: &str,
+    method: &str,
+    status: Option<i64>,
+    content_type: Option<&str>,
+) -> String {
     let status = status.map(|s| s.to_string()).unwrap_or_default();
     format!("{url}\n{method}\n{status}\n{}", content_type.unwrap_or_default())
 }
@@ -837,7 +862,10 @@ pub fn document(flow: &Flow) -> Document {
     if let Some(pid) = flow.client_pid {
         add("pid", num(f64::from(pid)));
     }
-    for (side, headers) in [("req", &flow.request_headers), ("res", &flow.response_headers)] {
+    for (side, headers) in [
+        ("req", &flow.request_headers),
+        ("res", &flow.response_headers),
+    ] {
         for ProxyHeader { name, value } in headers.iter().filter(|h| !h.name.is_empty()) {
             add(&format!("header.{name}"), text(value));
             add(&format!("{side}.header.{name}"), text(value));
@@ -848,7 +876,12 @@ pub fn document(flow: &Flow) -> Document {
     }
 
     Document {
-        text: flow_text(&flow.url, &flow.method, flow.status.map(i64::from), flow.content_type.as_deref()),
+        text: flow_text(
+            &flow.url,
+            &flow.method,
+            flow.status.map(i64::from),
+            flow.content_type.as_deref(),
+        ),
         fields: fields.into_iter().map(|(path, values)| (path, DocValues::Many(values))).collect(),
     }
 }
@@ -954,7 +987,9 @@ impl Sql<'_> {
             "url" => (vec!["url".into()], false),
             "method" => (vec!["method".into()], false),
             "type" => (
-                vec!["coalesce(content_type, header_value(request_headers, 'content-type'))".into()],
+                vec![
+                    "coalesce(content_type, header_value(request_headers, 'content-type'))".into(),
+                ],
                 false,
             ),
             "proto" => (
@@ -971,7 +1006,8 @@ impl Sql<'_> {
             "duration" => (vec!["elapsed_ms".into()], true),
             "pid" => (vec![c("client_pid")], true),
             "app" => {
-                let (bundle, path, name) = (c("client_bundle_id"), c("client_path"), c("client_name"));
+                let (bundle, path, name) =
+                    (c("client_bundle_id"), c("client_path"), c("client_name"));
                 let folder =
                     format!("CASE WHEN {bundle} IS NULL THEN folder_name({}) END", c("client_cwd"));
                 (vec![format!("coalesce({bundle}, {path})"), name, folder], false)
@@ -983,7 +1019,10 @@ impl Sql<'_> {
             "time" => return self.time(condition),
             "is" => return self.flags(condition),
             "header" => {
-                let both = [self.pairs("request_headers", key, condition), self.pairs("response_headers", key, condition)];
+                let both = [
+                    self.pairs("request_headers", key, condition),
+                    self.pairs("response_headers", key, condition),
+                ];
                 return format!("({} OR {})", both[0], both[1]);
             }
             "req.header" => return self.pairs("request_headers", key, condition),
@@ -997,17 +1036,24 @@ impl Sql<'_> {
     /// Any of the values passes.
     fn any_value(&mut self, values: &[String], numeric: bool, condition: &Condition) -> String {
         let parts: Vec<String> = values.iter().map(|v| self.test(v, numeric, condition)).collect();
-        if parts.len() == 1 { parts.into_iter().next().unwrap_or_default() } else { format!("({})", parts.join(" OR ")) }
+        if parts.len() == 1 {
+            parts.into_iter().next().unwrap_or_default()
+        } else {
+            format!("({})", parts.join(" OR "))
+        }
     }
 
     /// `condition` on one value, never NULL. `numeric` for a value stored as a number, compared
     /// without reading it as one first.
     fn test(&mut self, value: &str, numeric: bool, condition: &Condition) -> String {
-        let as_number =
-            if numeric { value.to_string() } else { format!("q_number({value})") };
+        let as_number = if numeric { value.to_string() } else { format!("q_number({value})") };
         let test = match condition {
-            Condition::Contains(needle) => format!("q_contains({value}, {})", self.param(needle.clone())),
-            Condition::Wildcard(pattern) => format!("q_wildcard({value}, {})", self.param(pattern.clone())),
+            Condition::Contains(needle) => {
+                format!("q_contains({value}, {})", self.param(needle.clone()))
+            }
+            Condition::Wildcard(pattern) => {
+                format!("q_wildcard({value}, {})", self.param(pattern.clone()))
+            }
             Condition::Present => format!("q_present({value})"),
             Condition::IsNumber => format!("{as_number} IS NOT NULL"),
             Condition::Equals(n) => format!("{as_number} = {}", self.param(*n)),
@@ -1083,7 +1129,10 @@ impl Sql<'_> {
     fn pairs(&mut self, json: &str, key: Option<&str>, condition: &Condition) -> String {
         let name = match key {
             Some(key) => {
-                format!("q_lower(json_extract(kv.value, '$.name')) = {} AND ", self.param(key.to_lowercase()))
+                format!(
+                    "q_lower(json_extract(kv.value, '$.name')) = {} AND ",
+                    self.param(key.to_lowercase())
+                )
             }
             None => String::new(),
         };
@@ -1120,7 +1169,9 @@ pub(crate) fn add_functions(conn: &rusqlite::Connection) -> rusqlite::Result<()>
     conn.create_scalar_function("q_wildcard", 2, flags, |ctx| {
         let pattern = ctx.get::<String>(1)?;
         Ok(match ctx.get_raw(0) {
-            ValueRef::Text(t) => wildcard_match(&pattern, &String::from_utf8_lossy(t).to_lowercase()),
+            ValueRef::Text(t) => {
+                wildcard_match(&pattern, &String::from_utf8_lossy(t).to_lowercase())
+            }
             v => value_text(v).is_some_and(|t| wildcard_match(&pattern, &t)),
         })
     })?;

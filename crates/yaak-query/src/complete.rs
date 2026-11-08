@@ -25,7 +25,10 @@ pub struct Completion {
     /// What replaces the span: `@method:`, `@header.`, or a value quoted when it needs to be.
     pub insert: String,
     pub kind: CompletionKind,
+    /// What a field is, from its definition.
     pub info: Option<String>,
+    /// A term using the field, from its definition.
+    pub example: Option<String>,
     /// The term is not finished after inserting (a field still needs its value, a map field its
     /// key), so completion should open again.
     pub reopen: bool,
@@ -115,6 +118,7 @@ fn missing_at(word: &str, typed: &str, schema: &Schema) -> Option<Completion> {
         insert: term,
         kind: CompletionKind::Field,
         info: None,
+        example: None,
         // With no value yet, go on to the field's values
         reopen: value.is_empty(),
     })
@@ -143,7 +147,8 @@ fn field_completions(
                 insert: format!("@{path}:"),
                 label: path,
                 kind: CompletionKind::Field,
-                info: None,
+                info: map.info.clone(),
+                example: map.example.clone(),
                 reopen: true,
             });
         }
@@ -157,6 +162,7 @@ fn field_completions(
             insert,
             kind: CompletionKind::Field,
             info: field.info.clone(),
+            example: field.example.clone(),
             reopen: true,
         });
     }
@@ -191,6 +197,7 @@ fn value_completions(
             insert: format_value(value),
             kind: CompletionKind::Value,
             info: None,
+            example: None,
             reopen: false,
         })
         .collect();
@@ -236,14 +243,27 @@ mod tests {
             kind: FieldKind::Text,
             map: false,
             info: None,
+            example: None,
         };
         Schema::new(
             vec![
                 text("method"),
                 text("url"),
                 text("name"),
-                FieldDef { name: "header".into(), kind: FieldKind::Text, map: true, info: None },
-                FieldDef { name: "error".into(), kind: FieldKind::Flag, map: false, info: None },
+                FieldDef {
+                    name: "header".into(),
+                    kind: FieldKind::Text,
+                    map: true,
+                    info: None,
+                    example: None,
+                },
+                FieldDef {
+                    name: "error".into(),
+                    kind: FieldKind::Flag,
+                    map: false,
+                    info: None,
+                    example: None,
+                },
             ],
             FreeText::Fuzzy,
         )
@@ -367,6 +387,57 @@ mod tests {
         assert_eq!(at("(a)|"), None);
         // A word is replaced up to the cursor
         assert_eq!(at("a|b"), Some(("a".into(), inserts(&["@name:", "@header."]))));
+    }
+
+    /// Field names that start with what is typed come first, then those holding it, in the
+    /// schema's order; nothing matches loosely.
+    #[test]
+    fn prefix_matches_first() {
+        let field = |name: &str| FieldDef {
+            name: name.into(),
+            kind: FieldKind::Text,
+            map: false,
+            info: None,
+            example: None,
+        };
+        let s = Schema::new(
+            vec![
+                field("time"),
+                field("scheme"),
+                field("method"),
+                field("host"),
+            ],
+            FreeText::Substring,
+        );
+        let labels = |input: &str| {
+            let c = completions(input, input.len(), &s, &HashMap::new()).unwrap();
+            c.items.into_iter().map(|i| i.label).collect::<Vec<_>>()
+        };
+        assert_eq!(labels("m"), ["method", "time", "scheme"]);
+        assert_eq!(labels("@h"), ["host", "scheme", "method"]);
+        assert!(completions("mt", 2, &s, &HashMap::new()).is_none(), "no fuzzy match");
+    }
+
+    /// A field's description and example go with it, and with the keys under a map.
+    #[test]
+    fn descriptions_and_examples() {
+        let s = Schema::new(
+            vec![FieldDef {
+                name: "header".into(),
+                kind: FieldKind::Text,
+                map: true,
+                info: Some("A header on either side".into()),
+                example: Some("@header.content-type:json".into()),
+            }],
+            FreeText::Substring,
+        );
+        let values = HashMap::from([("header".to_string(), vec!["accept".to_string()])]);
+        let c = completions("@he", 3, &s, &values).unwrap();
+        assert_eq!(c.items[0].info.as_deref(), Some("A header on either side"));
+        assert_eq!(c.items[0].example.as_deref(), Some("@header.content-type:json"));
+        let c = completions("@header.", 8, &s, &values).unwrap();
+        assert_eq!(c.items[0].label, "header.accept");
+        assert_eq!(c.items[0].example.as_deref(), Some("@header.content-type:json"));
     }
 
     #[test]

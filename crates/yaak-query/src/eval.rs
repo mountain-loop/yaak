@@ -1,9 +1,9 @@
 //! Runs a parsed query in memory, against one document or a whole table of them.
 
 use crate::ast::Node;
+use crate::condition::Condition;
 #[cfg(test)]
 use crate::condition::wildcard_match;
-use crate::condition::Condition;
 use crate::fuzzy::{FuzzyScratch, fuzzy_match_in};
 use crate::schema::{FreeText, Schema};
 use serde::{Deserialize, Serialize};
@@ -429,7 +429,7 @@ mod tests {
     use crate::{format_field, parse};
 
     fn text_field(name: &str) -> FieldDef {
-        FieldDef { name: name.into(), kind: FieldKind::Text, map: false, info: None }
+        FieldDef { name: name.into(), kind: FieldKind::Text, map: false, info: None, example: None }
     }
 
     /// The fields and free-text mode of Yaak's sidebar.
@@ -455,12 +455,19 @@ mod tests {
         Schema::new(
             vec![
                 text_field("url"),
-                FieldDef { name: "header".into(), kind: FieldKind::Text, map: true, info: None },
+                FieldDef {
+                    name: "header".into(),
+                    kind: FieldKind::Text,
+                    map: true,
+                    info: None,
+                    example: None,
+                },
                 FieldDef {
                     name: "status".into(),
                     kind: FieldKind::Number { units: vec![] },
                     map: false,
                     info: None,
+                    example: None,
                 },
                 FieldDef {
                     name: "duration".into(),
@@ -472,8 +479,15 @@ mod tests {
                     },
                     map: false,
                     info: None,
+                    example: None,
                 },
-                FieldDef { name: "error".into(), kind: FieldKind::Flag, map: false, info: None },
+                FieldDef {
+                    name: "error".into(),
+                    kind: FieldKind::Flag,
+                    map: false,
+                    info: None,
+                    example: None,
+                },
             ],
             FreeText::Substring,
         )

@@ -98,6 +98,24 @@ function wordAt(text: string, pos: number): { word: string; from: number } | nul
   return { word, from: pos - word.length };
 }
 
+/** The panel beside a completion: what the field is, and a term using it */
+function infoOf(info: string | null, example: string | null): Completion["info"] {
+  if (example == null) return undefined;
+  return () => {
+    const el = document.createElement("div");
+    if (info != null) {
+      const what = document.createElement("div");
+      what.textContent = info;
+      el.append(what);
+    }
+    const term = document.createElement("code");
+    term.className = "cm-query-example";
+    term.textContent = example;
+    el.append(term);
+    return el;
+  };
+}
+
 function completionSource({ schema, values, loadValues, moreCompletions }: QueryFilterOptions) {
   return async (ctx: CompletionContext): Promise<CompletionResult | null> => {
     const text = ctx.state.doc.toString();
@@ -111,8 +129,10 @@ function completionSource({ schema, values, loadValues, moreCompletions }: Query
 
     const options: Completion[] = (result?.items ?? []).map((item) => ({
       label: item.label,
-      type: item.kind === "field" ? "property" : "constant",
-      info: item.info ?? undefined,
+      // Not a CodeMirror type: it names the kind for `onlyFields` below, and draws no icon
+      type: item.kind === "field" ? "field" : "value",
+      detail: item.info ?? undefined,
+      info: infoOf(item.info, item.example),
       apply: (view, _completion, from, to) => {
         view.dispatch({
           changes: { from, to, insert: item.insert },
@@ -137,7 +157,7 @@ function completionSource({ schema, values, loadValues, moreCompletions }: Query
     if (options.length === 0) return null;
 
     // Field names pop up for something typed; on an empty spot, only when asked for
-    const onlyFields = options.every((o) => o.type === "property");
+    const onlyFields = options.every((o) => o.type === "field");
     if (onlyFields && from === to && !ctx.explicit) return null;
 
     // The engine has already filtered and ranked the options
@@ -220,11 +240,22 @@ const problemTheme = EditorView.baseTheme({
   },
 });
 
+const completionTheme = EditorView.baseTheme({
+  ".cm-query-example": {
+    display: "block",
+    marginTop: "0.25rem",
+    color: "var(--color-text)",
+    whiteSpace: "pre",
+  },
+});
+
 /** Highlighting and completion for a search box written in Yaak's query language */
 export function queryFilter(options: QueryFilterOptions): Extension {
   const extensions: Extension[] = [
     highlight,
-    autocompletion({ override: [completionSource(options)] }),
+    // No type icons: the fields and values of a search have no kind the editor's icons name
+    autocompletion({ override: [completionSource(options)], icons: false }),
+    completionTheme,
   ];
   if (options.problems != null) {
     extensions.push(problemField, problemChecker(options.problems), problemTheme);

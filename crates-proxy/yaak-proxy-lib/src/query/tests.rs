@@ -79,7 +79,10 @@ fn fixture() -> Vec<Flow> {
             status: Some(200),
             content_type: Some("application/json; charset=utf-8".into()),
             request_headers: vec![header("Accept", "application/json")],
-            response_headers: vec![header("X-Cache", "HIT"), header("Content-Type", "application/json")],
+            response_headers: vec![
+                header("X-Cache", "HIT"),
+                header("Content-Type", "application/json"),
+            ],
             response_size: 250_000,
             request_size: 120,
             elapsed_ms: Some(820),
@@ -131,7 +134,11 @@ fn fixture() -> Vec<Flow> {
             started_at: at(3),
             ..base("fl_error", "http://localhost:3000/health")
         },
-        Flow { started_at: at(0), agent_read: true, ..base("fl_pending", "https://example.com/slow") },
+        Flow {
+            started_at: at(0),
+            agent_read: true,
+            ..base("fl_pending", "https://example.com/slow")
+        },
         Flow {
             status: Some(101),
             stream_kind: Some(StreamKind::Websocket),
@@ -202,14 +209,38 @@ fn url_fields() {
     assert_eq!(finds("@path:/v1/charges/*"), ids(&["fl_stripe"]));
     assert_eq!(finds("@path:/v1/charges/ch_1/*"), ids(&["fl_stripe"]));
     assert_eq!(finds("@path:/v1/charge/*"), ids(&[]));
-    assert_eq!(finds("@path:/"), ids(&["fl_daemon", "fl_error", "fl_github", "fl_grpc", "fl_loop", "fl_pending", "fl_stripe", "fl_ws"]));
+    assert_eq!(
+        finds("@path:/"),
+        ids(&[
+            "fl_daemon",
+            "fl_error",
+            "fl_github",
+            "fl_grpc",
+            "fl_loop",
+            "fl_pending",
+            "fl_stripe",
+            "fl_ws"
+        ])
+    );
     assert_eq!(finds("@url:*page=2*"), ids(&["fl_github"]));
     assert_eq!(finds("@query.page:2"), ids(&["fl_github"]));
     assert_eq!(finds("@query.SORT:stars"), ids(&["fl_github"]));
     assert_eq!(finds("@query.page:*"), ids(&["fl_github"]));
     assert_eq!(finds("@query.page:>1"), ids(&["fl_github"]));
     assert_eq!(finds("@query:stars"), ids(&["fl_github"]));
-    assert_eq!(finds("-@query.page:*"), ids(&["fl_daemon", "fl_error", "fl_grpc", "fl_loop", "fl_pending", "fl_stripe", "fl_tunnel", "fl_ws"]));
+    assert_eq!(
+        finds("-@query.page:*"),
+        ids(&[
+            "fl_daemon",
+            "fl_error",
+            "fl_grpc",
+            "fl_loop",
+            "fl_pending",
+            "fl_stripe",
+            "fl_tunnel",
+            "fl_ws"
+        ])
+    );
 }
 
 #[test]
@@ -235,7 +266,17 @@ fn statuses() {
     assert_eq!(finds("@status:>=400"), ids(&["fl_daemon", "fl_loop", "fl_stripe"]));
     assert_eq!(finds("@status:[200 TO 299]"), ids(&["fl_github", "fl_grpc"]));
     assert_eq!(finds("@status:50*"), ids(&["fl_daemon", "fl_loop"]));
-    assert_eq!(finds("@status:*"), ids(&["fl_daemon", "fl_github", "fl_grpc", "fl_loop", "fl_stripe", "fl_ws"]));
+    assert_eq!(
+        finds("@status:*"),
+        ids(&[
+            "fl_daemon",
+            "fl_github",
+            "fl_grpc",
+            "fl_loop",
+            "fl_stripe",
+            "fl_ws"
+        ])
+    );
     assert_eq!(finds("-@status:*"), ids(&["fl_error", "fl_pending", "fl_tunnel"]));
     assert_eq!(finds("@status:40"), ids(&[]));
 }
@@ -257,7 +298,17 @@ fn sizes_and_durations_with_units() {
 
 #[test]
 fn times_ago_and_absolute() {
-    assert_eq!(finds("@time:<5m"), ids(&["fl_error", "fl_github", "fl_grpc", "fl_loop", "fl_pending", "fl_ws"]));
+    assert_eq!(
+        finds("@time:<5m"),
+        ids(&[
+            "fl_error",
+            "fl_github",
+            "fl_grpc",
+            "fl_loop",
+            "fl_pending",
+            "fl_ws"
+        ])
+    );
     assert_eq!(finds("@time:<=30m @time:>5m"), ids(&["fl_stripe"]));
     assert_eq!(finds("@time:>1h"), ids(&["fl_daemon", "fl_tunnel"]));
     assert_eq!(finds("@time:>1d"), ids(&["fl_tunnel"]));
@@ -315,7 +366,19 @@ fn headers_on_either_side_or_one() {
     assert_eq!(finds("@res.header.content-type:json"), ids(&["fl_github"]));
     assert_eq!(finds("@header.accept:application/*"), ids(&["fl_github"]));
     assert_eq!(finds("@header:miss"), ids(&["fl_stripe"]));
-    assert_eq!(finds("-@header.x-cache:hit"), ids(&["fl_daemon", "fl_error", "fl_grpc", "fl_loop", "fl_pending", "fl_stripe", "fl_tunnel", "fl_ws"]));
+    assert_eq!(
+        finds("-@header.x-cache:hit"),
+        ids(&[
+            "fl_daemon",
+            "fl_error",
+            "fl_grpc",
+            "fl_loop",
+            "fl_pending",
+            "fl_stripe",
+            "fl_tunnel",
+            "fl_ws"
+        ])
+    );
 }
 
 #[test]
@@ -330,7 +393,19 @@ fn flags() {
     assert_eq!(finds("@is:ws"), ids(&["fl_ws"]));
     assert_eq!(finds("@is:sse"), ids(&[]));
     assert_eq!(finds("@is:GRPC"), ids(&["fl_grpc"]));
-    assert_eq!(finds("@is:*"), ids(&["fl_daemon", "fl_error", "fl_github", "fl_grpc", "fl_loop", "fl_pending", "fl_tunnel", "fl_ws"]));
+    assert_eq!(
+        finds("@is:*"),
+        ids(&[
+            "fl_daemon",
+            "fl_error",
+            "fl_github",
+            "fl_grpc",
+            "fl_loop",
+            "fl_pending",
+            "fl_tunnel",
+            "fl_ws"
+        ])
+    );
     assert_eq!(finds("@is:s*"), ids(&["fl_daemon", "fl_github"]));
     // Not yet, and not a flag
     assert_eq!(finds("@is:marked"), ids(&[]));
@@ -344,7 +419,10 @@ fn groups_and_negation() {
     assert_eq!(finds("(@status:4xx OR @is:tunnelled) -@method:connect"), ids(&["fl_stripe"]));
     assert_eq!(finds("-(@status:* OR @is:pending)"), ids(&["fl_error", "fl_tunnel"]));
     assert_eq!(finds("github -@host:github.com"), ids(&["fl_github"]));
-    assert_eq!(finds("@host:*.example.com AND -@is:ws"), ids(&["fl_grpc", "fl_pending", "fl_tunnel"]));
+    assert_eq!(
+        finds("@host:*.example.com AND -@is:ws"),
+        ids(&["fl_grpc", "fl_pending", "fl_tunnel"])
+    );
 }
 
 #[test]
@@ -372,9 +450,8 @@ fn hiding_system() {
 
 #[test]
 fn diagnostics_mark_what_cannot_run() {
-    let kinds = |q: &str| {
-        diagnostics(q).into_iter().map(|d| (d.kind, d.start, d.end)).collect::<Vec<_>>()
-    };
+    let kinds =
+        |q: &str| diagnostics(q).into_iter().map(|d| (d.kind, d.start, d.end)).collect::<Vec<_>>();
     use QueryDiagnosticKind::*;
     assert_eq!(kinds("@status:4xx @time:<5m @host:*.a.com"), vec![]);
     assert_eq!(kinds("@nope:x"), vec![(UnknownField, 0, 6)]);
@@ -402,8 +479,9 @@ fn time_is_compared_as_stored() {
     for (flow, stored) in flows.iter().zip(stored) {
         assert_eq!(stored_time(started_ms(&flow.started_at)), stored);
     }
-    let precise = NaiveDateTime::parse_from_str("2026-11-07 10:00:00.123456", "%Y-%m-%d %H:%M:%S%.f")
-        .unwrap();
+    let precise =
+        NaiveDateTime::parse_from_str("2026-11-07 10:00:00.123456", "%Y-%m-%d %H:%M:%S%.f")
+            .unwrap();
     assert_eq!(stored_time(started_ms(&precise)), "2026-11-07 10:00:00.123456");
 }
 
@@ -421,11 +499,14 @@ fn reads_url_parts() {
     assert_eq!(url_sidebar_path("https://a.com/v1//users/"), Some("/v1/users".into()));
     assert_eq!(url_sidebar_path("https://a.com/v1/users"), None);
     assert_eq!(url_sidebar_path("https://a.com"), None);
-    assert_eq!(url_query("https://a.com/?A=1&b=%20two&a=3#f"), vec![
-        ("a".to_string(), "1".to_string()),
-        ("b".to_string(), " two".to_string()),
-        ("a".to_string(), "3".to_string()),
-    ]);
+    assert_eq!(
+        url_query("https://a.com/?A=1&b=%20two&a=3#f"),
+        vec![
+            ("a".to_string(), "1".to_string()),
+            ("b".to_string(), " two".to_string()),
+            ("a".to_string(), "3".to_string()),
+        ]
+    );
 }
 
 // -- The drift guard --
@@ -465,10 +546,37 @@ fn sample(count: usize) -> Vec<Flow> {
         "https://user:pw@intranet.local",
         "bank.example.com:443",
     ];
-    let paths = ["", "/", "/v1/charges", "/v1/charges/ch_1", "/v1//users", "/repos/yaak", "/ÜBER/x", "/a%20b"];
-    let queries = ["", "?page=2", "?page=10&sort=Stars", "?q=%C3%A9t%C3%A9", "?a=1&a=2", "?flag", "?page=two"];
+    let paths = [
+        "",
+        "/",
+        "/v1/charges",
+        "/v1/charges/ch_1",
+        "/v1//users",
+        "/repos/yaak",
+        "/ÜBER/x",
+        "/a%20b",
+    ];
+    let queries = [
+        "",
+        "?page=2",
+        "?page=10&sort=Stars",
+        "?q=%C3%A9t%C3%A9",
+        "?a=1&a=2",
+        "?flag",
+        "?page=two",
+    ];
     let methods = ["GET", "POST", "put", "DELETE", "CONNECT", "HEAD"];
-    let statuses = [None, Some(101), Some(200), Some(204), Some(301), Some(404), Some(500), Some(503), Some(508)];
+    let statuses = [
+        None,
+        Some(101),
+        Some(200),
+        Some(204),
+        Some(301),
+        Some(404),
+        Some(500),
+        Some(503),
+        Some(508),
+    ];
     let types = [
         None,
         Some("application/json"),
@@ -477,24 +585,69 @@ fn sample(count: usize) -> Vec<Flow> {
         Some("image/png"),
         Some(""),
     ];
-    let header_names = ["Content-Type", "accept", "X-Cache", "x-trace", "Set-Cookie", "ÉTAG"];
-    let header_values = ["application/json", "HIT", "miss", "", "a=1; Path=/", "200", "Wörld", "text/*"];
+    let header_names = [
+        "Content-Type",
+        "accept",
+        "X-Cache",
+        "x-trace",
+        "Set-Cookie",
+        "ÉTAG",
+    ];
+    let header_values = [
+        "application/json",
+        "HIT",
+        "miss",
+        "",
+        "a=1; Path=/",
+        "200",
+        "Wörld",
+        "text/*",
+    ];
     // Name, bundle id, path and working directory
     type App<'a> = (Option<&'a str>, Option<&'a str>, Option<&'a str>, Option<&'a str>);
     let apps: [App; 7] = [
         (None, None, None, None),
-        (Some("Google Chrome"), Some("com.google.Chrome"), Some("/Applications/Google Chrome.app"), None),
+        (
+            Some("Google Chrome"),
+            Some("com.google.Chrome"),
+            Some("/Applications/Google Chrome.app"),
+            None,
+        ),
         (Some("curl"), None, Some("/usr/bin/curl"), Some("/Users/ada/src/fieldwork")),
         (Some("node"), None, Some("/opt/homebrew/bin/node"), Some("/Users/ada/src/Ledger/")),
         (Some("nsurlsessiond"), None, Some("/usr/libexec/nsurlsessiond"), Some("/")),
         (Some("trustd"), None, Some("/somewhere/trustd"), None),
-        (Some("Slack"), Some("com.tinyspeck.slackmacgap"), Some("/Applications/Slack.app"), Some("/tmp")),
+        (
+            Some("Slack"),
+            Some("com.tinyspeck.slackmacgap"),
+            Some("/Applications/Slack.app"),
+            Some("/tmp"),
+        ),
     ];
     let versions = ["HTTP/1.1", "HTTP/2", "HTTP/1.0", ""];
-    let streams = [None, None, None, Some(StreamKind::Websocket), Some(StreamKind::Sse), Some(StreamKind::Grpc), Some(StreamKind::GrpcWeb)];
+    let streams = [
+        None,
+        None,
+        None,
+        Some(StreamKind::Websocket),
+        Some(StreamKind::Sse),
+        Some(StreamKind::Grpc),
+        Some(StreamKind::GrpcWeb),
+    ];
     let sizes = [0, 1, 999, 1000, 1001, 250_000, 1_000_000, 2_500_000_000];
-    let elapsed = [None, Some(0), Some(12), Some(500), Some(501), Some(1500), Some(60_000), Some(61_000)];
-    let ages_s = [0, 30, 59, 60, 61, 299, 300, 301, 3599, 3600, 7200, 86_399, 86_400, 90_000, 700_000];
+    let elapsed = [
+        None,
+        Some(0),
+        Some(12),
+        Some(500),
+        Some(501),
+        Some(1500),
+        Some(60_000),
+        Some(61_000),
+    ];
+    let ages_s = [
+        0, 30, 59, 60, 61, 299, 300, 301, 3599, 3600, 7200, 86_399, 86_400, 90_000, 700_000,
+    ];
 
     (0..count)
         .map(|i| {
@@ -506,14 +659,17 @@ fn sample(count: usize) -> Vec<Flow> {
             };
             let headers = |rng: &mut Rng| {
                 (0..rng.next() % 4)
-                    .map(|_| header(rng.pick::<&str>(&header_names), rng.pick::<&str>(&header_values)))
+                    .map(|_| {
+                        header(rng.pick::<&str>(&header_names), rng.pick::<&str>(&header_values))
+                    })
                     .collect::<Vec<_>>()
             };
             let (name, bundle, path, cwd) = *rng.pick(&apps);
             let age = *rng.pick(&ages_s) as i64;
-            let started_at =
-                (now() - Duration::seconds(age) - Duration::microseconds((rng.next() % 3) as i64 * 250))
-                    .naive_utc();
+            let started_at = (now()
+                - Duration::seconds(age)
+                - Duration::microseconds((rng.next() % 3) as i64 * 250))
+            .naive_utc();
             Flow {
                 id: format!("fl_{i:03}"),
                 url,
@@ -735,9 +891,10 @@ fn the_database_and_the_evaluator_find_the_same_flows() {
             if sql != memory {
                 let only_sql: Vec<_> = sql.iter().filter(|id| !memory.contains(id)).collect();
                 let only_memory: Vec<_> = memory.iter().filter(|id| !sql.contains(id)).collect();
-                let example = only_sql.first().or(only_memory.first()).map(|id| {
-                    flows.iter().find(|f| &&f.id == id).cloned()
-                });
+                let example = only_sql
+                    .first()
+                    .or(only_memory.first())
+                    .map(|id| flows.iter().find(|f| &&f.id == id).cloned());
                 panic!(
                     "{query:?} (hide_system {hide_system}): only in SQL {only_sql:?}, \
                     only in memory {only_memory:?}; e.g. {example:#?}"
@@ -796,7 +953,17 @@ fn seen_values_for_completion() {
     cache.sort();
     assert_eq!(cache, vec!["HIT", "MISS"]);
     // Near-unique fields offer nothing
-    for path in ["url", "path", "id", "pid", "size", "duration", "time", "query", "query.page"] {
+    for path in [
+        "url",
+        "path",
+        "id",
+        "pid",
+        "size",
+        "duration",
+        "time",
+        "query",
+        "query.page",
+    ] {
         assert!(values(path).is_empty(), "{path}");
     }
 }
@@ -807,11 +974,28 @@ fn a_header_with_many_values_offers_none() {
         .map(|i| Flow {
             id: format!("fl_{i}"),
             url: "https://a.com/".into(),
-            response_headers: vec![header("Date", &format!("day {i}")), header("Server", "nginx")],
+            response_headers: vec![
+                header("Date", &format!("day {i}")),
+                header("Server", "nginx"),
+            ],
             ..Default::default()
         })
         .collect();
     let (_dir, db, _) = db_of(flows);
     assert!(seen_values(&db, "header.date").unwrap().is_empty());
     assert_eq!(seen_values(&db, "res.header.server").unwrap(), vec!["nginx"]);
+}
+
+/// Completion shows each field with what it is and a term using it, and every such term runs.
+#[test]
+fn fields_have_descriptions_and_examples_that_run() {
+    for field in &schema().fields {
+        assert!(field.info.as_deref().is_some_and(|i| !i.is_empty()), "{}", field.name);
+        if FIELDS_NOT_YET.contains(&field.name.as_str()) {
+            continue;
+        }
+        let example = field.example.as_deref().unwrap_or_else(|| panic!("{}", field.name));
+        assert!(example.contains(&format!("@{}", field.name)), "{example}");
+        assert_eq!(diagnostics(example), vec![], "{example}");
+    }
 }

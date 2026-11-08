@@ -442,8 +442,7 @@ mod tests {
         assert!(!flows[0].cancelled);
         assert_eq!((flows[0].stream_kind, flows[0].message_count), (None, 0));
         // Failed flows are found without the gRPC status column too.
-        let failed =
-            crate::flows::FlowFilter::search("@is:error");
+        let failed = crate::flows::FlowFilter::search("@is:error");
         assert_eq!(crate::flows::list(&db, &failed).unwrap().len(), 0);
 
         // Filters by app work without the folder column, and count without the clear mark.
@@ -460,8 +459,7 @@ mod tests {
         .unwrap();
         drop(conn);
         let db = ProxyQueryManager::open_read_only(&path, Some(&test_key())).unwrap();
-        let filter =
-            crate::flows::FlowFilter::search("@app:curl");
+        let filter = crate::flows::FlowFilter::search("@app:curl");
         let (page, total, matching) = crate::flows::page(&db, &filter).unwrap();
         assert_eq!((page.len(), total, matching), (1, 1, Some(1)));
         assert_eq!(page[0].number, 1);
@@ -596,9 +594,12 @@ mod tests {
             .unwrap()
             .map(|v| v.unwrap())
             .collect();
-        assert_eq!(&applied[6..], [
-            "00000007", "00000008", "00000009", "00000010", "00000011", "00000012"
-        ]);
+        assert_eq!(
+            &applied[6..],
+            [
+                "00000007", "00000008", "00000009", "00000010", "00000011", "00000012"
+            ]
+        );
         let mark_columns = columns(&conn, "flow_clear_mark");
         assert_eq!(mark_columns, ["id", "max_rowid", "cleaner", "cleaner_at"]);
         drop(conn);

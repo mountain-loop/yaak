@@ -124,7 +124,11 @@ pub fn counts(db: &ProxyQueryManager, hide_system: bool) -> Result<Vec<SavedQuer
         .map(|s| FlowFilter { hide_system, ..FlowFilter::search(s.query.clone()) })
         .collect();
     let counts = flows::count_each(db, &filters)?;
-    Ok(saved.into_iter().zip(counts).map(|(s, count)| SavedQueryCount { id: s.id, count }).collect())
+    Ok(saved
+        .into_iter()
+        .zip(counts)
+        .map(|(s, count)| SavedQueryCount { id: s.id, count })
+        .collect())
 }
 
 #[cfg(test)]
@@ -156,15 +160,19 @@ mod tests {
 
         let renamed = rename(&db, &ok.id, "Fine").unwrap();
         assert_eq!(renamed.name, "Fine");
-        assert_eq!(list(&db).unwrap().iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), [
-            "Errors", "Fine"
-        ]);
+        assert_eq!(
+            list(&db).unwrap().iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            ["Errors", "Fine"]
+        );
 
         let counts = counts(&db, false).unwrap();
-        assert_eq!(counts, vec![
-            SavedQueryCount { id: errors.id.clone(), count: 2 },
-            SavedQueryCount { id: ok.id.clone(), count: 1 },
-        ]);
+        assert_eq!(
+            counts,
+            vec![
+                SavedQueryCount { id: errors.id.clone(), count: 2 },
+                SavedQueryCount { id: ok.id.clone(), count: 1 },
+            ]
+        );
 
         assert!(delete(&db, &errors.id).unwrap());
         assert!(!delete(&db, &errors.id).unwrap());

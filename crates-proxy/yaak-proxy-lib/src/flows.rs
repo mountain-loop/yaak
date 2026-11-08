@@ -1019,8 +1019,7 @@ mod tests {
         let (_dir, db) = db_of(vec![]);
         let plan: Vec<String> = db.with_conn(|c| {
             let conn = c.conn().resolve();
-            let (condition, params) =
-                FlowFilter::search("stripe @status:>=400").condition_in(conn);
+            let (condition, params) = FlowFilter::search("stripe @status:>=400").condition_in(conn);
             let sql = format!(
                 "EXPLAIN QUERY PLAN SELECT * FROM flows WHERE {condition} \
                 ORDER BY started_at DESC, id DESC LIMIT 500"

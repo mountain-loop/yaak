@@ -272,7 +272,8 @@ fn search_reaches_inside_the_encrypted_database() {
     assert_eq!((page.len(), total, matching), (50, FLOWS, Some(FLOWS)));
     let (page, _, matching) = flows::page(&db, &q("items/2999")).unwrap();
     assert_eq!((page[0].id.as_str(), matching), ("fl_02999", Some(1)));
-    let posts_not_found = FlowFilter { limit: Some(1), ..FlowFilter::search("@method:post @status:4xx") };
+    let posts_not_found =
+        FlowFilter { limit: Some(1), ..FlowFilter::search("@method:post @status:4xx") };
     let (_, _, matching) = flows::page(&db, &posts_not_found).unwrap();
     assert_eq!(matching, Some((0..FLOWS).filter(|i| i % 3 == 0 && i % 10 == 0).count()));
 

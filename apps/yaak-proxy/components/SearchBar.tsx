@@ -1,6 +1,15 @@
+import { startCompletion } from "@codemirror/autocomplete";
 import type { Extension } from "@codemirror/state";
 import { Compartment } from "@codemirror/state";
-import { Dropdown, Icon, IconButton, Input, type InputHandle } from "@yaakapp-internal/ui";
+import type { EditorView } from "@codemirror/view";
+import {
+  Dropdown,
+  Icon,
+  IconButton,
+  Input,
+  type InputHandle,
+  LazyCodeEditor,
+} from "@yaakapp-internal/ui";
 import { queryFilter } from "@yaakapp-internal/ui/editor";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { memo, useEffect, useMemo, useRef } from "react";
@@ -85,6 +94,9 @@ export const SearchBar = memo(function SearchBar() {
 
   return (
     <Input
+      renderEditor={(props) => (
+        <LazyCodeEditor {...props} keyDownHandler={startCompletionOnCtrlSpace} />
+      )}
       setRef={(h) => {
         handleRef.current = h;
       }}
@@ -141,6 +153,17 @@ export const SearchBar = memo(function SearchBar() {
     />
   );
 });
+
+/**
+ * Ctrl+Space lists what can be typed, fields and saved searches on an empty spot, as it does in
+ * Yaak's editors, whose shared editor leaves the key to each app
+ */
+function startCompletionOnCtrlSpace(e: KeyboardEvent, view: EditorView): boolean {
+  if (!(e.ctrlKey && e.key === " " && !e.metaKey && !e.altKey && !e.shiftKey)) return false;
+  e.preventDefault();
+  startCompletion(view);
+  return true;
+}
 
 /** "Search 4,102 flows", the title and count that sat in the header's middle */
 function placeholderFor(total: number): string {
