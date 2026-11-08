@@ -19,6 +19,7 @@ members = [
   "crates/yaak-mcp",
   "crates/yaak-models",
   "crates/yaak-plugins",
+  "crates/yaak-query",
   "crates/yaak-sse",
   "crates/yaak-sync",
   "crates/yaak-templates",
@@ -96,6 +97,7 @@ yaak-lifecycle = { path = "crates/yaak-lifecycle" }
 yaak-mcp = { path = "crates/yaak-mcp" }
 yaak-models = { path = "crates/yaak-models" }
 yaak-plugins = { path = "crates/yaak-plugins" }
+yaak-query = { path = "crates/yaak-query" }
 yaak-sse = { path = "crates/yaak-sse" }
 yaak-sync = { path = "crates/yaak-sync" }
 yaak-templates = { path = "crates/yaak-templates" }
