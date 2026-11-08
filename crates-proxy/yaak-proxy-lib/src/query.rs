@@ -147,14 +147,15 @@ impl FlowQuery {
         Matcher::new(self.root.as_ref(), schema())
     }
 
-    /// The SQL condition on `flows` and its parameters, for a database with `columns`.
+    /// The SQL condition on `flows` and its parameters, for a database with `columns`. In
+    /// parentheses, so a caller may add to it with `AND`.
     pub fn sql(&self, columns: &FlowColumns) -> (String, Vec<Value>) {
         let mut sql = Sql { columns, params: Vec::new() };
         let condition = match &self.root {
             None => "1".to_string(),
             Some(root) => sql.node(root),
         };
-        (condition, sql.params)
+        (format!("({condition})"), sql.params)
     }
 }
 
@@ -693,6 +694,15 @@ pub fn url_path(url: &str) -> Option<&str> {
     url_parts(url).path
 }
 
+/// The path as the sidebar names it, its empty segments left out (`/v1//users` is
+/// `/v1/users`), when that differs from the path, so a sidebar row's term finds it.
+pub fn url_sidebar_path(url: &str) -> Option<String> {
+    let path = url_path(url)?;
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    let normalized = format!("/{}", segments.join("/"));
+    (normalized != path && !path.is_empty()).then_some(normalized)
+}
+
 /// The query's parameters, decoded, their names lowercased.
 pub fn url_query(url: &str) -> Vec<(String, String)> {
     let Some(query) = url_parts(url).query else {
@@ -778,6 +788,9 @@ pub fn document(flow: &Flow) -> Document {
     }
     if let Some(path) = url_path(&flow.url) {
         add("path", text(path));
+    }
+    if let Some(path) = url_sidebar_path(&flow.url) {
+        add("path", DocValue::Text(path));
     }
     add("url", text(&flow.url));
     for (name, value) in url_query(&flow.url) {
@@ -937,7 +950,7 @@ impl Sql<'_> {
             "host" => (vec!["url_hostname(url)".into(), "url_host(url)".into()], false),
             "port" => (vec!["url_port(url)".into()], true),
             "scheme" => (vec!["url_scheme(url)".into()], false),
-            "path" => (vec!["url_path(url)".into()], false),
+            "path" => (vec!["url_path(url)".into(), "url_sidebar_path(url)".into()], false),
             "url" => (vec!["url".into()], false),
             "method" => (vec!["method".into()], false),
             "type" => (
@@ -1149,6 +1162,9 @@ pub(crate) fn add_functions(conn: &rusqlite::Connection) -> rusqlite::Result<()>
     })?;
     conn.create_scalar_function("url_path", 1, flags, move |ctx| {
         Ok(url_path(&text_arg(ctx, 0)?.unwrap_or_default()).map(str::to_string))
+    })?;
+    conn.create_scalar_function("url_sidebar_path", 1, flags, move |ctx| {
+        Ok(url_sidebar_path(&text_arg(ctx, 0)?.unwrap_or_default()))
     })?;
     conn.create_scalar_function("url_query_json", 1, flags, move |ctx| {
         let pairs: Vec<ProxyHeader> = url_query(&text_arg(ctx, 0)?.unwrap_or_default())

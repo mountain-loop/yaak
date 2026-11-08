@@ -418,6 +418,9 @@ fn reads_url_parts() {
     assert_eq!(url_scheme("bank.example.com:443"), None);
     assert_eq!(url_path("https://a.com/x/y?q=1#f"), Some("/x/y"));
     assert_eq!(url_path("https://a.com?q=1"), Some(""));
+    assert_eq!(url_sidebar_path("https://a.com/v1//users/"), Some("/v1/users".into()));
+    assert_eq!(url_sidebar_path("https://a.com/v1/users"), None);
+    assert_eq!(url_sidebar_path("https://a.com"), None);
     assert_eq!(url_query("https://a.com/?A=1&b=%20two&a=3#f"), vec![
         ("a".to_string(), "1".to_string()),
         ("b".to_string(), " two".to_string()),

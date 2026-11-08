@@ -268,7 +268,7 @@ export const loadOlderFlowsAtom = atom(null, async (get, set) => {
     const merge = (win: FlowWindow) => {
       if (win.flows[0]?.id !== first.id) return win;
       const merged = prependOlder(win, withoutRemoved(res.flows), PAGE_SIZE);
-      const kept = search == null ? changes : changesFor(search, changes);
+      const kept = search == null ? changes : changesFor(search, merged, changes);
       // Counted when they first applied.
       return { ...applyChanges(merged, kept), total: merged.total };
     };
@@ -286,19 +286,32 @@ export const loadOlderFlowsAtom = atom(null, async (get, set) => {
 });
 
 /**
- * The changes a search's window takes: flows the backend matched against the search as it sent
- * their events, and every deletion. A flow matched against another search, sent as the search
- * changed or read from the database while another process owns the engine, is matched again
- * there, and joins when the answer comes.
+ * The changes a search's window `win` takes: flows the backend matched against the search as it
+ * sent their events, and every deletion. A flow it holds that no longer matches, such as a
+ * pending flow that completed under `@is:pending`, leaves it. A flow matched against another
+ * search, sent as the search changed or read from the database while another process owns the
+ * engine, is matched again there, and joins or leaves when the answer comes.
  */
-function changesFor(search: Pick<SearchWindow, "key" | "query">, changes: ModelPayload[]) {
+function changesFor(
+  search: Pick<SearchWindow, "key" | "query">,
+  win: FlowWindow,
+  changes: ModelPayload[],
+): ModelPayload[] {
   const unknown: ModelPayload[] = [];
-  const kept = changes.filter((c) => {
-    if (c.change.type === "delete") return true;
-    if (c.search?.key === search.key) return c.search.matches;
-    unknown.push(c);
-    return false;
-  });
+  let held: Set<string> | null = null;
+  const kept: ModelPayload[] = [];
+  for (const c of changes) {
+    if (c.change.type === "delete") {
+      kept.push(c);
+    } else if (c.search?.key !== search.key) {
+      unknown.push(c);
+    } else if (c.search.matches) {
+      kept.push(c);
+    } else {
+      held ??= new Set(win.flows.map((f) => f.id));
+      if (held.has(c.model.id)) kept.push({ ...c, change: { type: "delete" } });
+    }
+  }
   if (unknown.length > 0) matchLater(search, unknown);
   return kept;
 }
@@ -306,7 +319,10 @@ function changesFor(search: Pick<SearchWindow, "key" | "query">, changes: ModelP
 /** The store `syncFlows` keeps, for answers that come after the changes they are for */
 let syncedStore: Store | null = null;
 
-/** Matches flows against the search in the database, and adds those it covers to its window */
+/**
+ * Matches flows against the search in the database, then has its window take them as it takes
+ * events matched as they were sent. A flow the window holds a newer copy of meanwhile keeps it.
+ */
 function matchLater(search: Pick<SearchWindow, "key" | "query">, changes: ModelPayload[]) {
   const store = syncedStore;
   if (store == null) return;
@@ -314,16 +330,20 @@ function matchLater(search: Pick<SearchWindow, "key" | "query">, changes: ModelP
   rpc("match_flows", { filter: search.query, ids })
     .then((matched) => {
       const covered = new Set(matched);
-      // Marked as matched, so a window still loading takes them as it settles.
-      const found = changes
-        .filter((c) => covered.has(c.model.id))
-        .map((c) => ({ ...c, search: { key: search.key, matches: true } }));
-      if (found.length === 0) return;
+      const marked = changes.map((c) => ({
+        ...c,
+        search: { key: search.key, matches: covered.has(c.model.id) },
+      }));
       const following = store.get(followingAtom);
       store.set(searchWindowAtom, (s) => {
         if (s?.key !== search.key) return s;
-        if (s.loading) return { ...s, buffered: [...s.buffered, ...found] };
-        const next = applyChanges(s.win, found);
+        if (s.loading) return { ...s, buffered: [...s.buffered, ...marked] };
+        const newer = new Map(s.win.flows.map((f) => [f.id, f.updatedAt]));
+        const current = marked.filter((c) => {
+          const held = newer.get(c.model.id);
+          return held == null || held <= c.model.updatedAt;
+        });
+        const next = applyChanges(s.win, changesFor(s, s.win, current));
         return { ...s, win: following ? trimWindow(next) : next };
       });
     })
@@ -362,7 +382,7 @@ export function syncFlows(store: Store) {
       if (s == null) return s;
       // A matching flow written after the page's snapshot would otherwise be missed.
       if (s.loading) return { ...s, buffered: [...s.buffered, ...changes] };
-      const next = applyChanges(s.win, changesFor(s, changes));
+      const next = applyChanges(s.win, changesFor(s, s.win, changes));
       return { ...s, win: following ? trimWindow(next) : next };
     });
     const selected = store.get(selectedFlowAtom);
@@ -521,7 +541,8 @@ export function syncFlows(store: Store) {
       store.set(searchWindowAtom, (s) => {
         if (s?.key !== key) return s;
         // Applied again over the page: a flow already in it is replaced, not added.
-        const win = applyChanges(page ?? s.win, changesFor(s, s.buffered));
+        const base = page ?? s.win;
+        const win = applyChanges(base, changesFor(s, base, s.buffered));
         return {
           ...s,
           win: page == null ? win : { ...win, total: page.total },

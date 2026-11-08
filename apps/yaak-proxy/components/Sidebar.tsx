@@ -122,7 +122,8 @@ function HideSystemToggle() {
 export function Sidebar() {
   const tree = useAtomValue(sidebarTreeAtom);
   const getItemKey = useCallback(
-    (item: SidebarItem) => `${item.id}:${item.count}:${item.countLabel ?? ""}`,
+    // The label too, as a saved search's changes when it is renamed
+    (item: SidebarItem) => `${item.id}:${item.count}:${item.countLabel ?? ""}:${item.label}`,
     [],
   );
   const decryptList = useDecryptList();

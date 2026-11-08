@@ -888,6 +888,7 @@ mod tests {
             flow("https://api.stripe.community/", "GET", Some(200), None),
             flow("http://x.com:80/a", "GET", Some(200), None),
             flow("https://x.com:443/a", "GET", Some(200), None),
+            flow("https://example.com/v1//users", "GET", Some(200), None),
         ]);
         let count = |query: &str| found(&db, query).len();
         assert_eq!(count("@host:api.stripe.com"), 5);
@@ -896,9 +897,27 @@ mod tests {
         assert_eq!(count("@host:x.com @path:/a"), 2);
         assert_eq!(count("@host:api.stripe.com @path:/v1/charges/* OR @host:x.com"), 5);
         assert_eq!(count("@host:API.stripe.com @path:/V1/charges/*"), 3);
+        // A path with empty segments is found by the sidebar's row for it.
+        assert_eq!(count("@host:example.com @path:/v1/users/*"), 1);
     }
 
     /// The cases `lib/search.test.ts` checks `sidebarPath` against, so the two agree.
+    /// A search with `OR` at its top still pages and leaves out cleared flows.
+    #[test]
+    fn a_top_level_or_keeps_to_the_page_and_the_clear() {
+        let (_dir, db) = db_of(vec![
+            flow("https://a.com/1", "GET", Some(200), None),
+            flow("https://a.com/2", "GET", Some(404), None),
+            flow("https://a.com/3", "GET", Some(200), None),
+        ]);
+        let query = "@status:200 OR @status:404";
+        let before = FlowFilter { before: Some("fl_001".into()), ..FlowFilter::search(query) };
+        assert_eq!(urls(&db, before), vec!["https://a.com/1"]);
+        clear(&db).unwrap();
+        assert!(urls(&db, FlowFilter::search(query)).is_empty());
+        assert_eq!(page(&db, &FlowFilter::search(query)).unwrap().2, Some(0));
+    }
+
     #[test]
     fn sidebar_path_rules() {
         for (url, path) in [
