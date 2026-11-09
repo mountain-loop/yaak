@@ -109,7 +109,7 @@ checksum = "f6f39be698127218cca460cb624878c9aa4e2b47dba3b277963d2bf00bad263b"
 dependencies = [
  "android_log-sys",
  "env_filter 0.1.3",
- "log 0.4.34",
+ "log 0.4.35",
 ]
 
 [[package]]
@@ -211,7 +211,7 @@ checksum = "aeb9553e62312c8756a5979254fc6d7da8bbeb5986a1e17037fab932f7037917"
 dependencies = [
  "clipboard-win",
  "image",
- "log 0.4.34",
+ "log 0.4.35",
  "objc2 0.6.5",
  "objc2-app-kit",
  "objc2-core-foundation",
@@ -304,9 +304,9 @@ dependencies = [
 
 [[package]]
 name = "async-compression"
-version = "0.4.51"
+version = "0.4.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d5755640120b24961f8231e05892e4a4f7e0d04e8aeca161508c9c397946970"
+checksum = "6ad47a740fb906fffdd891e8b6d5fde2511600f7bfaebd68939fa08a14999459"
 dependencies = [
  "compression-codecs",
  "compression-core",
@@ -676,9 +676,9 @@ dependencies = [
 
 [[package]]
 name = "block2"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "340d2f0bdb2a43c1d3cd40513185b2bd7def0aa1052f956455114bc98f82dcf2"
+checksum = "cdeb9d870516001442e364c5220d3574d2da8dc765554b4a617230d33fa58ef5"
 dependencies = [
  "objc2 0.6.5",
 ]
@@ -1186,9 +1186,9 @@ dependencies = [
 
 [[package]]
 name = "compression-codecs"
-version = "0.4.46"
+version = "0.4.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cae36683101b2899f48bd31f8db9839437356188e3b1ff23096e73dab09ba8fe"
+checksum = "84f840cff84d10085260e460023934d0af699e71212b09b2a41452e8bd9cda43"
 dependencies = [
  "brotli 9.1.1",
  "compression-core",
@@ -1334,7 +1334,7 @@ dependencies = [
  "document-features",
  "idna",
  "indexmap 2.14.2",
- "log 0.4.34",
+ "log 0.4.35",
  "serde",
  "serde_derive",
  "serde_json",
@@ -1440,6 +1440,12 @@ dependencies = [
  "foreign-types 0.3.2",
  "libc",
 ]
+
+[[package]]
+name = "core_detect"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
 
 [[package]]
 name = "countme"
@@ -2007,7 +2013,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38"
 dependencies = [
  "bitflags 2.11.0",
- "block2 0.6.1",
+ "block2 0.6.2",
  "libc",
  "objc2 0.6.5",
 ]
@@ -2217,11 +2223,16 @@ checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
 
 [[package]]
 name = "encoding_rs"
-version = "0.8.35"
+version = "0.8.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
+checksum = "89253175e704ab869b04f9db224d38630e0211a53841a79181deae0889e169f5"
 dependencies = [
  "cfg-if",
+ "core_detect",
+ "multiversion_no_op",
+ "rustversion",
+ "scopeguard",
+ "simdutf8",
 ]
 
 [[package]]
@@ -2263,7 +2274,7 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "186e05a59d4c50738528153b83b0b0194d3a29507dfec16eccd4b342903397d0"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "regex 1.13.1",
 ]
 
@@ -2273,7 +2284,7 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "900d271a03799a1ee8d1ca9b19893b48ca674a9284fefcfb85f05e74ed314217"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "regex 1.13.1",
 ]
 
@@ -2287,7 +2298,7 @@ dependencies = [
  "anstyle",
  "env_filter 2.0.0",
  "jiff",
- "log 0.4.34",
+ "log 0.4.35",
 ]
 
 [[package]]
@@ -2348,7 +2359,7 @@ name = "eventsource-client"
 version = "0.14.0"
 source = "git+https://github.com/yaakapp/rust-eventsource-client#60e0e3ac5038149c4778dc4979b09b152214f9a8"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "pin-project",
 ]
 
@@ -2439,7 +2450,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4316185f709b23713e41e3195f90edef7fb00c3ed4adc79769cf09cc762a3b29"
 dependencies = [
  "colored",
- "log 0.4.34",
+ "log 0.4.35",
 ]
 
 [[package]]
@@ -2484,9 +2495,9 @@ checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
 name = "flate2"
-version = "1.1.10"
+version = "1.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e634e2e0ebac1ee034020da1ca582e17ffe4e0f5e985823721e168928136dcb"
+checksum = "626d4928326b646e70f65ed36fc7cf9f206bdb68a0019ee7c6b4709da4e084c4"
 dependencies = [
  "crc32fast",
  "miniz_oxide 0.9.1",
@@ -2968,7 +2979,7 @@ dependencies = [
  "bitflags 2.11.0",
  "libc",
  "libgit2-sys",
- "log 0.4.34",
+ "log 0.4.35",
  "openssl-sys",
 ]
 
@@ -3226,7 +3237,7 @@ version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b7410cae13cbc75623c98ac4cbfd1f0bedddf3227afc24f370cf0f50a44a11c"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "mac",
  "markup5ever 0.14.1",
  "match_token",
@@ -3238,7 +3249,7 @@ version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1054432bae2f14e0061e33d23402fbaa67a921d319d56adc6bcf887ddad1cbc2"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "markup5ever 0.38.0",
 ]
 
@@ -3410,7 +3421,7 @@ dependencies = [
  "core-foundation-sys",
  "iana-time-zone-haiku",
  "js-sys",
- "log 0.4.34",
+ "log 0.4.35",
  "wasm-bindgen",
  "windows-core 0.61.2",
 ]
@@ -3820,7 +3831,7 @@ dependencies = [
  "defmt",
  "jiff-core",
  "jiff-static",
- "log 0.4.34",
+ "log 0.4.35",
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
@@ -3833,7 +3844,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e52fe76043ccecc9005d2305ebaadf7d7fc0cc89ca6baa10a94d6bc68c7128c"
 dependencies = [
  "defmt",
- "log 0.4.34",
+ "log 0.4.35",
 ]
 
 [[package]]
@@ -3858,7 +3869,7 @@ dependencies = [
  "cfg-if",
  "combine",
  "jni-sys 0.3.0",
- "log 0.4.34",
+ "log 0.4.35",
  "thiserror 1.0.69",
  "walkdir",
  "windows-sys 0.45.0",
@@ -3874,7 +3885,7 @@ dependencies = [
  "combine",
  "jni-macros",
  "jni-sys 0.4.1",
- "log 0.4.34",
+ "log 0.4.35",
  "simd_cesu8",
  "thiserror 2.0.21",
  "walkdir",
@@ -4003,7 +4014,7 @@ checksum = "eebcc3aff044e5944a8fbaf69eb277d11986064cba30c468730e8b9909fb551c"
 dependencies = [
  "byteorder",
  "dbus-secret-service",
- "log 0.4.34",
+ "log 0.4.35",
  "security-framework 2.11.1",
  "security-framework 3.7.0",
  "windows-sys 0.60.2",
@@ -4064,7 +4075,7 @@ dependencies = [
  "gtk",
  "gtk-sys",
  "libappindicator-sys",
- "log 0.4.34",
+ "log 0.4.35",
 ]
 
 [[package]]
@@ -4213,14 +4224,14 @@ version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e19e8d5c34a3e0e2223db8e060f9e8264aeeb5c5fc64a4ee9965c062211c024b"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
 ]
 
 [[package]]
 name = "log"
-version = "0.4.34"
+version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "lzma-rust2"
@@ -4348,7 +4359,7 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7a7213d12e1864c0f002f52c2923d4556935a43dec5e71355c2760e0f6e7a18"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "phf 0.11.3",
  "phf_codegen 0.11.3",
  "string_cache 0.8.9",
@@ -4362,7 +4373,7 @@ version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8983d30f2915feeaaab2d6babdd6bc7e9ed1a00b66b5e6d74df19aa9c0e91862"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "tendril 0.5.0",
  "web_atoms",
 ]
@@ -4392,9 +4403,9 @@ checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
 
 [[package]]
 name = "md5"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae960838283323069879657ca3de837e9f7bbb4c7bf6ea7f1b290d5e9476d2e0"
+checksum = "7ebb8d8732c6a6df3d8f032a82911cfc747e00efb95cc46e8d0acd5b5b88570c"
 
 [[package]]
 name = "memchr"
@@ -4475,7 +4486,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a650543ca06a924e8b371db273b2756685faae30f8487da1b56505a8f78b0c"
 dependencies = [
  "libc",
- "log 0.4.34",
+ "log 0.4.35",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.48.0",
 ]
@@ -4487,7 +4498,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1788edb87fdc09c7e26304471e2f5be8cdefb1b6930d6e3985fc02ff53bf86ee"
 dependencies = [
  "libc",
- "log 0.4.34",
+ "log 0.4.35",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.61.2",
 ]
@@ -4514,6 +4525,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "multiversion_no_op"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
+
+[[package]]
 name = "nanoid"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4529,7 +4546,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "465500e14ea162429d264d44189adc38b199b62b1c21eea9f69e4b73cb03bbf2"
 dependencies = [
  "libc",
- "log 0.4.34",
+ "log 0.4.35",
  "openssl",
  "openssl-probe",
  "openssl-sys",
@@ -4547,7 +4564,7 @@ checksum = "c3f42e7bbe13d351b6bead8286a43aac9534b82bd3cc43e47037f012ebfd62d4"
 dependencies = [
  "bitflags 2.11.0",
  "jni-sys 0.3.0",
- "log 0.4.34",
+ "log 0.4.35",
  "ndk-sys",
  "num_enum",
  "raw-window-handle",
@@ -4671,7 +4688,7 @@ dependencies = [
  "inotify",
  "kqueue",
  "libc",
- "log 0.4.34",
+ "log 0.4.35",
  "mio 1.2.4",
  "notify-types",
  "objc2-core-foundation",
@@ -4802,7 +4819,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d49e936b501e5c5bf01fda3a9452ff86dc3ea98ad5f283e1455153142d97518c"
 dependencies = [
  "bitflags 2.11.0",
- "block2 0.6.1",
+ "block2 0.6.2",
  "libc",
  "objc2 0.6.5",
  "objc2-cloud-kit",
@@ -4951,7 +4968,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
 dependencies = [
  "bitflags 2.11.0",
- "block2 0.6.1",
+ "block2 0.6.2",
  "libc",
  "objc2 0.6.5",
  "objc2-core-foundation",
@@ -5057,7 +5074,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25b1312ad7bc8a0e92adae17aa10f90aae1fb618832f9b993b022b591027daed"
 dependencies = [
  "bitflags 2.11.0",
- "block2 0.6.1",
+ "block2 0.6.2",
  "objc2 0.6.5",
  "objc2-cloud-kit",
  "objc2-core-data",
@@ -5087,7 +5104,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91672909de8b1ce1c2252e95bbee8c1649c9ad9d14b9248b3d7b4c47903c47ad"
 dependencies = [
  "bitflags 2.11.0",
- "block2 0.6.1",
+ "block2 0.6.2",
  "objc2 0.6.5",
  "objc2-app-kit",
  "objc2-core-foundation",
@@ -5162,9 +5179,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.117"
+version = "0.9.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b47e7e6bb2c38cd930d25a23b40fa52e068c10e85f3e03a7f5ba5aaca5713695"
+checksum = "19c413d6ec9ebaf5e1c829d355cb3e9f783778d700f135be0921d52fce3c60ae"
 dependencies = [
  "cc",
  "libc",
@@ -5214,7 +5231,7 @@ version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41fc863e2ca13dc2d5c34fb22ea4a588248ac14db929616ba65c45f21744b1e9"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "serde",
  "windows-sys 0.52.0",
 ]
@@ -6596,7 +6613,7 @@ version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51de85fb3fb6524929c8a2eb85e6b6d363de4e8c48f9e2c2eac4944abc181c93"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "parking_lot",
  "scheduled-thread-pool",
 ]
@@ -6918,7 +6935,7 @@ dependencies = [
  "hyper-tls",
  "hyper-util",
  "js-sys",
- "log 0.4.34",
+ "log 0.4.35",
  "mime",
  "mime_guess",
  "native-tls",
@@ -6952,13 +6969,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a15ad77d9e70a92437d8f74c35d99b4e4691128df018833e99f90bcd36152672"
 dependencies = [
  "ashpd",
- "block2 0.6.1",
+ "block2 0.6.2",
  "dispatch2",
  "glib-sys",
  "gobject-sys",
  "gtk-sys",
  "js-sys",
- "log 0.4.34",
+ "log 0.4.35",
  "objc2 0.6.5",
  "objc2-app-kit",
  "objc2-core-foundation",
@@ -6997,9 +7014,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "3.8.0"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8be15815186873ea063bf005011d16c356804973489e40c39116ae3a2878d1f"
+checksum = "d24a7e92f4bcaa36b97fa93c4fa7ca8f3e669eced949345b3462dba333c7f909"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -7018,6 +7035,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "sha2 0.11.1",
  "sse-stream",
  "thiserror 2.0.21",
  "tokio",
@@ -7030,9 +7048,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp-macros"
-version = "3.8.0"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b0748e054a5f5598b3213cf72099ae6b2745ba4d996c59ccf455150a7dbb839"
+checksum = "b3140f24a766f80f9ec1607bde85680959a69b83d46fa9ce87dadab7e67ab029"
 dependencies = [
  "darling 0.24.1",
  "proc-macro2",
@@ -7127,7 +7145,7 @@ dependencies = [
  "inotify",
  "kqueue",
  "libc",
- "log 0.4.34",
+ "log 0.4.35",
  "mio 1.2.4",
  "rolldown-notify-types",
  "walkdir",
@@ -7140,7 +7158,7 @@ version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69128ae9ebf6d65638157e79dc9430e9341179aed9d85dde315ce6a702dba7e1"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "rolldown-file-id",
  "rolldown-notify",
  "rolldown-notify-types",
@@ -7561,7 +7579,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "aws-lc-rs",
- "log 0.4.34",
+ "log 0.4.35",
  "once_cell",
  "ring",
  "rustls-pki-types",
@@ -7609,7 +7627,7 @@ dependencies = [
  "core-foundation 0.10.1",
  "core-foundation-sys",
  "jni 0.22.4",
- "log 0.4.34",
+ "log 0.4.35",
  "once_cell",
  "rustls",
  "rustls-native-certs",
@@ -7871,7 +7889,7 @@ dependencies = [
  "cssparser 0.29.6",
  "derive_more 0.99.20",
  "fxhash",
- "log 0.4.34",
+ "log 0.4.35",
  "phf 0.8.0",
  "phf_codegen 0.8.0",
  "precomputed-hash",
@@ -7888,7 +7906,7 @@ dependencies = [
  "bitflags 2.11.0",
  "cssparser 0.36.0",
  "derive_more 2.1.1",
- "log 0.4.34",
+ "log 0.4.35",
  "new_debug_unreachable",
  "phf 0.13.1",
  "phf_codegen 0.13.1",
@@ -8370,7 +8388,7 @@ dependencies = [
  "core-graphics 0.24.0",
  "foreign-types 0.5.0",
  "js-sys",
- "log 0.4.34",
+ "log 0.4.35",
  "objc2 0.5.2",
  "objc2-foundation 0.2.2",
  "objc2-quartz-core 0.2.2",
@@ -8696,7 +8714,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a33f7f9e486ade65fcf1e45c440f9236c904f5c1002cdc7fc6ae582777345ce4"
 dependencies = [
  "bitflags 2.11.0",
- "block2 0.6.1",
+ "block2 0.6.2",
  "core-foundation 0.10.1",
  "core-graphics 0.25.0",
  "crossbeam-channel",
@@ -8709,7 +8727,7 @@ dependencies = [
  "gtk",
  "jni 0.21.1",
  "libc",
- "log 0.4.34",
+ "log 0.4.35",
  "ndk",
  "ndk-sys",
  "objc2 0.6.5",
@@ -8776,7 +8794,7 @@ dependencies = [
  "http-range",
  "jni 0.21.1",
  "libc",
- "log 0.4.34",
+ "log 0.4.35",
  "mime",
  "muda",
  "objc2 0.6.5",
@@ -8891,7 +8909,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4136fb69d967753d000423d7e5f863f89bf949efbdfbecb43a580426a01a0194"
 dependencies = [
  "arboard",
- "log 0.4.34",
+ "log 0.4.35",
  "serde",
  "serde_json",
  "tauri",
@@ -8926,7 +8944,7 @@ version = "2.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61854a36651aa48381e5e209f69a01273b77f3f9f91f0c430b1b98d33bd47229"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "raw-window-handle",
  "rfd",
  "serde",
@@ -8947,7 +8965,7 @@ dependencies = [
  "anyhow",
  "dunce",
  "glob",
- "log 0.4.34",
+ "log 0.4.35",
  "objc2-foundation 0.3.2",
  "percent-encoding",
  "schemars 0.8.22",
@@ -8970,7 +8988,7 @@ checksum = "86f2e3c40b77fd1eb7f8e1b6900fb036aee2da1ea2d3783c91255a82c636649d"
 dependencies = [
  "android_logger",
  "fern",
- "log 0.4.34",
+ "log 0.4.35",
  "objc2 0.6.5",
  "objc2-foundation 0.3.2",
  "serde",
@@ -9012,7 +9030,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8f08346c8deb39e96f86973da0e2d76cbb933d7ac9b750f6dc4daf955a6f997"
 dependencies = [
  "gethostname 1.0.2",
- "log 0.4.34",
+ "log 0.4.35",
  "os_info",
  "serde",
  "serde_json",
@@ -9030,7 +9048,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8548af174c5516e4f71f142acea4d02e00316296ea9aafa58798851481003e3c"
 dependencies = [
  "encoding_rs",
- "log 0.4.34",
+ "log 0.4.35",
  "open",
  "os_pipe",
  "regex 1.13.1",
@@ -9073,7 +9091,7 @@ dependencies = [
  "futures-util",
  "http",
  "infer",
- "log 0.4.34",
+ "log 0.4.35",
  "minisign-verify",
  "osakit",
  "percent-encoding",
@@ -9129,7 +9147,7 @@ dependencies = [
  "html5ever 0.29.1",
  "http",
  "kuchikiki",
- "log 0.4.34",
+ "log 0.4.35",
  "objc2 0.6.5",
  "objc2-app-kit",
  "objc2-foundation 0.3.2",
@@ -9152,7 +9170,7 @@ dependencies = [
  "gtk",
  "http",
  "jni 0.21.1",
- "log 0.4.34",
+ "log 0.4.35",
  "objc2 0.6.5",
  "objc2-app-kit",
  "objc2-web-kit",
@@ -9187,7 +9205,7 @@ dependencies = [
  "infer",
  "json-patch",
  "kuchikiki",
- "log 0.4.34",
+ "log 0.4.35",
  "memchr",
  "phf 0.13.1",
  "plist",
@@ -9224,7 +9242,7 @@ dependencies = [
  "http",
  "infer",
  "json-patch",
- "log 0.4.34",
+ "log 0.4.35",
  "memchr",
  "phf 0.13.1",
  "plist",
@@ -9530,7 +9548,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17a073bfed563fa236697a068031408a93cd9522e08abf9933ead3e73411bd71"
 dependencies = [
  "futures-util",
- "log 0.4.34",
+ "log 0.4.35",
  "rustls",
  "rustls-native-certs",
  "rustls-pki-types",
@@ -9795,7 +9813,7 @@ version = "0.1.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "784e0ac535deb450455cbfa28a6f0df145ea1bb7ae51b821cf5e7927fdcfbdd0"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
@@ -9839,7 +9857,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "once_cell",
  "tracing-core",
 ]
@@ -9952,7 +9970,7 @@ dependencies = [
  "data-encoding",
  "http",
  "httparse",
- "log 0.4.34",
+ "log 0.4.35",
  "rand 0.10.3",
  "rustls",
  "rustls-pki-types",
@@ -10145,7 +10163,7 @@ dependencies = [
  "base64 0.22.1",
  "cookie_store",
  "flate2",
- "log 0.4.34",
+ "log 0.4.35",
  "percent-encoding",
  "rustls",
  "rustls-pki-types",
@@ -10166,7 +10184,7 @@ dependencies = [
  "base64 0.22.1",
  "http",
  "httparse",
- "log 0.4.34",
+ "log 0.4.35",
 ]
 
 [[package]]
@@ -10501,7 +10519,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8eab23fefc9e41f8e841df4a9c707e8a8c4ed26e944ef69297184de2785e3be"
 dependencies = [
  "dlib",
- "log 0.4.34",
+ "log 0.4.35",
  "pkg-config",
 ]
 
@@ -10539,12 +10557,12 @@ dependencies = [
 
 [[package]]
 name = "webbrowser"
-version = "1.2.5"
+version = "1.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2c8ddfbbf66e501434657400268cefe51b95140a0266236415cda7627732df7"
+checksum = "fe8d20d0214027baf11b8b0cc307c1da7657d8f4db9aa956f7de27a6fb1acbd5"
 dependencies = [
  "jni 0.22.4",
- "log 0.4.34",
+ "log 0.4.35",
  "ndk-context",
  "objc2 0.6.5",
  "objc2-app-kit",
@@ -11288,7 +11306,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "959c7ac3b8afde864f7a7448ac16f29b2b83350b7eccbf77fb781c3999aa6848"
 dependencies = [
  "libc",
- "log 0.4.34",
+ "log 0.4.35",
  "os_pipe",
  "rustix 1.1.5",
  "thiserror 2.0.21",
@@ -11312,7 +11330,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "186f9871daa55fd9c016578b810d149de58367113db7fb72b462d2323ce19514"
 dependencies = [
  "base64 0.22.1",
- "block2 0.6.1",
+ "block2 0.6.2",
  "cookie",
  "crossbeam-channel",
  "dirs 6.0.0",
@@ -11410,7 +11428,7 @@ dependencies = [
  "async-trait",
  "base64 0.23.1",
  "chrono",
- "log 0.4.34",
+ "log 0.4.35",
  "md5",
  "rusqlite",
  "serde_json",
@@ -11432,7 +11450,7 @@ dependencies = [
 name = "yaak-api"
 version = "0.1.0"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "reqwest",
  "sysproxy",
  "thiserror 2.0.21",
@@ -11449,7 +11467,7 @@ dependencies = [
  "cookie",
  "eventsource-client",
  "http",
- "log 0.4.34",
+ "log 0.4.35",
  "md5",
  "mime_guess",
  "notify",
@@ -11515,7 +11533,7 @@ dependencies = [
 name = "yaak-app-proxy"
 version = "0.0.0"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "serde_json",
  "tauri",
  "tauri-build",
@@ -11544,7 +11562,7 @@ dependencies = [
  "include_dir",
  "inquire",
  "keyring",
- "log 0.4.34",
+ "log 0.4.35",
  "oxc_resolver",
  "predicates",
  "rand 0.10.3",
@@ -11615,7 +11633,7 @@ dependencies = [
  "chacha20poly1305",
  "dbus-secret-service",
  "keyring",
- "log 0.4.34",
+ "log 0.4.35",
  "serde",
  "tempfile",
  "thiserror 2.0.21",
@@ -11629,7 +11647,7 @@ dependencies = [
  "chrono",
  "getrandom 0.3.4",
  "include_dir",
- "log 0.4.34",
+ "log 0.4.35",
  "nanoid",
  "openssl-sys",
  "r2d2",
@@ -11674,7 +11692,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "git2",
- "log 0.4.34",
+ "log 0.4.35",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -11697,7 +11715,7 @@ dependencies = [
  "dunce",
  "hyper-rustls",
  "hyper-util",
- "log 0.4.34",
+ "log 0.4.35",
  "md5",
  "prost",
  "prost-reflect",
@@ -11728,7 +11746,7 @@ dependencies = [
  "futures-util",
  "http-body",
  "hyper-util",
- "log 0.4.34",
+ "log 0.4.35",
  "mime_guess",
  "native-tls",
  "reqwest",
@@ -11753,7 +11771,7 @@ name = "yaak-license"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "log 0.4.34",
+ "log 0.4.35",
  "reqwest",
  "serde",
  "serde_json",
@@ -11770,7 +11788,7 @@ dependencies = [
 name = "yaak-lifecycle"
 version = "0.0.0"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "yaak-models",
 ]
 
@@ -11780,7 +11798,7 @@ version = "0.1.0"
 dependencies = [
  "cocoa",
  "csscolorparser",
- "log 0.4.34",
+ "log 0.4.35",
  "objc",
  "rand 0.10.3",
  "tauri",
@@ -11795,7 +11813,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
- "log 0.4.34",
+ "log 0.4.35",
  "reqwest",
  "rmcp",
  "serde",
@@ -11813,7 +11831,7 @@ dependencies = [
  "chrono",
  "hex",
  "include_dir",
- "log 0.4.34",
+ "log 0.4.35",
  "nanoid",
  "r2d2",
  "r2d2_sqlite",
@@ -11840,7 +11858,7 @@ dependencies = [
  "bytes",
  "clap",
  "env_logger",
- "log 0.4.34",
+ "log 0.4.35",
  "serde",
  "serde_json",
  "tokio",
@@ -11859,7 +11877,7 @@ dependencies = [
  "futures-util",
  "hex",
  "keyring",
- "log 0.4.34",
+ "log 0.4.35",
  "md5",
  "path-slash",
  "rand 0.10.3",
@@ -11883,7 +11901,7 @@ name = "yaak-proxy"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
- "block2 0.6.1",
+ "block2 0.6.2",
  "bytes",
  "dispatch2",
  "flate2",
@@ -11893,7 +11911,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "libc",
- "log 0.4.34",
+ "log 0.4.35",
  "pem",
  "rcgen",
  "reqwest",
@@ -11936,7 +11954,7 @@ dependencies = [
  "hyper-util",
  "include_dir",
  "libc",
- "log 0.4.34",
+ "log 0.4.35",
  "objc2 0.6.5",
  "objc2-app-kit",
  "objc2-foundation 0.3.2",
@@ -11987,7 +12005,7 @@ dependencies = [
 name = "yaak-rpc"
 version = "0.0.0"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "serde",
  "serde_json",
  "ts-rs",
@@ -12023,7 +12041,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "hex",
- "log 0.4.34",
+ "log 0.4.35",
  "notify",
  "serde",
  "serde_json",
@@ -12043,7 +12061,7 @@ version = "0.1.0"
 dependencies = [
  "dark-light",
  "dispatch2",
- "log 0.4.34",
+ "log 0.4.35",
  "objc2-app-kit",
  "objc2-foundation 0.3.2",
  "tauri",
@@ -12063,7 +12081,7 @@ name = "yaak-templates"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
- "log 0.4.34",
+ "log 0.4.35",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -12077,7 +12095,7 @@ dependencies = [
 name = "yaak-tls"
 version = "0.1.0"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "p12",
  "pem",
  "rustls",
@@ -12096,7 +12114,7 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "js-sys",
- "log 0.4.34",
+ "log 0.4.35",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -12121,7 +12139,7 @@ dependencies = [
  "clap",
  "env_logger",
  "futures-util",
- "log 0.4.34",
+ "log 0.4.35",
  "serde",
  "serde_json",
  "tempfile",
@@ -12139,7 +12157,7 @@ dependencies = [
 name = "yaak-window"
 version = "0.1.0"
 dependencies = [
- "log 0.4.34",
+ "log 0.4.35",
  "md5",
  "rand 0.10.3",
  "serde",
@@ -12154,7 +12172,7 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "http",
- "log 0.4.34",
+ "log 0.4.35",
  "md5",
  "serde",
  "serde_json",
@@ -12438,7 +12456,7 @@ checksum = "f05cd8797d63865425ff89b5c4a48804f35ba0ce8d125800027ad6017d2b5249"
 dependencies = [
  "bumpalo",
  "crc32fast",
- "log 0.4.34",
+ "log 0.4.35",
  "simd-adler32",
 ]
 
