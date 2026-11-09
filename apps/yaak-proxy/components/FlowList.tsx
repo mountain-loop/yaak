@@ -215,6 +215,14 @@ export function FlowList({ style, className }: Props) {
     }
   }, [hold, loadOlder, setFollowing, ROW_HEIGHT]);
 
+  // Focus moving to a sort button out of view scrolls the header itself; the rows follow.
+  const handleHeaderScroll = useCallback(() => {
+    const header = headerScrollRef.current;
+    const el = scrollRef.current;
+    if (header == null || el == null || header.scrollLeft === el.scrollLeft) return;
+    el.scrollLeft = header.scrollLeft;
+  }, []);
+
   // The header scrolls the list sideways, as it has no scrollbar of its own.
   const handleHeaderWheel = useCallback((e: WheelEvent<HTMLDivElement>) => {
     const el = scrollRef.current;
@@ -307,6 +315,7 @@ export function FlowList({ style, className }: Props) {
       <div
         ref={headerScrollRef}
         onWheel={handleHeaderWheel}
+        onScroll={handleHeaderScroll}
         style={{ marginRight: scrollbarWidth }}
         className="overflow-hidden"
       >

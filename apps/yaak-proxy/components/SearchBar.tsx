@@ -165,7 +165,13 @@ export const SearchBar = memo(function SearchBar() {
                 ⌘F
               </kbd>
             ) : (
-              <div className="flex items-center self-center ml-1 mr-0.5">
+              // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- keeps focus in the editor
+              <div
+                // Pressing these leaves the editor focused, so a wrapped box does not collapse and
+                // move them before the click lands.
+                onMouseDown={(e) => e.preventDefault()}
+                className="flex items-center self-center ml-1 mr-0.5"
+              >
                 <Dropdown
                   items={[
                     {

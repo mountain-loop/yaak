@@ -42,7 +42,6 @@ export function FlowTimeline({ flow }: { flow: Flow }) {
               ) : (
                 <Tooltip
                   wrap
-                  onlyWhenTruncated
                   content={event.detail}
                   delay={CONTROL_TOOLTIP_DELAY}
                 >

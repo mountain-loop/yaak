@@ -166,6 +166,11 @@ function appQueryFor(app: string, system: boolean): string {
   return system ? `${fieldTerm("is", "system")} ${query}` : query;
 }
 
+/** A program outside an app bundle: its executable, for Reveal in Finder */
+function programPath(flow: Flow): string | undefined {
+  return flow.clientBundleId == null ? (flow.clientPath ?? undefined) : undefined;
+}
+
 /** A node being built, its children by id */
 interface Trie {
   item: SidebarItem;
@@ -185,6 +190,9 @@ function child(parent: Trie, row: PlaceRow): Trie {
     if (row.decrypt != null) node.item.decrypt = row.decrypt;
     if (row.path != null) node.item.path = row.path;
     parent.children.set(row.id, node);
+  } else if (node.item.path !== row.path) {
+    // Folders of the same name in different places share a row, which then names no one path.
+    delete node.item.path;
   }
   node.item.count++;
   return node;
@@ -272,10 +280,13 @@ export function buildSidebarTree(
       }
       if (folder != null) item.sublabel = folder;
       if (flow.clientPath != null) item.appPath = flow.clientPath;
-      // A program outside an app bundle: its executable
-      if (flow.clientBundleId == null && flow.clientPath != null) item.path = flow.clientPath;
+      const program = programPath(flow);
+      if (program != null) item.path = program;
       app = { item, children: new Map() };
       parent.children.set(id, app);
+    } else if (app.item.path !== programPath(flow)) {
+      // Programs of the same name in different places share a row, which names no one path.
+      delete app.item.path;
     }
     app.item.count++;
     parent.item.count++;

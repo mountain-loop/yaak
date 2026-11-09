@@ -177,6 +177,24 @@ describe("programs outside an app", () => {
   });
 });
 
+test("a row shared by folders or programs in different places names no path", () => {
+  const tool = { clientName: "claude", clientPath: "/usr/local/bin/claude" };
+  const items = itemsById(
+    buildSidebarTree(
+      [
+        flow("https://a.com/", { ...tool, clientCwd: "/src/yaak" }),
+        flow("https://b.com/", { ...tool, clientCwd: "/worktrees/123/yaak" }),
+        flow("https://c.com/", { ...tool, clientPath: "/opt/bin/claude", clientCwd: "/src/ml" }),
+      ],
+      3,
+    ),
+  );
+  expect(items.get("app:claude|cwd:yaak")?.kind).toBe("folder");
+  expect(items.get("app:claude|cwd:yaak")?.path).toBeUndefined();
+  expect(items.get("app:claude|cwd:ml")?.path).toBe("/src/ml");
+  expect(items.get("app:claude")?.path).toBeUndefined();
+});
+
 test("an app in a bundle has no path to reveal", () => {
   const items = itemsById(buildSidebarTree([flow("https://slack.com/", slack)], 1));
   expect(items.get("app:Slack")?.path).toBeUndefined();
