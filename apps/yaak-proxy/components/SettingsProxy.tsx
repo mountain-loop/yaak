@@ -1,6 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
-import type { HttpVersion, SystemProxyStatus } from "@yaakapp-internal/proxy-lib";
+import type {
+  HttpVersion,
+  SystemProxyStatus,
+  TrafficRetention,
+} from "@yaakapp-internal/proxy-lib";
 import {
   Button,
   Dialog,
@@ -31,7 +35,6 @@ import {
   type TerminalShell,
 } from "../lib/env";
 import {
-  CAPTURE_LIMIT_OPTIONS,
   KEEP_TRAFFIC_OPTIONS,
   sizeFromOptionValue,
   sizeOptionsFor,
@@ -44,16 +47,15 @@ import { useShowToast } from "../lib/toast";
 import { DecryptListEditor } from "./DecryptListEditor";
 
 /**
- * The proxy's own settings tab: how it listens, what it decrypts, the system proxy and its
- * helper, how much traffic it keeps, and the environment for one terminal. Everything set once
- * and left alone, which is what left the state pill's menu.
+ * The proxy's own settings tab: how it listens and the system proxy, what it decrypts, what
+ * happens to captured traffic, and the environment for one terminal. Everything set once and
+ * left alone, which is what left the state pill's menu.
  */
 export function SettingsProxy() {
   const proxyState = useAtomValue(proxyStateAtom);
   const store = useStore();
   const refresh = { onSettled: () => void refreshProxyState(store) };
   const setHttpVersion = useRpcMutation("set_http_version", refresh);
-  const setCaptureLimit = useRpcMutation("set_capture_body_limit", refresh);
   const setAtLaunch = useRpcMutation("set_system_proxy_at_launch", refresh);
   const systemProxy = useRpcQuery("system_proxy_status", {});
   // Another process owning the engine wouldn't see changes until it restarts
@@ -63,10 +65,10 @@ export function SettingsProxy() {
     <VStack space={1.5} className="mb-4">
       <div className="mb-3">
         <Heading>Proxy</Heading>
-        <p className="text-text-subtle">Listening, decryption, storage and terminals</p>
+        <p className="text-text-subtle">Listening, decryption, traffic and terminals</p>
       </div>
       <SettingsList className="space-y-8">
-        <SettingsSection title="Listening">
+        <SettingsSection title="Proxy">
           <PortRow disabled={elsewhere} />
           <SettingRowSelect<HttpVersion>
             name="httpVersion"
@@ -80,40 +82,27 @@ export function SettingsProxy() {
               { label: "HTTP/1.1 only", value: "http1Only" },
             ]}
           />
-          <SettingRowSelect
-            name="captureBodyLimit"
-            title="Body limit"
-            description="Stored per body"
-            value={sizeOptionValue(proxyState?.captureBodyLimit ?? null)}
-            disabled={elsewhere}
-            onChange={(v) => {
-              const bytes = sizeFromOptionValue(v);
-              if (bytes != null) setCaptureLimit.mutate({ bytes });
-            }}
-            options={sizeOptionsFor(CAPTURE_LIMIT_OPTIONS, proxyState?.captureBodyLimit ?? null)
-              .filter((o) => o.bytes != null)
-              .map(({ label, value }) => ({ label, value }))}
-          />
+          {systemProxy.data?.supported === true && (
+            <>
+              <SettingRowBoolean
+                title="Override system proxy"
+                description="At launch"
+                checked={proxyState?.systemProxyAtLaunch ?? true}
+                disabled={setAtLaunch.isPending}
+                onChange={(enabled) => setAtLaunch.mutate({ enabled })}
+              />
+              <HelperRow status={systemProxy.data} />
+            </>
+          )}
         </SettingsSection>
 
-        <SettingsSection title="Decrypt">
+        <SettingsSection title="Decryption">
           <DecryptListEditor className="py-4" />
         </SettingsSection>
 
-        {systemProxy.data?.supported === true && (
-          <SettingsSection title="System proxy">
-            <SettingRowBoolean
-              title="Override at launch"
-              checked={proxyState?.systemProxyAtLaunch ?? true}
-              disabled={setAtLaunch.isPending}
-              onChange={(enabled) => setAtLaunch.mutate({ enabled })}
-            />
-            <HelperRow status={systemProxy.data} />
-          </SettingsSection>
-        )}
-
-        <SettingsSection title="Storage">
-          <KeepTrafficRow />
+        <SettingsSection title="Traffic">
+          <TrafficRow />
+          {proxyState?.traffic === "keep" && <KeepTrafficRow />}
           <ResetRow />
         </SettingsSection>
 
@@ -225,6 +214,30 @@ function HelperRow({ status }: { status: SystemProxyStatus }) {
   );
 }
 
+/** Whether captured traffic is cleared as the app launches or kept between launches */
+function TrafficRow() {
+  const proxyState = useAtomValue(proxyStateAtom);
+  const store = useStore();
+  const setTraffic = useRpcMutation("set_traffic", {
+    onSettled: () => void refreshProxyState(store),
+  });
+  return (
+    <SettingRowSelect<TrafficRetention>
+      name="traffic"
+      title="Captured traffic"
+      selectClassName="w-56!"
+      value={proxyState?.traffic ?? "clearOnLaunch"}
+      disabled={proxyState?.otherOwner != null}
+      onChange={(traffic) => setTraffic.mutate({ traffic })}
+      options={[
+        { label: "Clear on launch", value: "clearOnLaunch" },
+        { label: "Keep between launches", value: "keep" },
+      ]}
+    />
+  );
+}
+
+/** The most traffic kept between launches, beside what is stored now */
 function KeepTrafficRow() {
   const proxyState = useAtomValue(proxyStateAtom);
   const store = useStore();
@@ -234,7 +247,7 @@ function KeepTrafficRow() {
   });
   const keep = proxyState?.keepTrafficBytes ?? null;
   return (
-    <SettingRow title="Keep traffic" description="Oldest flows dropped past the limit">
+    <SettingRow title="Size limit" description="Oldest flows dropped past it">
       <div className="flex items-center gap-3">
         {size.data != null && (
           <span className="text-sm text-text-subtle tabular-nums whitespace-nowrap">
@@ -243,7 +256,7 @@ function KeepTrafficRow() {
         )}
         <SettingSelectControl
           name="keepTraffic"
-          label="Keep traffic"
+          label="Size limit"
           value={sizeOptionValue(keep)}
           disabled={proxyState?.otherOwner != null}
           onChange={(v) => setKeep.mutate({ bytes: sizeFromOptionValue(v) })}

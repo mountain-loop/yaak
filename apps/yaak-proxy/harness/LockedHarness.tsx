@@ -23,6 +23,7 @@ const STATE: GetProxyStateResponse = {
   locked: { message: LOCKED, keychain: true },
   otherOwner: null,
   captureBodyLimit: 10 * 1024 * 1024,
+  traffic: "clearOnLaunch",
   keepTrafficBytes: null,
 };
 

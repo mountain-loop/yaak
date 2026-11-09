@@ -33,7 +33,7 @@ use crate::macos::{SystemProxyBackend, SystemProxyStatus};
 use crate::messages::FlowMessage;
 use crate::models::{Flow, FlowBody, ModelPayload, ProxyHeader, StreamKind, find_header};
 use crate::save::{ClientDb, SaveFlowRequest, SaveFlowResponse, WorkspaceSummary};
-use crate::settings::{DecryptList, HttpVersion, ProxySettings};
+use crate::settings::{DecryptList, HttpVersion, ProxySettings, TrafficRetention};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use chrono::{DateTime, Utc};
@@ -106,6 +106,15 @@ pub struct ProxyCtx {
     resets: Arc<AtomicU64>,
     /// The thread keeping captured traffic under the keep-traffic cap, while there is one.
     sweeper: Arc<(Mutex<Sweeper>, Condvar)>,
+    /// Captured traffic is to be emptied as the databases are first unlocked, this launch
+    /// being set to clear it. Taken once it is.
+    clear_at_launch: Arc<AtomicBool>,
+    /// The system proxy watch is running, so it is started once.
+    watching_system_proxy: Arc<AtomicBool>,
+    /// System proxy changes decided but not yet made, from when `system_proxy_on` is set until
+    /// the change is done. Until then the system proxy is not yet as meant, and following it
+    /// would undo the change before it is made.
+    system_proxy_pending: Arc<AtomicU64>,
     pub events: RpcEventEmitter,
     /// gRPC schemas as decoded, and the protoc that compiles attached protos.
     pub grpc: GrpcState,
@@ -150,10 +159,18 @@ impl ProxyCtx {
             lock_reason: Arc::new(Mutex::new(None)),
             resets: Arc::new(AtomicU64::new(0)),
             sweeper: Default::default(),
+            clear_at_launch: Arc::new(AtomicBool::new(false)),
+            watching_system_proxy: Arc::new(AtomicBool::new(false)),
+            system_proxy_pending: Arc::new(AtomicU64::new(0)),
             events,
             grpc: GrpcState::default(),
             live_search: Default::default(),
         };
+        // Unreadable settings keep the traffic: nothing is deleted on a guess. Nor is traffic
+        // another process is capturing as this launches, which this one may take over later.
+        let clear = ctx.settings().is_ok_and(|s| s.traffic() == TrafficRetention::ClearOnLaunch)
+            && control::live_owner(data_dir).is_none_or(|o| o.pid == std::process::id());
+        ctx.clear_at_launch.store(clear, Ordering::SeqCst);
         if db::needs_encrypting(data_dir) {
             let unlocking = ctx.clone();
             std::thread::spawn(move || {
@@ -251,12 +268,24 @@ impl ProxyCtx {
         }
 
         let db_key = db::database_key(&key);
+        // Before converting, so bodies about to be deleted aren't encrypted first.
+        let clearing = self.take_clear_at_launch();
+        if clearing && let Err(e) = db::remove_blobs(&self.data_dir) {
+            warn!("{e}");
+        }
+        let converting = converting && db::needs_encrypting(&self.data_dir);
         if converting {
             let converted = self.encrypt_existing(&db_key);
             self.set_encrypting(None);
             converted?;
         }
         let stores = Stores::open(&self.data_dir, &db_key)?;
+        if clearing {
+            match flows::delete_all(&stores.db) {
+                Ok(()) => log::info!("Cleared captured traffic at launch"),
+                Err(e) => warn!("{e}"),
+            }
+        }
         // SQLCipher's exit handler is registered by now, so the gate's runs before it.
         exit_gate::install();
         *self.stores.write().unwrap_or_else(PoisonError::into_inner) = Some(stores);
@@ -271,6 +300,23 @@ impl ProxyCtx {
         }
         self.sweep_soon();
         Ok(key)
+    }
+
+    /// Whether this unlock empties the captured traffic: the first to get this far since a
+    /// launch set to clear it. Not while another process owns the engine, as the CLI daemon
+    /// may: the traffic is its, still being written, and this app takes it over as it is. Asked
+    /// at launch too, as the first unlock may come later, once the keychain allows it.
+    fn take_clear_at_launch(&self) -> bool {
+        if !self.clear_at_launch.swap(false, Ordering::SeqCst) {
+            return false;
+        }
+        match control::live_owner(&self.data_dir) {
+            Some(owner) if owner.pid != std::process::id() => {
+                log::info!("Keeping captured traffic: {}", control::already_owned(&owner));
+                false
+            }
+            _ => true,
+        }
     }
 
     /// Converts the plain databases, telling the app how far it has got a few times a second.
@@ -440,11 +486,13 @@ impl ProxyCtx {
             *last_port = Some(bound);
         }
         let route = system_proxy.unwrap_or(settings.system_proxy_at_launch);
+        let pending = route.then(|| self.pending_system_proxy_change());
         self.system_proxy_on.store(route, Ordering::SeqCst);
-        if route {
+        if let Some(pending) = pending {
             // The password dialog can sit open for a while; the engine is up regardless.
             let ctx = self.detached();
             std::thread::spawn(move || {
+                let _pending = pending;
                 if let Err(e) = ctx.change_system_proxy(true, bound, true) {
                     warn!("Failed to turn on the system proxy: {e}");
                     ctx.system_proxy_on.store(false, Ordering::SeqCst);
@@ -486,11 +534,13 @@ impl ProxyCtx {
 
     /// Stops the engine and turns off a system proxy that points at it.
     pub fn stop(&self) -> Result<(), String> {
+        let pending = self.pending_system_proxy_change();
         self.system_proxy_on.store(false, Ordering::SeqCst);
         let port = self.take_handle()?;
         if let Some(port) = port {
             let ctx = self.detached();
             std::thread::spawn(move || {
+                let _pending = pending;
                 if let Err(e) = ctx.change_system_proxy(false, port, true) {
                     warn!("Failed to turn off the system proxy: {e}");
                 }
@@ -565,6 +615,8 @@ impl ProxyCtx {
                 warn!("Failed to reset a stale system proxy: {e}");
             }
         });
+        // The owner turns the system proxy on and off, so it follows changes made underneath.
+        self.watch_system_proxy();
         Ok(())
     }
 
@@ -692,6 +744,7 @@ impl ProxyCtx {
     /// password dialog. Not saved: the `systemProxyAtLaunch` setting decides whether it turns
     /// on as the engine starts. Blocks.
     pub fn set_system_proxy(&self, enabled: bool) -> Result<SystemProxyStatus, String> {
+        let _pending = self.pending_system_proxy_change();
         let Some(port) = self.port() else {
             if enabled {
                 return Err("The proxy is not running, so there is nothing to route to".into());
@@ -797,6 +850,18 @@ impl ProxyCtx {
         self.sweep_soon();
         self.emit_state();
         Ok(bytes)
+    }
+
+    /// Whether captured traffic is cleared at the next launch or kept, saved in `settings.json`.
+    /// Kept, the keep-traffic cap applies from now on; cleared, it is remembered but not
+    /// applied, and nothing already captured goes until the next launch.
+    pub fn set_traffic(&self, traffic: TrafficRetention) -> Result<TrafficRetention, String> {
+        let mut settings = self.settings()?;
+        settings.traffic = Some(traffic);
+        settings.save(&self.settings_path())?;
+        self.sweep_soon();
+        self.emit_state();
+        Ok(traffic)
     }
 
     /// Bytes the captured traffic takes, as the keep-traffic cap counts them: the databases'
@@ -916,9 +981,9 @@ impl ProxyCtx {
         }
     }
 
-    /// The keep-traffic cap, as `settings.json` has it.
+    /// The keep-traffic cap, as `settings.json` has it, while traffic is kept between launches.
     fn keep_traffic(&self) -> Option<u64> {
-        self.settings().ok().and_then(|s| s.keep_traffic_bytes)
+        self.settings().ok().and_then(|s| s.keep_traffic_cap())
     }
 
     /// Sweeps the oldest flows while the captured traffic is over the cap, then waits for
@@ -1091,6 +1156,88 @@ impl ProxyCtx {
             macos::set(false, port, self.system_proxy_backend(), &self.snapshot_path())?;
         }
         Ok(())
+    }
+
+    /// Marks a system proxy change as decided and not yet made, until the guard is dropped.
+    fn pending_system_proxy_change(&self) -> PendingChange {
+        self.system_proxy_pending.fetch_add(1, Ordering::SeqCst);
+        PendingChange(self.system_proxy_pending.clone())
+    }
+
+    /// Follows the system proxy as macOS reports changes to it, for as long as the process
+    /// runs, so a change made underneath the app, by hand or by another app such as Proxyman,
+    /// shows at once. Started once; a failure leaves the app reading it when the window is
+    /// focused, as before.
+    pub fn watch_system_proxy(&self) {
+        if self.watching_system_proxy.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        if let Err(e) = macos::watch(move || {
+            let _ = tx.send(());
+        }) {
+            warn!("Not following the system proxy: {e}");
+            return;
+        }
+        let ctx = self.detached();
+        let spawned =
+            std::thread::Builder::new().name("system-proxy-follow".into()).spawn(move || {
+                while rx.recv().is_ok() {
+                    // One change comes as several notices, a service at a time.
+                    while rx.recv_timeout(SYSTEM_PROXY_SETTLE).is_ok() {}
+                    while !ctx.follow_system_proxy() {
+                        std::thread::sleep(SYSTEM_PROXY_SETTLE);
+                    }
+                }
+            });
+        if let Err(e) = spawned {
+            warn!("Not following the system proxy: {e}");
+        }
+    }
+
+    /// Takes the system proxy as it is now: meant to point at the running engine while every
+    /// service sends its traffic there, and not otherwise. With nothing left pointing at the
+    /// engine's port, the settings saved for putting back are dropped, so stopping or quitting
+    /// restores nothing over a change someone else made. Tells the app either way. Returns
+    /// false, doing nothing, while a change of the app's own is under way, to be tried again.
+    /// Blocks.
+    fn follow_system_proxy(&self) -> bool {
+        if self.system_proxy_pending.load(Ordering::SeqCst) > 0 {
+            return false;
+        }
+        // Held so no change starts meanwhile, nor a change of ours is mistaken for another's.
+        let _turn = match self.system_proxy_turn.try_lock() {
+            Ok(turn) => turn,
+            Err(std::sync::TryLockError::Poisoned(turn)) => turn.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return false,
+        };
+        if self.system_proxy_pending.load(Ordering::SeqCst) > 0 {
+            return false;
+        }
+        let running = self.port();
+        let Some(port) = running.or_else(|| self.settings().ok().map(|s| s.port)) else {
+            return true;
+        };
+        match macos::routing(port) {
+            Ok(routing) => {
+                if running.is_some() {
+                    let was = self.system_proxy_on.swap(routing.every, Ordering::SeqCst);
+                    if was != routing.every {
+                        let now = if routing.every { "on" } else { "off" };
+                        debug!("The system proxy is {now} at port {port} after a change");
+                    }
+                }
+                if !routing.any
+                    && let Err(e) =
+                        macos::forget(port, self.system_proxy_backend(), &self.snapshot_path())
+                {
+                    warn!("Failed to forget the replaced proxy settings: {e}");
+                }
+            }
+            Err(e) => warn!("Failed to read the system proxy: {e}"),
+        }
+        self.emit_state();
+        true
     }
 
     /// Yaak has run on this machine, so there is a database to save into.
@@ -1272,6 +1419,19 @@ fn remove_captured_when_closed(data_dir: &Path) -> Result<(), String> {
         }
     }
 }
+
+/// A system proxy change decided and not yet made, counted while it is held.
+struct PendingChange(Arc<AtomicU64>);
+
+impl Drop for PendingChange {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// How long the system proxy is left to settle after a change is reported before it is read,
+/// and how long a read waits for a change of the app's own to finish.
+const SYSTEM_PROXY_SETTLE: Duration = Duration::from_millis(500);
 
 /// Tries at deleting the captured databases, 100 ms apart, before a reset gives up.
 const REMOVE_TRIES: u32 = 50;
@@ -1535,7 +1695,10 @@ pub struct GetProxyStateResponse {
     /// Bytes of each body stored per flow.
     #[ts(type = "number")]
     pub capture_body_limit: usize,
-    /// The most captured traffic kept, in bytes, or null to keep everything.
+    /// Captured traffic is cleared at launch or kept between launches.
+    pub traffic: TrafficRetention,
+    /// The most captured traffic kept, in bytes, or null to keep everything. Applies only
+    /// while traffic is kept.
     #[ts(type = "number | null")]
     pub keep_traffic_bytes: Option<u64>,
     /// Why the engine last failed to start, until it starts.
@@ -1633,6 +1796,12 @@ pub struct SetPortRequest {
 pub struct SetCaptureBodyLimitRequest {
     #[ts(type = "number")]
     pub bytes: u64,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SetTrafficRequest {
+    pub traffic: TrafficRetention,
 }
 
 #[derive(Deserialize, TS)]
@@ -2075,6 +2244,7 @@ async fn get_proxy_state(
             system_proxy_at_launch: settings.system_proxy_at_launch,
             http_version: settings.http_version,
             capture_body_limit: settings.capture_body_limit,
+            traffic: settings.traffic(),
             keep_traffic_bytes: settings.keep_traffic_bytes,
             start_error: ctx.start_error(),
             encrypting: ctx.encrypting(),
@@ -2114,6 +2284,10 @@ fn set_capture_body_limit(
 ) -> Result<usize, RpcError> {
     let bytes = usize::try_from(req.bytes).map_err(rpc_error)?;
     ctx.set_capture_body_limit(bytes).map_err(rpc_error)
+}
+
+fn set_traffic(ctx: &ProxyCtx, req: SetTrafficRequest) -> Result<TrafficRetention, RpcError> {
+    ctx.set_traffic(req.traffic).map_err(rpc_error)
 }
 
 /// The cap as saved, in bytes, or null to keep everything.
@@ -3335,6 +3509,7 @@ define_rpc! {
         set_system_proxy_at_launch(SetSystemProxyAtLaunchRequest) -> bool,
         set_http_version(SetHttpVersionRequest) -> HttpVersion,
         set_capture_body_limit(SetCaptureBodyLimitRequest) -> usize,
+        set_traffic(SetTrafficRequest) -> TrafficRetention,
         set_keep_traffic(SetKeepTrafficRequest) -> Option<usize>,
     }
     async_commands {
@@ -4396,9 +4571,17 @@ mod tests {
         assert_eq!(removed.len(), 20 - kept, "the app hears of each");
         assert_eq!(removed, ids[..removed.len()], "the oldest, in order");
 
-        // Set, the cap starts the sweeper, which finds nothing more to do; taken away, it stops.
+        // Clearing at launch, a cap is saved but not applied.
         assert_eq!(ctx.set_keep_traffic(Some(cap)).unwrap(), Some(cap));
         assert_eq!(ctx.settings().unwrap().keep_traffic_bytes, Some(cap));
+        assert!(!sweeper_running(&ctx), "no sweeping while traffic is cleared at launch");
+        // Kept, the cap starts the sweeper, which finds nothing more to do; taken away, it
+        // stops, as it does when traffic goes back to being cleared at launch.
+        ctx.set_traffic(TrafficRetention::Keep).unwrap();
+        assert!(sweeper_running(&ctx));
+        ctx.set_traffic(TrafficRetention::ClearOnLaunch).unwrap();
+        wait_until("the sweeper stops", || !sweeper_running(&ctx));
+        ctx.set_traffic(TrafficRetention::Keep).unwrap();
         assert!(sweeper_running(&ctx));
         assert_eq!(ctx.set_keep_traffic(None).unwrap(), None);
         wait_until("the sweeper stops", || !sweeper_running(&ctx));
@@ -4632,6 +4815,75 @@ mod tests {
         ctx.stop().unwrap();
     }
 
+    /// Opens the proxy in `dir` as a launch does, with `keys`, after writing two flows with
+    /// bodies and a saved search into it from a launch before.
+    fn relaunch_with_traffic(
+        dir: &Path,
+        keys: &MasterKeySource,
+        settings: Option<ProxySettings>,
+    ) -> ProxyCtx {
+        {
+            let (events, _rx) = RpcEventEmitter::new();
+            let ctx = ProxyCtx::new(dir, events, keys.clone()).unwrap();
+            flow_with_response(&ctx, "fl_a", "text/plain", b"one");
+            flow_with_response(&ctx, "fl_b", "text/plain", b"two");
+            saved_queries::create(&ctx.db().unwrap(), "Errors", "@status:>=400").unwrap();
+            assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 2);
+        }
+        if let Some(settings) = settings {
+            settings.save(&dir.join("settings.json")).unwrap();
+        }
+        let (events, _rx) = RpcEventEmitter::new();
+        ProxyCtx::new(dir, events, keys.clone()).unwrap()
+    }
+
+    /// By default a launch starts with no traffic, bodies included, and keeps saved searches.
+    #[test]
+    fn a_launch_clears_captured_traffic_by_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let keys = MasterKeySource::memory();
+        let ctx = relaunch_with_traffic(dir.path(), &keys, None);
+        let db = ctx.db().unwrap();
+        assert_eq!(flows::count(&db).unwrap(), 0);
+        assert_eq!(blobs_of(&ctx, "fl_a", 0), 0);
+        let saved = saved_queries::list(&db).unwrap();
+        assert_eq!(saved.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Errors"]);
+        // New traffic is written as before.
+        flow_with_response(&ctx, "fl_c", "text/plain", b"three");
+        assert_eq!(flows::count(&db).unwrap(), 1);
+    }
+
+    /// Kept between launches, or with a cap set before the choice existed, traffic stays.
+    #[test]
+    fn a_launch_keeps_traffic_when_set_to() {
+        let keys = MasterKeySource::memory();
+        let keep = ProxySettings { traffic: Some(TrafficRetention::Keep), ..Default::default() };
+        // From before the choice: a cap and no `traffic` key.
+        let capped: ProxySettings =
+            serde_json::from_str(r#"{"keepTrafficBytes": 1073741824}"#).unwrap();
+        assert_eq!(capped.traffic, None);
+        for settings in [keep, capped] {
+            let dir = tempfile::tempdir().unwrap();
+            let ctx = relaunch_with_traffic(dir.path(), &keys, Some(settings));
+            assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 2);
+            assert_eq!(blobs_of(&ctx, "fl_a", 0), 1);
+        }
+    }
+
+    /// Only a launch clears: unlocking again, after a reset, keeps what was captured since.
+    #[test]
+    fn only_the_first_unlock_clears() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        assert!(!ctx.take_clear_at_launch(), "taken by the launch");
+        flow_with_response(&ctx, "fl_a", "text/plain", b"one");
+        ctx.reset_captured_data().unwrap();
+        flow_with_response(&ctx, "fl_b", "text/plain", b"two");
+        assert!(ctx.unlock().is_ok());
+        assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 1);
+    }
+
     /// The capture limit is saved and shows in the proxy's state, as the keep-traffic cap does.
     #[tokio::test(flavor = "multi_thread")]
     async fn the_state_has_the_capture_limit_and_the_traffic_cap() {
@@ -4644,6 +4896,14 @@ mod tests {
         assert_eq!(set_keep_traffic(&ctx, req).unwrap(), Some(1 << 30));
         let state = get_proxy_state(ctx.clone(), GetProxyStateRequest {}).await.unwrap();
         assert_eq!((state.capture_body_limit, state.keep_traffic_bytes), (4096, Some(1 << 30)));
+        assert_eq!(
+            state.traffic,
+            TrafficRetention::ClearOnLaunch,
+            "a cap set now keeps the choice"
+        );
+        set_traffic(&ctx, SetTrafficRequest { traffic: TrafficRetention::Keep }).unwrap();
+        let state = get_proxy_state(ctx.clone(), GetProxyStateRequest {}).await.unwrap();
+        assert_eq!(state.traffic, TrafficRetention::Keep);
         let size = get_storage_size(ctx.clone(), GetStorageSizeRequest {}).await.unwrap();
         assert!(size.bytes > 0);
         ctx.set_keep_traffic(None).unwrap();

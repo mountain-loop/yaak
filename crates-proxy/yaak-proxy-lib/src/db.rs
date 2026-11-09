@@ -270,6 +270,21 @@ pub fn remove_captured(data_dir: &Path) -> std::result::Result<(), String> {
     Ok(())
 }
 
+/// Deletes `blobs.sqlite`, every body and message payload, for one made empty as it opens.
+/// The data key stays, as `proxy.db` is still encrypted with it. Nothing may have it open.
+pub fn remove_blobs(data_dir: &Path) -> std::result::Result<(), String> {
+    for suffix in ["", "-wal", "-shm"] {
+        let path = data_dir.join(format!("{BLOBS_DB}{suffix}"));
+        match std::fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                return Err(format!("Failed to delete {}: {e}", path.display()));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 /// Either database in `data_dir` is plain, left by a build from before encryption.
 pub fn needs_encrypting(data_dir: &Path) -> bool {
     [PROXY_DB, BLOBS_DB]

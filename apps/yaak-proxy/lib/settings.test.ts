@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
-  CAPTURE_LIMIT_OPTIONS,
   DEFAULT_SETTINGS_VALUES,
   KEEP_TRAFFIC_OPTIONS,
   proxySettingsView,
@@ -78,13 +77,6 @@ describe("size options", () => {
   });
 
   test("labels in the units the limits are set in", () => {
-    expect(CAPTURE_LIMIT_OPTIONS.map((o) => o.label)).toEqual([
-      "1 MB",
-      "5 MB",
-      "10 MB",
-      "50 MB",
-      "100 MB",
-    ]);
     expect(KEEP_TRAFFIC_OPTIONS.map((o) => o.label)).toEqual([
       "Unlimited",
       "500 MB",
@@ -97,22 +89,25 @@ describe("size options", () => {
   });
 
   test("values round trip", () => {
-    for (const o of [...KEEP_TRAFFIC_OPTIONS, ...CAPTURE_LIMIT_OPTIONS]) {
+    for (const o of KEEP_TRAFFIC_OPTIONS) {
       expect(sizeFromOptionValue(sizeOptionValue(o.bytes))).toBe(o.bytes);
     }
     expect(sizeFromOptionValue("abc")).toBeNull();
   });
 
   test("a size set elsewhere gets its own option, in order", () => {
-    const options = sizeOptionsFor(CAPTURE_LIMIT_OPTIONS, 3 * 1024 * 1024);
+    const MB = 1024 * 1024;
+    const options = sizeOptionsFor(KEEP_TRAFFIC_OPTIONS, 750 * MB);
     expect(options.map((o) => o.bytes)).toEqual([
-      1024 * 1024,
-      3 * 1024 * 1024,
-      5 * 1024 * 1024,
-      10 * 1024 * 1024,
-      50 * 1024 * 1024,
-      100 * 1024 * 1024,
+      500 * MB,
+      750 * MB,
+      1024 * MB,
+      2048 * MB,
+      5120 * MB,
+      10240 * MB,
+      20480 * MB,
+      null,
     ]);
-    expect(sizeOptionsFor(CAPTURE_LIMIT_OPTIONS, 10 * 1024 * 1024)).toBe(CAPTURE_LIMIT_OPTIONS);
+    expect(sizeOptionsFor(KEEP_TRAFFIC_OPTIONS, 1024 * MB)).toBe(KEEP_TRAFFIC_OPTIONS);
   });
 });

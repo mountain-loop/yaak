@@ -141,12 +141,6 @@ export const KEEP_TRAFFIC_OPTIONS = sizeOptions(
   "Unlimited",
 );
 
-/** How much of each body is stored */
-export const CAPTURE_LIMIT_OPTIONS = sizeOptions(
-  [MB, 5 * MB, 10 * MB, 50 * MB, 100 * MB],
-  "Unlimited",
-);
-
 /**
  * The option a stored size selects. A size set elsewhere (the CLI or `settings.json`) that no
  * option has is added as its own, so the select still shows it.

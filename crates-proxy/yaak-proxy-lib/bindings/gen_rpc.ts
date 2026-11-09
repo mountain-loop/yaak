@@ -262,7 +262,12 @@ httpVersion: HttpVersion,
  */
 captureBodyLimit: number, 
 /**
- * The most captured traffic kept, in bytes, or null to keep everything.
+ * Captured traffic is cleared at launch or kept between launches.
+ */
+traffic: TrafficRetention, 
+/**
+ * The most captured traffic kept, in bytes, or null to keep everything. Applies only
+ * while traffic is kept.
  */
 keepTrafficBytes: number | null, 
 /**
@@ -447,7 +452,7 @@ export type ResetCapturedDataRequest = Record<string, never>;
 
 export type RpcEventSchema = { decrypt_list_changed: DecryptListChangedPayload, flows_cleared: FlowsClearedPayload, flows_removed: FlowsRemovedPayload, message_write: MessagePayload, model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, saved_queries_changed: SavedQueriesChangedPayload, };
 
-export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_decrypt_list: [GetDecryptListRequest, DecryptList], get_message_payload: [GetMessagePayloadRequest, GetMessagePayloadResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], query_schema: [QuerySchemaRequest, QuerySchemaResponse], validate_query: [ValidateQueryRequest, Array<QueryDiagnostic>], watch_query: [WatchQueryRequest, boolean], list_saved_queries: [ListSavedQueriesRequest, Array<SavedQuery>], create_saved_query: [CreateSavedQueryRequest, SavedQuery], rename_saved_query: [RenameSavedQueryRequest, SavedQuery], delete_saved_query: [DeleteSavedQueryRequest, boolean], list_grpc_schemas: [ListGrpcSchemasRequest, Array<GrpcSchema>], list_messages: [ListMessagesRequest, ListMessagesResponse], remove_grpc_schema: [RemoveGrpcSchemaRequest, boolean], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], set_http_version: [SetHttpVersionRequest, HttpVersion], set_capture_body_limit: [SetCaptureBodyLimitRequest, number], set_keep_traffic: [SetKeepTrafficRequest, number | null], add_grpc_schema: [AddGrpcSchemaRequest, GrpcSchema], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], decode_grpc_message: [DecodeGrpcMessageRequest, DecodedGrpcMessage], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], helper_register: [HelperRegisterRequest, SystemProxyStatus], helper_unregister: [HelperUnregisterRequest, SystemProxyStatus], edit_decrypt_list: [EditDecryptListRequest, DecryptList], list_seen: [ListSeenRequest, SeenTargets], set_decrypt_list: [SetDecryptListRequest, DecryptList], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], reflect_grpc_host: [ReflectGrpcHostRequest, GrpcSchema], save_flow: [SaveFlowToYaakRequest, SavedFlow], save_flow_body: [SaveFlowBodyRequest, SaveFlowBodyResponse], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], set_port: [SetPortRequest, number], get_storage_size: [GetStorageSizeRequest, GetStorageSizeResponse], reset_captured_data: [ResetCapturedDataRequest, boolean], open_terminal: [OpenTerminalRequest, boolean], query_values: [QueryValuesRequest, Array<string>], match_flows: [MatchFlowsRequest, Array<string>], count_saved_queries: [CountSavedQueriesRequest, Array<SavedQueryCount>], };
+export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_decrypt_list: [GetDecryptListRequest, DecryptList], get_message_payload: [GetMessagePayloadRequest, GetMessagePayloadResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], query_schema: [QuerySchemaRequest, QuerySchemaResponse], validate_query: [ValidateQueryRequest, Array<QueryDiagnostic>], watch_query: [WatchQueryRequest, boolean], list_saved_queries: [ListSavedQueriesRequest, Array<SavedQuery>], create_saved_query: [CreateSavedQueryRequest, SavedQuery], rename_saved_query: [RenameSavedQueryRequest, SavedQuery], delete_saved_query: [DeleteSavedQueryRequest, boolean], list_grpc_schemas: [ListGrpcSchemasRequest, Array<GrpcSchema>], list_messages: [ListMessagesRequest, ListMessagesResponse], remove_grpc_schema: [RemoveGrpcSchemaRequest, boolean], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], set_http_version: [SetHttpVersionRequest, HttpVersion], set_capture_body_limit: [SetCaptureBodyLimitRequest, number], set_traffic: [SetTrafficRequest, TrafficRetention], set_keep_traffic: [SetKeepTrafficRequest, number | null], add_grpc_schema: [AddGrpcSchemaRequest, GrpcSchema], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], decode_grpc_message: [DecodeGrpcMessageRequest, DecodedGrpcMessage], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], helper_register: [HelperRegisterRequest, SystemProxyStatus], helper_unregister: [HelperUnregisterRequest, SystemProxyStatus], edit_decrypt_list: [EditDecryptListRequest, DecryptList], list_seen: [ListSeenRequest, SeenTargets], set_decrypt_list: [SetDecryptListRequest, DecryptList], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], reflect_grpc_host: [ReflectGrpcHostRequest, GrpcSchema], save_flow: [SaveFlowToYaakRequest, SavedFlow], save_flow_body: [SaveFlowBodyRequest, SaveFlowBodyResponse], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], set_port: [SetPortRequest, number], get_storage_size: [GetStorageSizeRequest, GetStorageSizeResponse], reset_captured_data: [ResetCapturedDataRequest, boolean], open_terminal: [OpenTerminalRequest, boolean], query_values: [QueryValuesRequest, Array<string>], match_flows: [MatchFlowsRequest, Array<string>], count_saved_queries: [CountSavedQueriesRequest, Array<SavedQueryCount>], };
 
 export type SaveFlowBodyRequest = { flowId: string, which: FlowBody, 
 /**
@@ -567,6 +572,8 @@ export type SetRecordingRequest = { enabled: boolean, };
 
 export type SetSystemProxyAtLaunchRequest = { enabled: boolean, };
 
+export type SetTrafficRequest = { traffic: TrafficRetention, };
+
 /**
  * How a change gets administrator rights.
  */
@@ -595,6 +602,11 @@ supported: boolean, };
 export type SystemProxyStatusRequest = Record<string, never>;
 
 export type TakeOverRequest = Record<string, never>;
+
+/**
+ * What happens to captured traffic between launches.
+ */
+export type TrafficRetention = "clearOnLaunch" | "keep";
 
 export type ValidateQueryRequest = { query: string, };
 

@@ -71,6 +71,9 @@ objc2-service-management = { version = "0.3.2", default-features = false, featur
     "SMAppService",
 ] }
 plist = "1.7"
+# Told when the system proxy changes underneath the app, as Proxyman or System Settings change it.
+core-foundation = "0.9"
+system-configuration = "0.7"
 
 [dev-dependencies]
 base64 = "0.23.1"

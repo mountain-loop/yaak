@@ -337,6 +337,7 @@ async fn body_rpcs() {
             "systemProxyAtLaunch": false,
             "httpVersion": "auto",
             "captureBodyLimit": CAPTURE_LIMIT,
+            "traffic": "clearOnLaunch",
             "keepTrafficBytes": null,
             "startError": null,
             "encrypting": null,

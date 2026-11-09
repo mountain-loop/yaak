@@ -15,8 +15,13 @@ pub struct ProxySettings {
     pub system_proxy_at_launch: bool,
     /// Bytes of each request and response body stored per flow.
     pub capture_body_limit: usize,
+    /// Whether captured traffic is cleared as the app or daemon launches or kept between
+    /// launches. Missing, as in a file from before the choice, it is read from
+    /// `keepTrafficBytes`: a cap set there means the traffic was meant to be kept.
+    #[serde(default)]
+    pub traffic: Option<TrafficRetention>,
     /// The most captured traffic kept, in bytes of the databases' used pages; the oldest flows
-    /// are deleted past it. None keeps everything.
+    /// are deleted past it. None keeps everything. Only applies while traffic is kept.
     pub keep_traffic_bytes: Option<u64>,
     /// The HTTP versions offered to clients in intercepted HTTPS.
     pub http_version: HttpVersion,
@@ -34,12 +39,25 @@ impl Default for ProxySettings {
             port: 9090,
             system_proxy_at_launch: true,
             capture_body_limit: DEFAULT_CAPTURE_BODY_LIMIT,
+            traffic: Some(TrafficRetention::ClearOnLaunch),
             keep_traffic_bytes: None,
             http_version: HttpVersion::Auto,
             decrypt: Vec::new(),
             decrypt_built_ins_removed: Vec::new(),
         }
     }
+}
+
+/// What happens to captured traffic between launches.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub enum TrafficRetention {
+    /// Emptied as the app or daemon launches, before anything reads it.
+    #[default]
+    ClearOnLaunch,
+    /// Kept, under the keep-traffic cap when there is one.
+    Keep,
 }
 
 /// One entry of the decrypt list, as the app shows it.
@@ -76,6 +94,25 @@ pub enum HttpVersion {
 }
 
 impl ProxySettings {
+    /// Whether traffic is cleared at launch or kept. A file from before the choice keeps it
+    /// when it has a keep-traffic cap, so an update doesn't delete a capture someone meant to
+    /// keep.
+    pub fn traffic(&self) -> TrafficRetention {
+        self.traffic.unwrap_or(if self.keep_traffic_bytes.is_some() {
+            TrafficRetention::Keep
+        } else {
+            TrafficRetention::ClearOnLaunch
+        })
+    }
+
+    /// The keep-traffic cap, while traffic is kept. Cleared at launch, nothing is swept.
+    pub fn keep_traffic_cap(&self) -> Option<u64> {
+        match self.traffic() {
+            TrafficRetention::Keep => self.keep_traffic_bytes,
+            TrafficRetention::ClearOnLaunch => None,
+        }
+    }
+
     /// The user's entries, then the built-in exclusions they kept.
     pub fn decrypt_list(&self) -> DecryptList {
         let user =
@@ -157,8 +194,12 @@ impl ProxySettings {
     /// The settings at `path`, or the defaults when there is no file.
     pub fn load(path: &Path) -> Result<Self, String> {
         match std::fs::read_to_string(path) {
-            Ok(contents) => serde_json::from_str(&contents)
-                .map_err(|e| format!("Invalid settings in {}: {e}", path.display())),
+            Ok(contents) => {
+                let mut settings: Self = serde_json::from_str(&contents)
+                    .map_err(|e| format!("Invalid settings in {}: {e}", path.display()))?;
+                settings.traffic = Some(settings.traffic());
+                Ok(settings)
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(e) => Err(format!("Failed to read {}: {e}", path.display())),
         }
@@ -182,7 +223,35 @@ mod tests {
         assert_eq!(settings.port, 9090);
         assert!(settings.system_proxy_at_launch);
         assert_eq!(settings.capture_body_limit, 10 * 1024 * 1024);
-        assert_eq!(settings.keep_traffic_bytes, None, "everything is kept");
+        assert_eq!(settings.keep_traffic_bytes, None, "no cap");
+        assert_eq!(settings.traffic(), TrafficRetention::ClearOnLaunch);
+    }
+
+    #[test]
+    fn a_file_from_before_the_choice_keeps_traffic_when_it_had_a_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(&path, r#"{"port": 9090, "keepTrafficBytes": 1073741824}"#).unwrap();
+        let settings = ProxySettings::load(&path).unwrap();
+        assert_eq!(settings.traffic(), TrafficRetention::Keep);
+        assert_eq!(settings.keep_traffic_cap(), Some(1 << 30));
+
+        std::fs::write(&path, r#"{"port": 9090, "keepTrafficBytes": null}"#).unwrap();
+        let settings = ProxySettings::load(&path).unwrap();
+        assert_eq!(settings.traffic(), TrafficRetention::ClearOnLaunch);
+
+        // Chosen once, the choice holds whatever the cap.
+        std::fs::write(&path, r#"{"traffic": "clearOnLaunch", "keepTrafficBytes": 1024}"#).unwrap();
+        let settings = ProxySettings::load(&path).unwrap();
+        assert_eq!(settings.traffic(), TrafficRetention::ClearOnLaunch);
+        assert_eq!(settings.keep_traffic_cap(), None, "the cap applies only while keeping");
+        assert_eq!(settings.keep_traffic_bytes, Some(1024), "but is remembered");
+
+        // Saved, the choice is written out, so setting a cap later doesn't change it.
+        settings.save(&path).unwrap();
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(json["traffic"], "clearOnLaunch");
     }
 
     #[test]
@@ -202,6 +271,7 @@ mod tests {
             port: 8080,
             system_proxy_at_launch: false,
             capture_body_limit: 1024,
+            traffic: Some(TrafficRetention::Keep),
             keep_traffic_bytes: Some(1 << 30),
             http_version: HttpVersion::Http1Only,
             decrypt: vec!["host:api.example.com".into()],
@@ -218,6 +288,7 @@ mod tests {
                 "port": 8080,
                 "systemProxyAtLaunch": false,
                 "captureBodyLimit": 1024,
+                "traffic": "keep",
                 "keepTrafficBytes": 1073741824,
                 "httpVersion": "http1Only",
                 "decrypt": ["host:api.example.com"],

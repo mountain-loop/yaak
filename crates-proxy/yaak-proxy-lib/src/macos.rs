@@ -152,6 +152,61 @@ fn set_scripted(
     }
 }
 
+/// Where the system proxy points, as far as one port is concerned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Routing {
+    /// Every enabled service sends HTTP and HTTPS to the port: the override is on.
+    pub every: bool,
+    /// Some service, enabled or not, still sends one of them to the port: something the app
+    /// set may be left to put back.
+    pub any: bool,
+}
+
+/// [`Routing`] at `port` through `ns`. Disabled services are read only when no enabled one
+/// routes everything, which is the common case worth the extra `networksetup` calls.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn routing_with(ns: &impl Networksetup, port: u16) -> Result<Routing, String> {
+    let enabled = read_services(ns, false)?;
+    let every = !enabled.is_empty()
+        && enabled.iter().all(|s| s.http.points_at(port) && s.https.points_at(port));
+    if every {
+        return Ok(Routing { every, any: true });
+    }
+    let any = read_services(ns, true)?.iter().any(|s| s.points_at(port));
+    Ok(Routing { every, any })
+}
+
+/// Drops the settings the password dialog or `sudo` saved for putting back once routing at
+/// `port` ends, when nothing points at it any more: someone else changed the system proxy
+/// since, and what is there now is theirs. Saved settings for a service no longer present stay
+/// parked, as a restore would leave them. Never asks for rights: it only rewrites the file.
+/// Returns whether anything was dropped.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn forget_scripted(
+    ns: &impl Networksetup,
+    port: u16,
+    snapshot_path: &Path,
+) -> Result<bool, String> {
+    let Some(snapshot) = load_snapshot(snapshot_path)? else {
+        return Ok(false);
+    };
+    // Settings parked at port 0, a restore halfway through, or routing at another port are
+    // left to what handles them.
+    if snapshot.port == 0 || snapshot.port != port || !snapshot.restoring.is_empty() {
+        return Ok(false);
+    }
+    let services = read_services(ns, true)?;
+    let ports = snapshot.ports();
+    if services.iter().any(|s| ports.iter().any(|p| s.points_at(*p))) {
+        return Ok(false);
+    }
+    match snapshot.leftover(&services) {
+        Some(leftover) => save_snapshot(snapshot_path, &leftover)?,
+        None => remove_snapshot(snapshot_path)?,
+    }
+    Ok(true)
+}
+
 /// The calls as one `sh` script that stops at the first failure.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn script(commands: &[Vec<String>]) -> String {
@@ -267,6 +322,104 @@ pub fn set(
             snapshot_path,
         ),
     }
+}
+
+/// Where the system proxy points now, judged against `port`. Blocks.
+#[cfg(target_os = "macos")]
+pub fn routing(port: u16) -> Result<Routing, String> {
+    routing_with(&yaak_proxy_helper::networksetup::SystemNetworksetup, port)
+}
+
+/// Drops what was saved for putting back once routing at `port` ends, when nothing points at
+/// it any more, so stopping or quitting restores nothing over someone else's change. Never
+/// asks for rights: the helper is root already, and the other paths only rewrite their file.
+/// Blocks.
+#[cfg(target_os = "macos")]
+pub fn forget(port: u16, backend: SystemProxyBackend, snapshot_path: &Path) -> Result<(), String> {
+    match backend {
+        // With nothing pointing at `port`, turning off there changes nothing and drops what
+        // the helper saved.
+        SystemProxyBackend::Helper => crate::helper::set(false, port),
+        SystemProxyBackend::AdminPrompt | SystemProxyBackend::Sudo => {
+            let ns = yaak_proxy_helper::networksetup::SystemNetworksetup;
+            if forget_scripted(&ns, port, snapshot_path)? {
+                log::info!(
+                    "The system proxy no longer points at port {port}; forgot what it replaced"
+                );
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Calls `changed`, on a thread of its own, each time macOS reports a change to a proxy
+/// setting: by this app, another one such as Proxyman, or the user in System Settings. Several
+/// may come for one change. Runs for as long as the process does.
+#[cfg(target_os = "macos")]
+pub fn watch(changed: impl Fn() + Send + 'static) -> Result<(), String> {
+    use core_foundation::array::CFArray;
+    use core_foundation::runloop::{CFRunLoop, kCFRunLoopCommonModes};
+    use core_foundation::string::CFString;
+    use system_configuration::dynamic_store::{
+        SCDynamicStore, SCDynamicStoreBuilder, SCDynamicStoreCallBackContext,
+    };
+
+    type Changed = Box<dyn Fn() + Send>;
+    fn callout(_store: SCDynamicStore, _keys: CFArray<CFString>, changed: &mut Changed) {
+        changed();
+    }
+
+    let changed: Changed = Box::new(changed);
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("system-proxy-watch".into())
+        .spawn(move || {
+            let context = SCDynamicStoreCallBackContext { callout, info: changed };
+            let Some(store) =
+                SCDynamicStoreBuilder::new("yaak-proxy").callback_context(context).build()
+            else {
+                let _ = ready_tx.send(Err("Failed to open the dynamic store".to_string()));
+                return;
+            };
+            // The proxies in effect, and each service's own, as `networksetup` changes them.
+            let keys = CFArray::from_CFTypes(&[CFString::from("State:/Network/Global/Proxies")]);
+            let patterns =
+                CFArray::from_CFTypes(&[CFString::from("Setup:/Network/Service/[^/]+/Proxies")]);
+            if !store.set_notification_keys(&keys, &patterns) {
+                let _ = ready_tx.send(Err("Failed to watch the proxy settings".to_string()));
+                return;
+            }
+            let Some(source) = store.create_run_loop_source() else {
+                let _ = ready_tx.send(Err("Failed to watch the proxy settings".to_string()));
+                return;
+            };
+            // SAFETY: a constant CoreFoundation exports.
+            CFRunLoop::get_current().add_source(&source, unsafe { kCFRunLoopCommonModes });
+            let _ = ready_tx.send(Ok(()));
+            CFRunLoop::run_current();
+        })
+        .map_err(|e| format!("Failed to start watching the system proxy: {e}"))?;
+    ready_rx.recv().map_err(|_| "The system proxy watch stopped".to_string())?
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn routing(_port: u16) -> Result<Routing, String> {
+    Ok(Routing { every: false, any: false })
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn forget(
+    _port: u16,
+    _backend: SystemProxyBackend,
+    _snapshot_path: &Path,
+) -> Result<(), String> {
+    Ok(())
+}
+
+/// No system proxy to watch here.
+#[cfg(not(target_os = "macos"))]
+pub fn watch(_changed: impl Fn() + Send + 'static) -> Result<(), String> {
+    Ok(())
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -476,6 +629,75 @@ mod tests {
         let ethernet = &ns.proxies()[1];
         assert!(!ethernet.points_at(9090));
         assert_eq!(ethernet.http.server, HOST);
+    }
+
+    #[test]
+    fn routing_follows_what_the_services_point_at() {
+        let ns = fake();
+        let prompts = std::cell::Cell::new(0);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        assert_eq!(routing_with(&ns, 9090).unwrap(), Routing { every: false, any: false });
+
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+        assert_eq!(routing_with(&ns, 9090).unwrap(), Routing { every: true, any: true });
+
+        // Another app moves one proxy of one service to its own port.
+        let wifi = ns.proxies()[0].clone();
+        ns.set_proxy("Wi-Fi", setting(true, HOST, 9091), wifi.https);
+        assert_eq!(routing_with(&ns, 9090).unwrap(), Routing { every: false, any: true });
+
+        // A disabled service still pointing here counts as something to put back.
+        ns.set_proxy("Wi-Fi", setting(true, HOST, 9091), setting(true, HOST, 9091));
+        ns.set_enabled("Ethernet", false);
+        assert_eq!(routing_with(&ns, 9090).unwrap(), Routing { every: false, any: true });
+    }
+
+    #[test]
+    fn a_proxy_changed_underneath_forgets_what_it_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let prompts = std::cell::Cell::new(0);
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+
+        // Still pointing here: kept.
+        assert!(!forget_scripted(&ns, 9090, &path).unwrap());
+        assert!(path.exists());
+
+        // Another app, Proxyman say, points everything at its own port.
+        let theirs = (setting(true, HOST, 9091), setting(true, HOST, 9091));
+        ns.set_proxy("Wi-Fi", theirs.0.clone(), theirs.1.clone());
+        ns.set_proxy("Ethernet", theirs.0.clone(), theirs.1.clone());
+        // Checked against another port, nothing changes.
+        assert!(!forget_scripted(&ns, 8080, &path).unwrap());
+        assert!(forget_scripted(&ns, 9090, &path).unwrap());
+        assert!(!path.exists());
+
+        // Quitting now restores nothing over theirs, and asks for nothing.
+        let before = prompts.get();
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        assert_eq!(prompts.get(), before);
+        assert!(ns.proxies().iter().all(|s| s.http == theirs.0 && s.https == theirs.1));
+    }
+
+    #[test]
+    fn forgetting_keeps_settings_parked_for_a_missing_service() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let prompts = std::cell::Cell::new(0);
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+        ns.remove("Ethernet");
+        ns.set_proxy("Wi-Fi", ProxySetting::default(), ProxySetting::default());
+
+        assert!(forget_scripted(&ns, 9090, &path).unwrap());
+        let kept = load_snapshot(&path).unwrap().unwrap();
+        assert_eq!(kept.port, 0, "parked, routing nothing");
+        assert_eq!(kept.services.len(), 1);
+        assert_eq!(kept.services[0].name, "Ethernet");
+        // Parked settings aren't forgotten again.
+        assert!(!forget_scripted(&ns, 9090, &path).unwrap());
     }
 
     #[test]

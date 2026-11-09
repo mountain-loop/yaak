@@ -324,6 +324,27 @@ pub fn clear(db: &ProxyQueryManager) -> Result<usize, String> {
     .map_err(|e| format!("Failed to clear flows: {e}"))
 }
 
+/// Deletes every flow and message from `proxy.db` in one transaction, with what was left of a
+/// clear or sweep, for a launch that starts empty. Saved searches and gRPC schemas stay. Only
+/// before anything else writes: unlike [`clear`], flows being written are not spared. Their
+/// bodies are in `blobs.sqlite`, which goes whole ([`crate::db::remove_blobs`]).
+pub fn delete_all(db: &ProxyQueryManager) -> Result<(), String> {
+    db.with_tx(|c| {
+        let conn = c.conn().resolve();
+        // Unconditional, so SQLite drops each table's pages whole rather than row by row.
+        for table in [
+            "flow_messages",
+            "flows",
+            "flow_clear_mark",
+            "flow_sweep_pending",
+        ] {
+            conn.execute(&format!("DELETE FROM {table}"), [])?;
+        }
+        Ok::<_, yaak_database::Error>(())
+    })
+    .map_err(|e| format!("Failed to delete captured traffic: {e}"))
+}
+
 /// Flows deleted per transaction while deleting cleared ones, so a flow being written never
 /// waits long behind it.
 pub const DELETE_BATCH: usize = 500;

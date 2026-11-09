@@ -16,7 +16,7 @@ use yaak_proxy_lib::client::ProxyConnection;
 use yaak_proxy_lib::db::{BLOBS_DB, DATA_KEY, PROXY_DB, database_key};
 use yaak_proxy_lib::flows::{self, FlowFilter};
 use yaak_proxy_lib::models::{Flow, FlowBody, ProxyHeader};
-use yaak_proxy_lib::settings::ProxySettings;
+use yaak_proxy_lib::settings::{ProxySettings, TrafficRetention};
 use yaak_proxy_lib::{MasterKeySource, ProxyCtx};
 use yaak_rpc::RpcEventEmitter;
 
@@ -25,8 +25,15 @@ const QUERY_SECRET: &str = "QUERYSECRET456";
 const BODY_SECRET: &str = "BODYSECRET789";
 const FLOWS: usize = 3_000;
 
+/// The proxy in `dir`, launched with traffic kept between launches, so what one launch stored
+/// the next reads back.
 fn open_ctx(dir: &Path, keys: MasterKeySource) -> ProxyCtx {
-    let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
+    let settings = ProxySettings {
+        port: 0,
+        system_proxy_at_launch: false,
+        traffic: Some(TrafficRetention::Keep),
+        ..Default::default()
+    };
     settings.save(&dir.join("settings.json")).unwrap();
     let (events, _rx) = RpcEventEmitter::new();
     ProxyCtx::new(dir, events, keys).unwrap()
@@ -434,6 +441,38 @@ fn waits_for_an_older_owner_before_converting() {
     for name in [PROXY_DB, BLOBS_DB] {
         assert_eq!(file_state(&dir.path().join(name)).unwrap(), FileState::Encrypted);
     }
+}
+
+/// Launched while the CLI daemon captures, set to clear traffic at launch, the app keeps the
+/// daemon's traffic: it is still being written, and is what taking over shows.
+#[cfg(unix)]
+#[test]
+fn a_launch_under_another_owner_keeps_its_traffic() {
+    use yaak_proxy_lib::control::{ControlInfo, Owner, control_path};
+    let dir = plain_capture();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let owner = ControlInfo {
+        pid: std::os::unix::process::parent_id(),
+        control_port: listener.local_addr().unwrap().port(),
+        proxy_port: None,
+        token: "tok".into(),
+        owner: Owner::Cli,
+        started_at: chrono::Utc::now(),
+    };
+    let control = control_path(dir.path());
+    std::fs::write(&control, serde_json::to_string(&owner).unwrap()).unwrap();
+    let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
+    assert_eq!(settings.traffic(), TrafficRetention::ClearOnLaunch);
+    settings.save(&dir.path().join("settings.json")).unwrap();
+    let (events, _rx) = RpcEventEmitter::new();
+    let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+
+    // Taken over once the daemon lets go: every flow it captured is there.
+    drop(listener);
+    std::fs::remove_file(&control).unwrap();
+    ctx.start().unwrap();
+    assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), FLOWS);
+    ctx.stop().unwrap();
 }
 
 /// The data key's file gone from beside encrypted databases is refused too, rather than a new

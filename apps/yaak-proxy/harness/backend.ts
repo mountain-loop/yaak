@@ -31,6 +31,7 @@ export const HARNESS_STATE: GetProxyStateResponse = {
   systemProxyAtLaunch: true,
   httpVersion: "auto",
   captureBodyLimit: 10 * 1024 * 1024,
+  traffic: "keep",
   keepTrafficBytes: 2 * 1024 * 1024 * 1024,
   startError: null,
   encrypting: null,
