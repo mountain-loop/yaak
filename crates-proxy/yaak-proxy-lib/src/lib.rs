@@ -109,6 +109,12 @@ pub struct ProxyCtx {
     /// Captured traffic is to be emptied as the databases are first unlocked, this launch
     /// being set to clear it. Taken once it is.
     clear_at_launch: Arc<AtomicBool>,
+    /// `traffic.lock`, locked shared for as long as this process has the databases open, so
+    /// another launch can't delete them from under it: clearing them takes it alone.
+    traffic_lock: Arc<Mutex<Option<std::fs::File>>>,
+    /// Held while `system_proxy_on` is set and changes are counted pending, and while the
+    /// watch applies what it read, so what it read never overwrites a change decided since.
+    system_proxy_intent: Arc<Mutex<()>>,
     /// The system proxy watch is running, so it is started once.
     watching_system_proxy: Arc<AtomicBool>,
     /// System proxy changes decided but not yet made, from when `system_proxy_on` is set until
@@ -160,6 +166,8 @@ impl ProxyCtx {
             resets: Arc::new(AtomicU64::new(0)),
             sweeper: Default::default(),
             clear_at_launch: Arc::new(AtomicBool::new(false)),
+            traffic_lock: Arc::new(Mutex::new(None)),
+            system_proxy_intent: Arc::new(Mutex::new(())),
             watching_system_proxy: Arc::new(AtomicBool::new(false)),
             system_proxy_pending: Arc::new(AtomicU64::new(0)),
             events,
@@ -269,7 +277,9 @@ impl ProxyCtx {
 
         let db_key = db::database_key(&key);
         // Before converting, so bodies about to be deleted aren't encrypted first.
-        let clearing = self.take_clear_at_launch();
+        let clearing = self.lock_traffic(self.take_clear_at_launch());
+        // Shared again once cleared, or on the way out should opening fail.
+        let _share = clearing.then(|| ShareOnDrop(&self.traffic_lock));
         if clearing && let Err(e) = db::remove_blobs(&self.data_dir) {
             warn!("{e}");
         }
@@ -317,6 +327,41 @@ impl ProxyCtx {
             }
             _ => true,
         }
+    }
+
+    /// Takes `traffic.lock` for this process's life, the first time the databases open: alone
+    /// when `clear` asks to empty them and no other process has them open, so the clear goes
+    /// ahead; shared otherwise, waiting out another launch's clear. Returns whether to clear.
+    /// A launch racing this one, before either has claimed the engine, then never deletes a
+    /// database the other already has open.
+    fn lock_traffic(&self, clear: bool) -> bool {
+        let mut held = self.traffic_lock.lock().unwrap_or_else(PoisonError::into_inner);
+        if held.is_some() {
+            return false;
+        }
+        let path = self.data_dir.join(TRAFFIC_LOCK);
+        let file = match std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(e) => {
+                warn!("Failed to open {}, keeping captured traffic: {e}", path.display());
+                return false;
+            }
+        };
+        let alone = clear && file.try_lock().is_ok();
+        if clear && !alone {
+            log::info!("Keeping captured traffic: another process has it open");
+        }
+        if !alone && let Err(e) = file.lock_shared() {
+            warn!("Failed to lock {}: {e}", path.display());
+        }
+        *held = Some(file);
+        alone
     }
 
     /// Converts the plain databases, telling the app how far it has got a few times a second.
@@ -486,9 +531,8 @@ impl ProxyCtx {
             *last_port = Some(bound);
         }
         let route = system_proxy.unwrap_or(settings.system_proxy_at_launch);
-        let pending = route.then(|| self.pending_system_proxy_change());
-        self.system_proxy_on.store(route, Ordering::SeqCst);
-        if let Some(pending) = pending {
+        let (pending, _) = self.intend_system_proxy(route);
+        if route {
             // The password dialog can sit open for a while; the engine is up regardless.
             let ctx = self.detached();
             std::thread::spawn(move || {
@@ -534,8 +578,7 @@ impl ProxyCtx {
 
     /// Stops the engine and turns off a system proxy that points at it.
     pub fn stop(&self) -> Result<(), String> {
-        let pending = self.pending_system_proxy_change();
-        self.system_proxy_on.store(false, Ordering::SeqCst);
+        let (pending, _) = self.intend_system_proxy(false);
         let port = self.take_handle()?;
         if let Some(port) = port {
             let ctx = self.detached();
@@ -744,7 +787,6 @@ impl ProxyCtx {
     /// password dialog. Not saved: the `systemProxyAtLaunch` setting decides whether it turns
     /// on as the engine starts. Blocks.
     pub fn set_system_proxy(&self, enabled: bool) -> Result<SystemProxyStatus, String> {
-        let _pending = self.pending_system_proxy_change();
         let Some(port) = self.port() else {
             if enabled {
                 return Err("The proxy is not running, so there is nothing to route to".into());
@@ -753,7 +795,7 @@ impl ProxyCtx {
             self.change_system_proxy(false, self.settings()?.port, false)?;
             return self.system_proxy_status();
         };
-        let previous = self.system_proxy_on.swap(enabled, Ordering::SeqCst);
+        let (_pending, previous) = self.intend_system_proxy(enabled);
         if let Err(e) = self.change_system_proxy(enabled, port, enabled) {
             self.system_proxy_on.store(previous, Ordering::SeqCst);
             return Err(e);
@@ -1158,10 +1200,14 @@ impl ProxyCtx {
         Ok(())
     }
 
-    /// Marks a system proxy change as decided and not yet made, until the guard is dropped.
-    fn pending_system_proxy_change(&self) -> PendingChange {
+    /// Decides that this Mac's web traffic is meant to point at the running engine, or not,
+    /// returning what was meant before. The change counts as pending until the guard is
+    /// dropped, once it is made: until then the watch leaves `system_proxy_on` alone.
+    fn intend_system_proxy(&self, on: bool) -> (PendingChange, bool) {
+        let _intent = self.system_proxy_intent.lock().unwrap_or_else(PoisonError::into_inner);
         self.system_proxy_pending.fetch_add(1, Ordering::SeqCst);
-        PendingChange(self.system_proxy_pending.clone())
+        let previous = self.system_proxy_on.swap(on, Ordering::SeqCst);
+        (PendingChange(self.system_proxy_pending.clone()), previous)
     }
 
     /// Follows the system proxy as macOS reports changes to it, for as long as the process
@@ -1220,6 +1266,13 @@ impl ProxyCtx {
         };
         match macos::routing(port) {
             Ok(routing) => {
+                // Applied only if nothing was decided, and the engine didn't move, while it was
+                // read: a change asked for meanwhile wins, and is read again once made.
+                let intent =
+                    self.system_proxy_intent.lock().unwrap_or_else(PoisonError::into_inner);
+                if self.system_proxy_pending.load(Ordering::SeqCst) > 0 || self.port() != running {
+                    return false;
+                }
                 if running.is_some() {
                     let was = self.system_proxy_on.swap(routing.every, Ordering::SeqCst);
                     if was != routing.every {
@@ -1227,6 +1280,7 @@ impl ProxyCtx {
                         debug!("The system proxy is {now} at port {port} after a change");
                     }
                 }
+                drop(intent);
                 if !routing.any
                     && let Err(e) =
                         macos::forget(port, self.system_proxy_backend(), &self.snapshot_path())
@@ -1416,6 +1470,24 @@ fn remove_captured_when_closed(data_dir: &Path) -> Result<(), String> {
                 std::thread::sleep(Duration::from_millis(100));
             }
             Err(e) => return Err(e),
+        }
+    }
+}
+
+/// Beside the databases, locked shared by each process that has them open.
+const TRAFFIC_LOCK: &str = "traffic.lock";
+
+/// Turns the exclusive `traffic.lock` a launch took to clear back into a shared one as it is
+/// dropped, so other processes can open the databases again.
+struct ShareOnDrop<'a>(&'a Mutex<Option<std::fs::File>>);
+
+impl Drop for ShareOnDrop<'_> {
+    fn drop(&mut self) {
+        let held = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(file) = held.as_ref()
+            && let Err(e) = file.lock_shared()
+        {
+            warn!("Failed to share {TRAFFIC_LOCK}: {e}");
         }
     }
 }
@@ -4868,6 +4940,46 @@ mod tests {
             assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 2);
             assert_eq!(blobs_of(&ctx, "fl_a", 0), 1);
         }
+    }
+
+    /// A launch that overlaps another, before either has claimed the engine, leaves the
+    /// databases the other has open alone, so what it writes is not lost.
+    #[test]
+    fn an_overlapping_launch_keeps_the_other_launch_s_traffic() {
+        let dir = tempfile::tempdir().unwrap();
+        let keys = MasterKeySource::memory();
+        let (events, _rx) = RpcEventEmitter::new();
+        let first = ProxyCtx::new(dir.path(), events, keys.clone()).unwrap();
+        flow_with_response(&first, "fl_a", "text/plain", b"one");
+
+        let (events, _rx) = RpcEventEmitter::new();
+        let second = ProxyCtx::new(dir.path(), events, keys.clone()).unwrap();
+        assert_eq!(flows::count(&second.db().unwrap()).unwrap(), 1);
+        // The first still writes bodies into the database both read.
+        flow_with_response(&first, "fl_b", "text/plain", b"two");
+        assert_eq!(blobs_of(&second, "fl_a", 0), 1);
+        assert_eq!(blobs_of(&second, "fl_b", 0), 1);
+
+        // Once both have let go, the next launch clears.
+        drop((first, second));
+        let (events, _rx) = RpcEventEmitter::new();
+        let third = ProxyCtx::new(dir.path(), events, keys).unwrap();
+        assert_eq!(flows::count(&third.db().unwrap()).unwrap(), 0);
+    }
+
+    /// A change the app decides while the watch reads the system proxy wins over what the
+    /// watch read, which is read again once the change is made.
+    #[test]
+    fn the_watch_never_overwrites_a_change_under_way() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        let (pending, previous) = ctx.intend_system_proxy(true);
+        assert!(!previous);
+        assert!(!ctx.follow_system_proxy(), "left to try again");
+        assert!(ctx.system_proxy_on.load(Ordering::SeqCst), "the change stands");
+        drop(pending);
+        assert_eq!(ctx.system_proxy_pending.load(Ordering::SeqCst), 0);
     }
 
     /// Only a launch clears: unlocking again, after a reset, keeps what was captured since.
