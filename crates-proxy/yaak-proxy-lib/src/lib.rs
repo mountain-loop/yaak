@@ -1281,6 +1281,16 @@ impl ProxyCtx {
                     }
                 }
                 drop(intent);
+                // Back on the running engine without the app setting it, as Proxyman leaves it
+                // in putting back what it found: recorded as the app's, so it is turned off as
+                // the engine stops or the app quits.
+                if running.is_some()
+                    && routing.every
+                    && let Err(e) =
+                        macos::adopt(port, self.system_proxy_backend(), &self.snapshot_path())
+                {
+                    warn!("Failed to take over the system proxy pointing here: {e}");
+                }
                 if !routing.any
                     && let Err(e) =
                         macos::forget(port, self.system_proxy_backend(), &self.snapshot_path())

@@ -207,6 +207,26 @@ fn forget_scripted(
     Ok(true)
 }
 
+/// Records that the system proxy points at `port` for the app, when routing has come back to
+/// it without the app setting it, as another app such as Proxyman does in putting back what it
+/// found: the settings now there are saved as the ones to put back, with ours turned off, so
+/// stopping or quitting turns it off. A snapshot already saved for `port` is kept. Never asks
+/// for rights: it only writes the file. Returns whether anything was recorded.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn adopt_scripted(ns: &impl Networksetup, port: u16, snapshot_path: &Path) -> Result<bool, String> {
+    let saved = load_snapshot(snapshot_path)?;
+    if saved.as_ref().is_some_and(|s| s.port == port) {
+        return Ok(false);
+    }
+    let services = read_services(ns, false)?;
+    // Settings parked for a missing service, or left at an old port, are carried along, as
+    // turning on does.
+    let mut snapshot = saved.unwrap_or_default();
+    snapshot.extend(&services, port);
+    save_snapshot(snapshot_path, &snapshot)?;
+    Ok(true)
+}
+
 /// The calls as one `sh` script that stops at the first failure.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn script(commands: &[Vec<String>]) -> String {
@@ -352,6 +372,30 @@ pub fn forget(port: u16, backend: SystemProxyBackend, snapshot_path: &Path) -> R
     }
 }
 
+/// Records that the system proxy points at `port` for the app, when routing came back to it
+/// without the app setting it, so stopping or quitting turns it off. The helper is asked to
+/// point it there, as it already does, which records the app as its owner and restores it
+/// should the app exit; the other paths write their file. Never asks for rights. Blocks.
+#[cfg(target_os = "macos")]
+pub fn adopt(port: u16, backend: SystemProxyBackend, snapshot_path: &Path) -> Result<(), String> {
+    match backend {
+        SystemProxyBackend::Helper => {
+            let status = crate::helper::status()?;
+            if status.active && status.port == Some(port) {
+                return Ok(());
+            }
+            crate::helper::set(true, port)
+        }
+        SystemProxyBackend::AdminPrompt | SystemProxyBackend::Sudo => {
+            let ns = yaak_proxy_helper::networksetup::SystemNetworksetup;
+            if adopt_scripted(&ns, port, snapshot_path)? {
+                log::info!("The system proxy points at port {port} again; turning it off on quit");
+            }
+            Ok(())
+        }
+    }
+}
+
 /// Calls `changed`, on a thread of its own, each time macOS reports a change to a proxy
 /// setting: by this app, another one such as Proxyman, or the user in System Settings. Several
 /// may come for one change. Runs for as long as the process does.
@@ -409,6 +453,15 @@ pub fn routing(_port: u16) -> Result<Routing, String> {
 
 #[cfg(not(target_os = "macos"))]
 pub fn forget(
+    _port: u16,
+    _backend: SystemProxyBackend,
+    _snapshot_path: &Path,
+) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn adopt(
     _port: u16,
     _backend: SystemProxyBackend,
     _snapshot_path: &Path,
@@ -679,6 +732,69 @@ mod tests {
         set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
         assert_eq!(prompts.get(), before);
         assert!(ns.proxies().iter().all(|s| s.http == theirs.0 && s.https == theirs.1));
+    }
+
+    /// Proxyman turns its override on over ours, so ours is forgotten, then off again, putting
+    /// back what it found: ours. Quitting must still turn it off, or the Mac is left offline.
+    #[test]
+    fn quitting_after_another_app_restores_ours_turns_it_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let prompts = std::cell::Cell::new(0);
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+
+        // Proxyman on: it saves what it found, ours, and points everything at its port.
+        let found = ns.proxies();
+        for s in &found {
+            ns.set_proxy(&s.name, setting(true, HOST, 9091), setting(true, HOST, 9091));
+        }
+        assert!(forget_scripted(&ns, 9090, &path).unwrap());
+        assert!(!path.exists());
+
+        // Proxyman off: it puts back what it found, so everything points at us again.
+        for s in &found {
+            ns.set_proxy(&s.name, s.http.clone(), s.https.clone());
+        }
+        assert_eq!(routing_with(&ns, 9090).unwrap(), Routing { every: true, any: true });
+        assert!(adopt_scripted(&ns, 9090, &path).unwrap(), "the app owns it again");
+        assert_eq!(saved_port(&path), Some(9090));
+
+        // Quit.
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        assert!(ns.proxies().iter().all(|s| !s.points_at(9090)), "{:?}", ns.proxies());
+        assert!(!path.exists());
+    }
+
+    /// The same, had nothing been recorded when routing came back: turning off at the port
+    /// still turns off whatever points there.
+    #[test]
+    fn turning_off_without_a_snapshot_still_turns_off_what_points_here() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        for name in ["Wi-Fi", "Ethernet"] {
+            ns.set_proxy(name, setting(true, HOST, 9090), setting(true, HOST, 9090));
+        }
+        let prompts = std::cell::Cell::new(0);
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        assert!(ns.proxies().iter().all(|s| !s.points_at(9090)));
+        assert_eq!(prompts.get(), 1);
+    }
+
+    /// Adopting keeps a snapshot already saved for the port, and asks for nothing.
+    #[test]
+    fn adopting_keeps_what_was_saved_for_the_port() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let before = ns.proxies();
+        let prompts = std::cell::Cell::new(0);
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+        assert!(!adopt_scripted(&ns, 9090, &path).unwrap());
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        assert_eq!(ns.proxies()[0], before[0], "the user's corp proxy came back");
+        assert_eq!(prompts.get(), 2);
     }
 
     #[test]
