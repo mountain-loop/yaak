@@ -54,6 +54,7 @@ export function ClearFlowsButton() {
         className="pointer-events-auto"
         icon="trash"
         title={locked != null ? "Clear flows (traffic is locked)" : "Clear flows (none yet)"}
+        tooltip
         size="sm"
         iconColor="secondary"
         disabled
@@ -67,6 +68,7 @@ export function ClearFlowsButton() {
         className="pointer-events-auto"
         icon="trash"
         title="Clear flows"
+        tooltip
         size="sm"
         iconColor="secondary"
       />

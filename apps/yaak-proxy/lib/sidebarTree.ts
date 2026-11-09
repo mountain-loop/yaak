@@ -37,6 +37,11 @@ export interface SidebarItem {
   decrypt?: DecryptSubject;
   /** The saved search a Saved row is, for renaming and deleting it */
   savedId?: string;
+  /**
+   * On disk: a folder row's working directory, in full, and a program's executable, for Reveal
+   * in Finder and, on a folder, Copy path
+   */
+  path?: string;
 }
 
 /** A saved search as the sidebar lists it, with how many flows it covers */
@@ -62,6 +67,8 @@ interface PlaceRow {
   label: string;
   query: string;
   decrypt?: DecryptSubject;
+  /** A folder row's working directory, in full */
+  path?: string;
 }
 
 /**
@@ -128,8 +135,15 @@ function placeOf(flow: Flow): Place {
     } else {
       const folderId = `app:${app}|cwd:${folder}`;
       const folderQuery = `${appQuery} ${fieldTerm("cwd", folder)}`;
+      const folderRow: PlaceRow = {
+        id: folderId,
+        kind: "folder",
+        label: folder,
+        query: folderQuery,
+      };
+      if (flow.clientCwd != null) folderRow.path = flow.clientCwd;
       appRows = [
-        { id: folderId, kind: "folder", label: folder, query: folderQuery },
+        folderRow,
         ...rows.map((r) => ({
           ...r,
           id: `${folderId}|${r.id}`,
@@ -169,6 +183,7 @@ function child(parent: Trie, row: PlaceRow): Trie {
       children: new Map(),
     };
     if (row.decrypt != null) node.item.decrypt = row.decrypt;
+    if (row.path != null) node.item.path = row.path;
     parent.children.set(row.id, node);
   }
   node.item.count++;
@@ -257,6 +272,8 @@ export function buildSidebarTree(
       }
       if (folder != null) item.sublabel = folder;
       if (flow.clientPath != null) item.appPath = flow.clientPath;
+      // A program outside an app bundle: its executable
+      if (flow.clientBundleId == null && flow.clientPath != null) item.path = flow.clientPath;
       app = { item, children: new Map() };
       parent.children.set(id, app);
     }

@@ -20,3 +20,10 @@ export async function openLink(url: string, report: ReportFailure): Promise<void
     report(`Failed to open ${url}: ${String(err)}`);
   }
 }
+
+/** What the platform calls showing a file in its file manager */
+export function revealLabel(os: string): string {
+  if (os === "macos") return "Reveal in Finder";
+  if (os === "windows") return "Show in Explorer";
+  return "Show in Folder";
+}

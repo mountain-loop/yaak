@@ -1,7 +1,7 @@
 export type { BannerProps } from "./components/Banner";
 export { Banner } from "./components/Banner";
 export type { ButtonProps } from "./components/Button";
-export { Button } from "./components/Button";
+export { Button, CONTROL_TOOLTIP_DELAY } from "./components/Button";
 export type { CheckboxProps } from "./components/Checkbox";
 export { Checkbox } from "./components/Checkbox";
 export type { CopyIconButtonProps } from "./components/CopyIconButton";

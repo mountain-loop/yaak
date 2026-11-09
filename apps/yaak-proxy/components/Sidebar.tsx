@@ -1,8 +1,10 @@
 import {
   ContextMenu,
+  CONTROL_TOOLTIP_DELAY,
   type DropdownItem,
   Icon,
   IconButton,
+  Tooltip,
   Tree,
   type TreeProps,
 } from "@yaakapp-internal/ui";
@@ -14,9 +16,11 @@ import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { SIDEBAR_TREE_ID } from "../lib/atoms";
 import { blockerOf, decryptMenuAction, isDecrypted, listEdit, setDecrypted } from "../lib/decrypt";
+import { revealLabel, revealPath } from "../lib/opener";
 import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
 import { type SidebarItem, SYSTEM_ID } from "../lib/sidebarTree";
 import { hideSystemAtom, noteSidebarInput, sidebarTreeAtom } from "../lib/store";
+import { getOsType } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
 import { AppIcon } from "./AppIcon";
 import { savedSearchDialogAtom } from "./SavedSearchDialog";
@@ -68,7 +72,14 @@ function ItemInner({ item }: { item: SidebarItem }) {
       {item.kind === "saved" && <Icon icon="bookmark" size="sm" className="text-text-subtle" />}
       {item.kind === "folder" && <Icon icon="folder" size="sm" className="text-text-subtle" />}
       {item.appPath != null && <AppIcon path={item.appPath} />}
-      <span className="truncate">{item.label}</span>
+      {item.kind === "folder" && item.path != null ? (
+        // Named by its last part; the whole path on hover
+        <Tooltip wrap content={item.path} delay={CONTROL_TOOLTIP_DELAY}>
+          <span className="truncate">{item.label}</span>
+        </Tooltip>
+      ) : (
+        <span className="truncate">{item.label}</span>
+      )}
       {item.sublabel != null && (
         <span className="truncate text-xs text-text-subtlest">{item.sublabel}</span>
       )}
@@ -89,7 +100,9 @@ function DecryptedMark({ item }: { item: SidebarItem }) {
   const list = useDecryptList();
   if (item.decrypt == null || !isDecrypted(list, item.decrypt)) return null;
   return (
-    <Icon icon="lock_open" size="xs" title="Decrypted" className="shrink-0 text-text-subtlest" />
+    <Tooltip wrap content="Decrypted" delay={CONTROL_TOOLTIP_DELAY}>
+      <Icon icon="lock_open" size="xs" className="shrink-0 text-text-subtlest" />
+    </Tooltip>
   );
 }
 
@@ -107,6 +120,7 @@ function HideSystemToggle() {
       icon={hidden ? "eye_closed" : "eye"}
       iconColor="secondary"
       title={hidden ? "Show System in All traffic" : "Hide System from All traffic"}
+      tooltip
       className={classNames(
         "!h-4 !w-4 mr-1",
         !hidden && "opacity-0 [.tree-item:hover_&]:opacity-100 focus-visible:opacity-100",
@@ -135,10 +149,39 @@ export function Sidebar() {
     onError: (err) => showToast({ id: "saved-search", message: err.message, color: "danger" }),
   });
 
+  // A program's folder, or the program, is shown in Finder, and a folder's path copied.
+  const fail = useCallback(
+    (message: string) => showToast({ id: "sidebar-path", message, color: "danger" }),
+    [showToast],
+  );
+  const pathItems = useCallback(
+    (item: SidebarItem | undefined): DropdownItem[] => {
+      const path = item?.path;
+      if (item == null || path == null) return [];
+      return [
+        {
+          label: revealLabel(getOsType()),
+          leftSlot: <Icon icon="folder_open" />,
+          onSelect: () => void revealPath(path, fail),
+        },
+        {
+          label: "Copy path",
+          leftSlot: <Icon icon="copy" />,
+          hidden: item.kind !== "folder",
+          onSelect: () => {
+            navigator.clipboard.writeText(path).catch((err) => fail(String(err)));
+          },
+        },
+      ];
+    },
+    [fail],
+  );
+
   // Decrypt or Stop Decrypting the selected hosts, sites and apps, from new connections on.
   // A saved search is renamed or deleted.
   const getContextMenu = useCallback(
     (items: SidebarItem[]): DropdownItem[] => {
+      const paths = items.length === 1 ? pathItems(items[0]) : [];
       const saved = items.flatMap((i) => (i.savedId == null ? [] : [{ ...i, id: i.savedId }]));
       if (saved.length > 0) {
         const [first] = saved;
@@ -164,8 +207,10 @@ export function Sidebar() {
       }
       const subjects = items.flatMap((i) => (i.decrypt == null ? [] : [i.decrypt]));
       const action = decryptMenuAction(decryptList, subjects);
-      if (action == null) return [];
+      if (action == null) return paths;
       return [
+        ...paths,
+        ...(paths.length > 0 ? [{ type: "separator" } as const] : []),
         {
           label: action.label,
           icon: action.on ? "lock_open" : "lock",
@@ -187,7 +232,7 @@ export function Sidebar() {
         },
       ];
     },
-    [decryptList, saveDecryptList, showToast, setSavedDialog, deleteSaved],
+    [decryptList, saveDecryptList, showToast, setSavedDialog, deleteSaved, pathItems],
   );
   const renderContextMenu = useCallback<NonNullable<TreeProps<SidebarItem>["renderContextMenu"]>>(
     ({ items, position, onClose }) =>

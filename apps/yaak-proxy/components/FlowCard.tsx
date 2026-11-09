@@ -1,19 +1,21 @@
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow, FlowBody } from "@yaakapp-internal/proxy-lib";
 import {
+  CONTROL_TOOLTIP_DELAY,
   CountBadge,
   Dropdown,
   EmptyStateText,
   type ExtraPaneTab,
+  type HttpBodyResult,
   HttpRequestPaneView,
   HttpResponsePaneView,
-  type HttpBodyResult,
   Icon,
   IconButton,
   parseCookieHeaders,
   ResponseCookies,
   type ResponseViewMode,
   SplitLayout,
+  Tooltip,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useSetAtom } from "jotai";
@@ -181,17 +183,18 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
 /** The method and URL, at the status line's height so the two header lines align */
 function UrlLine({ flow }: { flow: Flow }) {
   return (
-    <div
-      className={classNames(
-        "flex items-center gap-2 min-h-[calc(var(--height-sm)+0.25rem)] -mb-1.5",
-        "font-mono text-sm whitespace-nowrap overflow-x-auto hide-scrollbars",
-      )}
-    >
-      <span className="text-text-subtle shrink-0">{flow.method}</span>
-      <span className="text-text select-text cursor-text" title={flow.url}>
-        {flow.url}
-      </span>
-    </div>
+    // The whole URL on hover, when it runs past the card
+    <Tooltip wrap onlyWhenTruncated content={flow.url} delay={CONTROL_TOOLTIP_DELAY}>
+      <div
+        className={classNames(
+          "flex items-center gap-2 min-h-[calc(var(--height-sm)+0.25rem)] -mb-1.5",
+          "font-mono text-sm whitespace-nowrap overflow-x-auto hide-scrollbars",
+        )}
+      >
+        <span className="text-text-subtle shrink-0">{flow.method}</span>
+        <span className="text-text select-text cursor-text">{flow.url}</span>
+      </div>
+    </Tooltip>
   );
 }
 
@@ -295,10 +298,11 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
             icon="bookmark"
             iconColor={saved ? "primary" : "secondary"}
             title={saved ? "Saved to Yaak" : "Save to Yaak"}
+            tooltip
             onClick={() => openSave(flow)}
           />
           <Dropdown items={flowActions(flow).slice(2)}>
-            <IconButton size="sm" icon="ellipsis" iconColor="secondary" title="Actions" />
+            <IconButton size="sm" icon="ellipsis" iconColor="secondary" title="Actions" tooltip />
           </Dropdown>
         </div>
       }

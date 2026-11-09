@@ -49,7 +49,7 @@ export function PausedRow({ style }: { style?: React.CSSProperties }) {
     <div
       style={style}
       className={classNames(
-        "absolute inset-x-0 flex items-center gap-2 h-xs px-3 mt-1",
+        "absolute left-1.5 right-1.5 flex items-center gap-2 h-xs px-3 mt-1",
         "rounded-md border border-dashed border-border-subtle text-text-subtle text-sm",
       )}
     >

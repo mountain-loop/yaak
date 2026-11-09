@@ -1,4 +1,11 @@
-import { Button, Icon, InlineCode, LoadingIcon } from "@yaakapp-internal/ui";
+import {
+  Button,
+  CONTROL_TOOLTIP_DELAY,
+  Icon,
+  InlineCode,
+  LoadingIcon,
+  Tooltip,
+} from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import type { ReactNode } from "react";
@@ -127,9 +134,17 @@ export function FirstRun() {
             title="What to decrypt"
             description={
               everything ? (
-                <span title="Except the built-in exclusions">Everything</span>
+                <Tooltip
+                  wrap
+                  content="Except the built-in exclusions"
+                  delay={CONTROL_TOOLTIP_DELAY}
+                >
+                  <span>Everything</span>
+                </Tooltip>
               ) : (
-                <span title="From a flow or the sidebar">Pick as they appear</span>
+                <Tooltip wrap content="From a flow or the sidebar" delay={CONTROL_TOOLTIP_DELAY}>
+                  <span>Pick as they appear</span>
+                </Tooltip>
               )
             }
             action={

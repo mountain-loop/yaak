@@ -11,6 +11,8 @@ vi.mock("@yaakapp-internal/ui", () => ({
   ),
   EmptyStateText: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   LoadingIcon: () => <span>LOADING</span>,
+  CONTROL_TOOLTIP_DELAY: 0,
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 const data = (truncated = false): FlowBodyData => ({

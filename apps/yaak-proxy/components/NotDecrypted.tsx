@@ -1,6 +1,6 @@
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow } from "@yaakapp-internal/proxy-lib";
-import { Button, formatMillis, Icon } from "@yaakapp-internal/ui";
+import { Button, CONTROL_TOOLTIP_DELAY, formatMillis, Icon, Tooltip } from "@yaakapp-internal/ui";
 import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
 import { type DecryptSubject, detailActions, listEdit, setDecrypted } from "../lib/decrypt";
 import { sidebarPath } from "../lib/search";
@@ -46,13 +46,23 @@ export function NotDecrypted({ flow }: { flow: Flow }) {
         <div className="font-mono text-xs">{facts.join(" · ")}</div>
         {flow.error != null && <div className="text-danger">{flow.error}</div>}
         {actions.listed ? (
-          <div title="Still tunnelled? The app may pin its certificate">
-            Decrypting new connections
-          </div>
+          <Tooltip
+            wrap
+            content="Still tunnelled? The app may pin its certificate"
+            delay={CONTROL_TOOLTIP_DELAY}
+          >
+            <div>Decrypting new connections</div>
+          </Tooltip>
         ) : actions.blocked != null ? (
-          <div title="Remove it from the decrypt list to decrypt">
-            Excluded by <span className="font-mono text-xs">{actions.blocked}</span>
-          </div>
+          <Tooltip
+            wrap
+            content="Remove it from the decrypt list to decrypt"
+            delay={CONTROL_TOOLTIP_DELAY}
+          >
+            <div>
+              Excluded by <span className="font-mono text-xs">{actions.blocked}</span>
+            </div>
+          </Tooltip>
         ) : (
           <div className="flex gap-2 mt-1">
             {actions.host && (
@@ -60,6 +70,7 @@ export function NotDecrypted({ flow }: { flow: Flow }) {
                 size="xs"
                 variant="border"
                 title={`Decrypt new connections to ${host}`}
+                tooltip
                 disabled={save.isPending}
                 onClick={() => decrypt(hostSubject)}
               >
@@ -71,6 +82,7 @@ export function NotDecrypted({ flow }: { flow: Flow }) {
                 size="xs"
                 variant="border"
                 title={`Decrypt new connections from ${app}`}
+                tooltip
                 disabled={save.isPending}
                 onClick={() => decrypt(appSubject)}
               >

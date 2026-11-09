@@ -4,6 +4,10 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { forwardRef } from "react";
 import { Icon } from "./Icon";
 import { LoadingIcon } from "./LoadingIcon";
+import { Tooltip } from "./Tooltip";
+
+/** How long the pointer rests on a control before its tooltip shows, in milliseconds */
+export const CONTROL_TOOLTIP_DELAY = 300;
 
 type ButtonVariant = "border" | "solid" | "input";
 type ButtonSize = "2xs" | "xs" | "sm" | "md" | "auto";
@@ -22,6 +26,8 @@ export type ButtonProps = Omit<HTMLAttributes<HTMLButtonElement>, "color" | "onC
   forDropdown?: boolean;
   disabled?: boolean;
   title?: string;
+  /** Shows `title` in Yaak's tooltip, quickly, rather than the browser's */
+  tooltip?: boolean;
   leftSlot?: ReactNode;
   rightSlot?: ReactNode;
 };
@@ -43,6 +49,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     rightSlot,
     disabled,
     title,
+    tooltip,
     onClick,
     ...props
   }: ButtonProps,
@@ -50,8 +57,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 ) {
   const resolvedColor = color ?? tone ?? "default";
   const isDisabled = disabled || isLoading;
+  const withTooltip = tooltip === true && title != null && title !== "";
 
-  return (
+  const button = (
     <button
       ref={ref}
       type={type}
@@ -99,7 +107,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       onDoubleClick={(e) => {
         e.stopPropagation();
       }}
-      title={title}
+      title={withTooltip ? undefined : title}
+      aria-label={withTooltip ? title : undefined}
       {...props}
     >
       {isLoading ? (
@@ -125,5 +134,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         />
       )}
     </button>
+  );
+
+  return withTooltip ? (
+    <Tooltip wrap content={title} delay={CONTROL_TOOLTIP_DELAY}>
+      {button}
+    </Tooltip>
+  ) : (
+    button
   );
 });

@@ -6,6 +6,7 @@ import {
   createHandleDrag,
   createSidebarDrag,
   createSplitDrag,
+  splitGridTemplate,
 } from "./resizeDrag";
 
 let frames: Map<number, FrameRequestCallback>;
@@ -222,6 +223,23 @@ describe("clampSplitRatio", () => {
   test("leaves the ratio alone with no size or no minimum", () => {
     expect(clampSplitRatio(0.01, 100, 0)).toBe(0.01);
     expect(clampSplitRatio(0.01, 0, 1000)).toBe(0.01);
+  });
+});
+
+describe("splitGridTemplate", () => {
+  const tracks = (t: string) => t.replace(/\s+/g, " ").trim();
+
+  test("puts the gutter between the panes, the handle's track", () => {
+    expect(tracks(splitGridTemplate(false, 0.4, 20))).toBe(
+      "' left drag right' minmax(0,1fr) / 0.6fr 20px 0.4fr",
+    );
+    expect(tracks(splitGridTemplate(true, 0.5, 8))).toBe(
+      "' left' minmax(0,0.5fr) ' drag' 8px ' right' minmax(0,0.5fr) / 1fr",
+    );
+  });
+
+  test("lets the panes meet without one", () => {
+    expect(tracks(splitGridTemplate(false, 0.5))).toContain("0.5fr 0px 0.5fr");
   });
 });
 

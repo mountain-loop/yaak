@@ -3,17 +3,18 @@ import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import {
   ContextMenu,
+  CONTROL_TOOLTIP_DELAY,
   CountBadge,
   formatMillis,
   HttpMethodTagRaw,
   HttpStatusTagRaw,
   Icon,
-  useContainerSize,
+  Tooltip,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import type { CSSProperties, KeyboardEvent, MouseEvent, WheelEvent } from "react";
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEvent, ReactElement, WheelEvent } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { selectedFlowAtom, selectedFlowIdAtom } from "../lib/atoms";
 import { shortContentType } from "../lib/body";
 import { utcTimestamp } from "../lib/flowViews";
@@ -21,6 +22,7 @@ import {
   type Column,
   type ColumnId,
   gridTemplate,
+  gridWidth,
   hostOf,
   nextSort,
   shownColumns,
@@ -66,7 +68,8 @@ interface Props {
 /**
  * Follows new traffic until a flow is selected or the list is scrolled, then holds. Scrolling to
  * the top loads older flows from the database. Catching up leaves a divider where the hold
- * began. Sorting by a column sorts the flows loaded and stops following.
+ * began. Sorting by a column sorts the flows loaded and stops following. The columns keep their
+ * widths, and the list scrolls sideways when they are wider than it, the header with it.
  */
 export function FlowList({ style, className }: Props) {
   const flows = useAtomValue(shownFlowsAtom);
@@ -81,9 +84,11 @@ export function FlowList({ style, className }: Props) {
   const [sort, setSort] = useAtom(flowSortAtom);
   const proxyState = useAtomValue(proxyStateAtom);
   const paused = proxyState?.state === "running" && proxyState.recording === false;
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { width } = useContainerSize(containerRef);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const lastScrollTop = useRef(0);
+  // The list's vertical scrollbar, which the header leaves room for so the two scroll as far
+  const [scrollbarWidth, setScrollbarWidth] = useState(0);
   const ignoreScroll = useRef(false);
   const [following, setFollowing] = useAtom(followAtom);
   const [heldAt, setHeldAt] = useState<string | null>(null);
@@ -101,10 +106,12 @@ export function FlowList({ style, className }: Props) {
   // Where the platform cannot tell which app sent a flow, there is no App column.
   const hasApps = useAtomValue(hasAppsAtom);
   const columns = useMemo(
-    () => shownColumns(prefs, width).filter((c) => hasApps || c.id !== "app"),
-    [prefs, width, hasApps],
+    () => shownColumns(prefs).filter((c) => hasApps || c.id !== "app"),
+    [prefs, hasApps],
   );
   const template = useMemo(() => gridTemplate(columns), [columns]);
+  // A row's grid, its padding and the list's margins: `px-1.5` and `left-1.5 right-1.5`
+  const contentWidth = useMemo(() => `calc(${gridWidth(columns)} + 1.5rem)`, [columns]);
   const arrivals = useArrivals(flows, following && sort == null);
 
   const virtualizer = useVirtualizer({
@@ -173,13 +180,29 @@ export function FlowList({ style, className }: Props) {
     if (latest.current.sort == null) void loadOlder();
   }, [hold, loadOlder]);
 
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el == null) return;
+    const measure = () => setScrollbarWidth(el.offsetWidth - el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (el == null) return;
+    if (headerScrollRef.current != null) headerScrollRef.current.scrollLeft = el.scrollLeft;
+    // Sideways only: following and holding go by the vertical position.
+    const top = el.scrollTop;
+    const moved = top !== lastScrollTop.current;
+    lastScrollTop.current = top;
     if (ignoreScroll.current) {
       ignoreScroll.current = false;
       return;
     }
-    const el = scrollRef.current;
-    if (el == null) return;
+    if (!moved) return;
     const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 2;
     if (atEnd && latest.current.sort == null) {
       setFollowing(true);
@@ -191,6 +214,13 @@ export function FlowList({ style, className }: Props) {
       }
     }
   }, [hold, loadOlder, setFollowing, ROW_HEIGHT]);
+
+  // The header scrolls the list sideways, as it has no scrollbar of its own.
+  const handleHeaderWheel = useCallback((e: WheelEvent<HTMLDivElement>) => {
+    const el = scrollRef.current;
+    if (el == null || e.deltaX === 0) return;
+    el.scrollLeft += e.deltaX;
+  }, []);
 
   // A list too short to scroll still loads older flows on scrolling up.
   const handleWheel = useCallback(
@@ -247,12 +277,18 @@ export function FlowList({ style, className }: Props) {
     [select],
   );
 
+  // A third click on a column goes back to start time, following as Sort by Start Time does.
   const handleSort = useCallback(
     (column: ColumnId) => {
+      const next = nextSort(latest.current.sort, column);
+      if (next == null) {
+        follow();
+        return;
+      }
       hold();
-      setSort((prev) => nextSort(prev, column));
+      setSort(next);
     },
-    [hold, setSort],
+    [follow, hold, setSort],
   );
 
   const newCount = following || sort != null ? 0 : countNewFlows(flows, heldAt);
@@ -261,18 +297,29 @@ export function FlowList({ style, className }: Props) {
 
   return (
     <div
-      ref={containerRef}
       style={style}
-      className={classNames(className, "grid grid-rows-[auto_minmax(0,1fr)] min-h-0 text-sm")}
+      className={classNames(
+        className,
+        "grid grid-rows-[auto_minmax(0,1fr)] grid-cols-[minmax(0,1fr)] min-h-0 text-sm",
+      )}
     >
-      <FlowListHeader
-        columns={columns}
-        template={template}
-        prefs={prefs}
-        sort={sort}
-        onSort={handleSort}
-        onSortByStart={follow}
-      />
+      {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- scrolls the list sideways */}
+      <div
+        ref={headerScrollRef}
+        onWheel={handleHeaderWheel}
+        style={{ marginRight: scrollbarWidth }}
+        className="overflow-hidden"
+      >
+        <FlowListHeader
+          columns={columns}
+          template={template}
+          width={contentWidth}
+          prefs={prefs}
+          sort={sort}
+          onSort={handleSort}
+          onSortByStart={follow}
+        />
+      </div>
       <div className="relative min-h-0">
         <div
           ref={scrollRef}
@@ -282,12 +329,17 @@ export function FlowList({ style, className }: Props) {
           onScroll={handleScroll}
           onWheel={handleWheel}
           onKeyDown={handleKeyDown}
-          className="group/flows h-full overflow-y-auto px-1.5 outline-hidden"
+          className="group/flows h-full overflow-auto outline-hidden"
         >
           {flows.length === 0 ? (
-            <FlowListEmpty />
+            <div className="h-full px-1.5">
+              <FlowListEmpty />
+            </div>
           ) : (
-            <div className="relative" style={{ height: totalSize }}>
+            <div
+              className="relative"
+              style={{ height: totalSize, width: contentWidth, minWidth: "100%" }}
+            >
               {virtualizer.getVirtualItems().map((item) => {
                 const flow = flows[item.index];
                 if (flow == null) return null;
@@ -311,7 +363,7 @@ export function FlowList({ style, className }: Props) {
                 <div
                   aria-hidden
                   style={{ top: dividerIndex * ROW_HEIGHT }}
-                  className="pointer-events-none absolute inset-x-0 h-0 border-t border-border"
+                  className="pointer-events-none absolute left-1.5 right-1.5 h-0 border-t border-border"
                 >
                   <span className="absolute -top-2 left-1 px-1 bg-surface text-2xs text-primary">
                     {divider.count === 1 ? "1 new" : `${divider.count} new`}
@@ -436,8 +488,8 @@ const FlowRow = memo(function FlowRow({
           : {}),
       }}
       className={classNames(
-        "absolute top-0 inset-x-0 grid items-center gap-x-3 px-1.5 rounded-md whitespace-nowrap",
-        "[&>*]:overflow-hidden [&>*]:text-ellipsis [&>*]:min-w-0 tabular-nums",
+        "absolute top-0 left-1.5 right-1.5 grid items-center px-1.5 rounded-md whitespace-nowrap",
+        "tabular-nums",
         flow.cancelled && "text-text-subtlest",
         selected
           ? "text-text bg-surface-highlight group-focus-within/flows:bg-surface-active"
@@ -469,9 +521,8 @@ function FlowMark({ flow }: { flow: Flow }) {
   if (open) states.push("Streaming");
   if (flow.responseTruncated) states.push("Body cut at the capture limit");
   if (flow.savedRequestId != null) states.push("Saved to Yaak");
-  const title = states.length === 0 ? undefined : states.join("\n");
-  return (
-    <span className="flex items-center justify-center" title={title}>
+  const mark = (
+    <span className="flex items-center justify-center">
       {flow.error != null ? (
         <Icon icon="circle_alert" size="sm" color="danger" />
       ) : flow.cancelled ? (
@@ -487,9 +538,27 @@ function FlowMark({ flow }: { flow: Flow }) {
       ) : null}
     </span>
   );
+  if (states.length === 0) return mark;
+  return (
+    <Tooltip wrap content={states.join("\n")} delay={CONTROL_TOOLTIP_DELAY}>
+      {mark}
+    </Tooltip>
+  );
 }
 
 const mono = "font-mono text-xs";
+
+/** Every cell: its padding matching the header's, and its text cut short at its width */
+const cell = "min-w-0 px-1.5 overflow-hidden text-ellipsis";
+
+/** A cell with its full text in a tooltip, shown when the cell cuts it short */
+function Truncated({ text, children }: { text: string; children: ReactElement }) {
+  return (
+    <Tooltip wrap onlyWhenTruncated content={text} delay={CONTROL_TOOLTIP_DELAY}>
+      {children}
+    </Tooltip>
+  );
+}
 
 /** An undecrypted tunnel still open: written as it opens, done once it closes */
 function isOpenTunnel(flow: Flow): boolean {
@@ -507,18 +576,25 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
   switch (column) {
     case "number":
       return (
-        <span className={classNames(mono, "text-right text-text-subtlest")}>
+        <span className={classNames(cell, mono, "text-right text-text-subtlest")}>
           {flow.number || ""}
         </span>
       );
     case "app": {
-      if (flow.clientPath == null) return <span />;
-      const folder = folderOf(flow);
+      if (flow.clientPath == null) return <span className={cell} />;
       const name = flow.clientName ?? flow.clientPath;
+      // A program outside an app says which folder it ran in, in full.
+      const folder = folderOf(flow) == null ? null : flow.clientCwd;
       return (
-        <span className="flex items-center" title={folder == null ? name : `${name} in ${folder}`}>
-          <AppIcon path={flow.clientPath} />
-        </span>
+        <Tooltip
+          wrap
+          content={folder == null ? name : `${name}\n${folder}`}
+          delay={CONTROL_TOOLTIP_DELAY}
+        >
+          <span className={classNames(cell, "flex items-center")}>
+            <AppIcon path={flow.clientPath} />
+          </span>
+        </Tooltip>
       );
     }
     case "method":
@@ -526,63 +602,74 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
         <HttpMethodTagRaw
           method={flow.method}
           short
-          className={classNames(mono, !flow.cancelled && "text-text-subtle")}
+          className={classNames(cell, mono, !flow.cancelled && "text-text-subtle")}
         />
       );
-    case "host":
+    case "host": {
+      const host = hostOf(flow.url);
       // Cut from the front, so the part that names the service stays.
       return (
-        <span className={classNames("rtl text-left", !flow.cancelled && "text-text-subtle")}>
-          <bdi>{hostOf(flow.url)}</bdi>
-        </span>
+        <Truncated text={host}>
+          <span
+            className={classNames(cell, "rtl text-left", !flow.cancelled && "text-text-subtle")}
+          >
+            <bdi>{host}</bdi>
+          </span>
+        </Truncated>
       );
+    }
     case "path": {
       // A tunnel's only path is its host; what it carried is unread.
-      if (flow.tunnelled) return <span className="text-text-subtlest">Not decrypted</span>;
+      if (flow.tunnelled) {
+        return <span className={classNames(cell, "text-text-subtlest")}>Not decrypted</span>;
+      }
       const { path, query } = splitPath(flow.url);
       if (flow.streamKind == null) {
         return (
-          <span>
-            {path}
-            <span className="text-text-subtlest">{query}</span>
-          </span>
+          <Truncated text={path + query}>
+            <span className={cell}>
+              {path}
+              <span className="text-text-subtlest">{query}</span>
+            </span>
+          </Truncated>
         );
       }
       // A stream's message count rides the end of the path, so it survives the narrow width,
       // ticking while the stream is open.
       return (
-        <span className="flex items-center">
-          <span className="truncate">
-            {path}
-            <span className="text-text-subtlest">{query}</span>
+        <Truncated text={path + query}>
+          <span className={classNames(cell, "flex items-center")}>
+            <span className="truncate">
+              {path}
+              <span className="text-text-subtlest">{query}</span>
+            </span>
+            <CountBadge
+              count={flow.messageCount}
+              showZero
+              color={isOpenStream(flow) ? "info" : undefined}
+              className="shrink-0 !mb-0 tabular-nums"
+            />
           </span>
-          <CountBadge
-            count={flow.messageCount}
-            showZero
-            color={isOpenStream(flow) ? "info" : undefined}
-            className="shrink-0 !mb-0 tabular-nums"
-          />
-        </span>
+        </Truncated>
       );
     }
     case "status":
       return (flow.cancelled || flow.tunnelled) && flow.status == null ? (
-        <span className={classNames(mono, "text-text-subtlest")}>--</span>
+        <span className={classNames(cell, mono, "text-text-subtlest")}>--</span>
       ) : (
-        <HttpStatusTagRaw status={flow.status ?? 0} short className={mono} />
+        <HttpStatusTagRaw status={flow.status ?? 0} short className={classNames(cell, mono)} />
       );
     case "type":
       return failed && noResponse ? (
-        <span
-          className={classNames("text-danger text-xs", span && "col-span-2")}
-          title={flow.error ?? undefined}
-        >
-          {flow.error}
-        </span>
+        <Tooltip wrap content={flow.error ?? ""} delay={CONTROL_TOOLTIP_DELAY}>
+          <span className={classNames(cell, "text-danger text-xs", span && "col-span-2")}>
+            {flow.error}
+          </span>
+        </Tooltip>
       ) : flow.cancelled && noResponse ? (
-        <span className={classNames("text-xs", span && "col-span-2")}>Cancelled</span>
+        <span className={classNames(cell, "text-xs", span && "col-span-2")}>Cancelled</span>
       ) : (
-        <span className={classNames(mono, "text-text-subtlest")}>
+        <span className={classNames(cell, mono, "text-text-subtlest")}>
           {shortContentType(flow.contentType) ?? "--"}
         </span>
       );
@@ -590,6 +677,7 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
       return (
         <span
           className={classNames(
+            cell,
             mono,
             "text-right",
             flow.responseTruncated ? "text-notice" : "text-text-subtle",
@@ -603,7 +691,7 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
       if (isOpenStream(flow) || isOpenTunnel(flow)) {
         const open = Date.now() - Date.parse(utcTimestamp(flow.startedAt));
         return (
-          <span className={classNames(mono, "text-right text-text-subtlest")}>
+          <span className={classNames(cell, mono, "text-right text-text-subtlest")}>
             {Number.isFinite(open) ? formatMillis(Math.max(0, open)) : "--"}
           </span>
         );
@@ -611,6 +699,7 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
       return (
         <span
           className={classNames(
+            cell,
             mono,
             "text-right",
             // A second or more stands out without a new colour.
@@ -624,11 +713,13 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
       );
     case "remote":
       return (
-        <span className={classNames(mono, "text-text-subtle")}>{flow.remoteAddr ?? "--"}</span>
+        <span className={classNames(cell, mono, "text-text-subtle")}>
+          {flow.remoteAddr ?? "--"}
+        </span>
       );
     case "version":
       return (
-        <span className={classNames(mono, "text-text-subtle")}>
+        <span className={classNames(cell, mono, "text-text-subtle")}>
           {flow.upstreamHttpVersion ?? flow.clientHttpVersion}
         </span>
       );

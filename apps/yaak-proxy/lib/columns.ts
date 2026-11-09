@@ -18,14 +18,12 @@ export interface ColumnDef {
   id: ColumnId;
   /** In the header and the picker */
   label: string;
-  /** Pixels, at the default interface size; the path takes what is left */
+  /** Pixels of content, at the default interface size; each cell adds `CELL_PADDING` */
   width: number;
   minWidth: number;
   align: "left" | "right";
   /** Shown until the person hides it */
   defaultVisible: boolean;
-  /** Kept when the list is narrow; the rest drop out below `WIDE_MIN_WIDTH` */
-  narrow: boolean;
 }
 
 export const COLUMNS: ColumnDef[] = [
@@ -36,7 +34,6 @@ export const COLUMNS: ColumnDef[] = [
     minWidth: 30,
     align: "right",
     defaultVisible: true,
-    narrow: false,
   },
   {
     id: "app",
@@ -45,7 +42,6 @@ export const COLUMNS: ColumnDef[] = [
     minWidth: 18,
     align: "left",
     defaultVisible: true,
-    narrow: true,
   },
   {
     id: "method",
@@ -54,7 +50,6 @@ export const COLUMNS: ColumnDef[] = [
     minWidth: 40,
     align: "left",
     defaultVisible: true,
-    narrow: true,
   },
   {
     id: "host",
@@ -63,16 +58,14 @@ export const COLUMNS: ColumnDef[] = [
     minWidth: 60,
     align: "left",
     defaultVisible: true,
-    narrow: true,
   },
   {
     id: "path",
     label: "Path",
-    width: 0,
+    width: 360,
     minWidth: 80,
     align: "left",
     defaultVisible: true,
-    narrow: true,
   },
   {
     id: "status",
@@ -81,7 +74,6 @@ export const COLUMNS: ColumnDef[] = [
     minWidth: 34,
     align: "left",
     defaultVisible: true,
-    narrow: true,
   },
   {
     id: "type",
@@ -90,7 +82,6 @@ export const COLUMNS: ColumnDef[] = [
     minWidth: 34,
     align: "left",
     defaultVisible: true,
-    narrow: false,
   },
   {
     id: "size",
@@ -99,7 +90,6 @@ export const COLUMNS: ColumnDef[] = [
     minWidth: 44,
     align: "right",
     defaultVisible: true,
-    narrow: false,
   },
   {
     id: "time",
@@ -108,7 +98,6 @@ export const COLUMNS: ColumnDef[] = [
     minWidth: 44,
     align: "right",
     defaultVisible: true,
-    narrow: true,
   },
   {
     id: "remote",
@@ -117,7 +106,6 @@ export const COLUMNS: ColumnDef[] = [
     minWidth: 60,
     align: "left",
     defaultVisible: false,
-    narrow: false,
   },
   {
     id: "version",
@@ -126,7 +114,6 @@ export const COLUMNS: ColumnDef[] = [
     minWidth: 44,
     align: "left",
     defaultVisible: false,
-    narrow: false,
   },
 ];
 
@@ -138,11 +125,11 @@ export function columnDef(id: ColumnId): ColumnDef {
   return def;
 }
 
-/** Below this width the list keeps only the narrow set: what a glance needs */
-export const WIDE_MIN_WIDTH = 760;
-
 /** The mark column, first and fixed */
-export const MARK_WIDTH = 22;
+export const MARK_WIDTH = 24;
+
+/** Each cell's padding, both sides together, added to its column's width; `px-1.5` per side */
+export const CELL_PADDING = "0.75rem";
 
 /** What the person chose: which columns show, and the widths they dragged, by id */
 export interface ColumnPrefs {
@@ -153,32 +140,18 @@ export interface ColumnPrefs {
 export const defaultColumnPrefs: ColumnPrefs = { visible: {}, widths: {} };
 
 export interface Column extends ColumnDef {
-  /** Its width now, in pixels; zero for the path, which takes the rest */
+  /** Its width now, in pixels of content */
   current: number;
 }
 
 /**
- * The columns shown at `listWidth`, in order: the visible ones, less those outside the narrow set
- * when the list is narrower than `WIDE_MIN_WIDTH`. The path always shows. Measured, not by
- * layout, so a wide window side by side still gets size and type.
+ * The columns shown, in order: the visible ones, the path always. Each keeps its width however
+ * narrow the list is; the list scrolls sideways instead.
  */
-export function shownColumns(prefs: ColumnPrefs, listWidth: number): Column[] {
-  const wide = listWidth >= WIDE_MIN_WIDTH;
-  return COLUMNS.filter((c) => {
-    if (c.id === "path") return true;
-    if (!(prefs.visible[c.id] ?? c.defaultVisible)) return false;
-    return wide || c.narrow;
-  }).map((c) => ({ ...c, current: currentWidth(prefs, c.id, listWidth) }));
-}
-
-/** The host gives way to the path in a narrow list, at most this share of its width */
-const HOST_SHARE = 0.24;
-
-function currentWidth(prefs: ColumnPrefs, id: ColumnId, listWidth: number): number {
-  if (id === "path") return 0;
-  const width = columnWidth(prefs, id);
-  if (id !== "host" || listWidth <= 0) return width;
-  return Math.max(columnDef(id).minWidth, Math.min(width, Math.round(listWidth * HOST_SHARE)));
+export function shownColumns(prefs: ColumnPrefs): Column[] {
+  return COLUMNS.filter((c) => c.id === "path" || (prefs.visible[c.id] ?? c.defaultVisible)).map(
+    (c) => ({ ...c, current: columnWidth(prefs, c.id) }),
+  );
 }
 
 export function columnWidth(prefs: ColumnPrefs, id: ColumnId): number {
@@ -186,12 +159,16 @@ export function columnWidth(prefs: ColumnPrefs, id: ColumnId): number {
   return Math.max(def.minWidth, Math.round(prefs.widths[id] ?? def.width));
 }
 
-/** The grid template for the header and every row */
+/** The grid template for the header and every row: the mark, then each column and its padding */
 export function gridTemplate(columns: Column[]): string {
-  const cells = columns.map((c) =>
-    c.id === "path" ? `minmax(${c.minWidth}px,1fr)` : `${c.current}px`,
-  );
+  const cells = columns.map((c) => `calc(${c.current}px + ${CELL_PADDING})`);
   return [`${MARK_WIDTH}px`, ...cells].join(" ");
+}
+
+/** The width of a row's grid, as CSS: the list scrolls sideways when it is wider than the list */
+export function gridWidth(columns: Column[]): string {
+  const px = columns.reduce((sum, c) => sum + c.current, MARK_WIDTH);
+  return `calc(${px}px + ${columns.length} * ${CELL_PADDING})`;
 }
 
 export function toggleColumn(prefs: ColumnPrefs, id: ColumnId): ColumnPrefs {
@@ -201,13 +178,18 @@ export function toggleColumn(prefs: ColumnPrefs, id: ColumnId): ColumnPrefs {
 }
 
 export function resizeColumn(prefs: ColumnPrefs, id: ColumnId, width: number): ColumnPrefs {
-  if (id === "path") return prefs;
   const w = Math.max(columnDef(id).minWidth, Math.round(width));
   return { ...prefs, widths: { ...prefs.widths, [id]: w } };
 }
 
 export function resetWidths(prefs: ColumnPrefs): ColumnPrefs {
   return { ...prefs, widths: {} };
+}
+
+/** One column back to its default width */
+export function resetWidth(prefs: ColumnPrefs, id: ColumnId): ColumnPrefs {
+  const { [id]: _, ...widths } = prefs.widths;
+  return { ...prefs, widths };
 }
 
 /**
@@ -238,10 +220,15 @@ export function firstDirection(column: ColumnId): boolean {
   return column === "number" || column === "size" || column === "time" || column === "status";
 }
 
-/** A click on a column's label: sort by it, or reverse the sort it already has */
-export function nextSort(sort: FlowSort | null, column: ColumnId): FlowSort {
-  if (sort?.column === column) return { column, descending: !sort.descending };
-  return { column, descending: firstDirection(column) };
+/**
+ * A click on a column's label: sort by it, reverse the sort it has, then, from the reversed sort,
+ * go back to start time
+ */
+export function nextSort(sort: FlowSort | null, column: ColumnId): FlowSort | null {
+  const first = firstDirection(column);
+  if (sort?.column !== column) return { column, descending: first };
+  if (sort.descending === first) return { column, descending: !first };
+  return null;
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -276,20 +263,19 @@ function sortKey(flow: Flow, column: ColumnId): Key {
 }
 
 /**
- * The flows in `sort`'s order, without a value last either way, then by start so equal values
- * keep arrival order. Sorts the flows given, which are the ones loaded, not the whole database.
+ * The flows in `sort`'s order, those without a value (none, empty or zero) lowest, so first
+ * ascending and last descending, then by start so equal values keep arrival order. Sorts the
+ * flows given, which are the ones loaded, not the whole database: the database only ever reads
+ * by start time, so no `ORDER BY` follows the column sort.
  */
 export function sortFlows(flows: Flow[], sort: FlowSort | null): Flow[] {
   if (sort == null) return flows;
   const dir = sort.descending ? -1 : 1;
-  const keyed = flows.map((flow, i) => ({ flow, i, key: sortKey(flow, sort.column) }));
+  const keyed = flows.map((flow, i) => ({ flow, i, key: sortKey(flow, sort.column) || null }));
   keyed.sort((a, b) => {
-    if (a.key == null || b.key == null) {
-      if (a.key == null && b.key == null) return a.i - b.i;
-      return a.key == null ? 1 : -1;
-    }
     let c: number;
-    if (typeof a.key === "number" && typeof b.key === "number") c = a.key - b.key;
+    if (a.key == null || b.key == null) c = Number(b.key == null) - Number(a.key == null);
+    else if (typeof a.key === "number" && typeof b.key === "number") c = a.key - b.key;
     else c = collator.compare(String(a.key), String(b.key));
     return c === 0 ? a.i - b.i : c * dir;
   });

@@ -159,6 +159,14 @@ describe("programs outside an app", () => {
     expect(items.get("app:curl|site:example.com")?.kind).toBe("site");
   });
 
+  test("folder rows carry their full path, and programs their executable", () => {
+    expect(items.get("app:claude|cwd:yaak")?.path).toBe("/src/yaak");
+    expect(items.get("app:claude|cwd:fieldwork")?.path).toBe("/src/fieldwork");
+    expect(items.get("app:claude")?.path).toBe("/usr/local/bin/claude");
+    // Hosts and paths under a folder are not on disk.
+    expect(items.get("app:claude|cwd:yaak|host:statsig.anthropic.com")?.path).toBeUndefined();
+  });
+
   test("a folder row selects that program in that folder", () => {
     const query = items.get("app:claude|cwd:yaak")?.query ?? "";
     expect(query).toBe("@app:claude @cwd:yaak");
@@ -167,6 +175,11 @@ describe("programs outside an app", () => {
     );
     expect(parseQuery(query)?.type).toBe("And");
   });
+});
+
+test("an app in a bundle has no path to reveal", () => {
+  const items = itemsById(buildSidebarTree([flow("https://slack.com/", slack)], 1));
+  expect(items.get("app:Slack")?.path).toBeUndefined();
 });
 
 describe("decrypting from the sidebar", () => {

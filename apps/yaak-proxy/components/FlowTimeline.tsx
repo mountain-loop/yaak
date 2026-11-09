@@ -1,10 +1,12 @@
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import {
+  CONTROL_TOOLTIP_DELAY,
   EventViewer,
   EventViewerRow,
   formatMillis,
   Icon,
   type IconProps,
+  Tooltip,
 } from "@yaakapp-internal/ui";
 import { useMemo } from "react";
 import { type FlowPhase, flowPhases, type PhaseKind } from "../lib/phases";
@@ -35,12 +37,21 @@ export function FlowTimeline({ flow }: { flow: Flow }) {
             onClick={onClick}
             icon={<Icon icon={icon} color={color} size="sm" />}
             content={
-              <span title={event.detail}>
-                {event.label}
-                {event.detail != null && (
-                  <span className="text-text-subtlest">{` ${event.detail}`}</span>
-                )}
-              </span>
+              event.detail == null ? (
+                <span>{event.label}</span>
+              ) : (
+                <Tooltip
+                  wrap
+                  onlyWhenTruncated
+                  content={event.detail}
+                  delay={CONTROL_TOOLTIP_DELAY}
+                >
+                  <span>
+                    {event.label}
+                    <span className="text-text-subtlest">{` ${event.detail}`}</span>
+                  </span>
+                </Tooltip>
+              )
             }
             columns="auto minmax(0,1fr) 6rem 6rem"
             cells={{

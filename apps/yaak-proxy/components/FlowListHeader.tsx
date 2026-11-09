@@ -15,6 +15,7 @@ import {
   type ColumnId,
   type ColumnPrefs,
   type FlowSort,
+  resetWidth,
   resetWidths,
   resizeColumn,
   toggleColumn,
@@ -25,6 +26,8 @@ import { columnPrefsAtom } from "../lib/store";
 interface Props {
   columns: Column[];
   template: string;
+  /** The rows' width, as CSS, so the header scrolls sideways with them */
+  width: string;
   prefs: ColumnPrefs;
   sort: FlowSort | null;
   onSort: (column: ColumnId) => void;
@@ -32,13 +35,15 @@ interface Props {
 }
 
 /**
- * The list's only control surface: a click on a label sorts by it and a second reverses it,
- * dragging the edge after a label resizes its column, and the picker sits in the empty corner on
- * hover, or anywhere on a right-click.
+ * The list's only control surface: a click on a label sorts by it, a second reverses it and a
+ * third goes back to start time. Dragging the edge after a label resizes its column and a
+ * double-click on it resets it. The picker sits in the empty corner on hover, or anywhere on a
+ * right-click.
  */
 export const FlowListHeader = memo(function FlowListHeader({
   columns,
   template,
+  width,
   prefs,
   sort,
   onSort,
@@ -82,67 +87,68 @@ export const FlowListHeader = memo(function FlowListHeader({
   }, []);
 
   return (
-    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- a right-click opens the same menu as the picker
-    <div
-      onContextMenu={openMenu}
-      style={{ gridTemplateColumns: template }}
-      className={classNames(
-        "group/header grid items-center gap-x-3 h-xs px-1.5 mx-1.5 select-none",
-        "text-xs text-text-subtlest border-b border-border-subtle",
-      )}
-    >
-      <span className="flex items-center justify-center">
-        <Dropdown items={items}>
-          <IconButton
-            size="xs"
-            icon="settings_2"
-            title="Columns"
-            iconColor="secondary"
-            className="opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100 !h-5 !w-5"
-          />
-        </Dropdown>
-      </span>
-      {columns.map((c) => (
-        <span key={c.id} className="relative h-full flex items-center min-w-0">
-          <button
-            type="button"
-            onClick={() => onSort(c.id)}
-            // No tooltip: the header sits under the search field, and a tooltip here covered it
-            aria-label={`Sort by ${c.label}`}
-            className={classNames(
-              "flex items-center gap-0.5 min-w-0 w-full h-full whitespace-nowrap hover:text-text-subtle",
-              c.align === "right" && "justify-end",
-              sort?.column === c.id && "text-text-subtle",
-            )}
-          >
-            {sort?.column === c.id && (
-              <Icon
-                icon="chevron_down"
-                size="xs"
-                className={classNames("shrink-0", !sort.descending && "rotate-180")}
-              />
-            )}
-            <span className="truncate">{c.id === "app" ? "" : c.label}</span>
-          </button>
-          {c.id !== "path" && (
+    // The same margins and padding as the rows, so each label sits over its cells.
+    <div style={{ width, minWidth: "100%" }} className="px-1.5">
+      {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- a right-click opens the same menu as the picker */}
+      <div
+        onContextMenu={openMenu}
+        style={{ gridTemplateColumns: template }}
+        className={classNames(
+          "group/header grid items-center h-xs px-1.5 select-none",
+          "text-xs text-text-subtlest border-b border-border-subtle",
+        )}
+      >
+        <span className="flex items-center justify-center">
+          <Dropdown items={items}>
+            <IconButton
+              size="xs"
+              icon="settings_2"
+              title="Columns"
+              tooltip
+              iconColor="secondary"
+              className="opacity-0 group-hover/header:opacity-100 focus-visible:opacity-100 !h-5 !w-5"
+            />
+          </Dropdown>
+        </span>
+        {columns.map((c) => (
+          <span key={c.id} className="relative h-full flex items-center min-w-0 px-1.5">
+            <button
+              type="button"
+              onClick={() => onSort(c.id)}
+              // No tooltip: the header sits under the search field, and a tooltip here covered it
+              aria-label={`Sort by ${c.label}`}
+              className={classNames(
+                "flex items-center gap-0.5 min-w-0 w-full h-full whitespace-nowrap hover:text-text-subtle",
+                c.align === "right" && "justify-end",
+                sort?.column === c.id && "text-text-subtle",
+              )}
+            >
+              {sort?.column === c.id && (
+                <Icon
+                  icon="chevron_down"
+                  size="xs"
+                  className={classNames("shrink-0", !sort.descending && "rotate-180")}
+                />
+              )}
+              <span className="truncate">{c.id === "app" ? "" : c.label}</span>
+            </button>
+            {/* On the column's right edge, the boundary with the next, resizing this one */}
             <ResizeHandle
               side="right"
               justify="center"
-              className="absolute top-0 -right-[0.45rem] opacity-0 group-hover/header:opacity-100"
+              className="absolute top-0 translate-x-1/2"
               onResizeStart={() => {
                 startWidth.current = c.current;
               }}
               onResizeMove={(e) =>
                 setPrefs((p) => resizeColumn(p, c.id, startWidth.current + e.x - e.xStart))
               }
-              onReset={() =>
-                setPrefs((p) => ({ ...p, widths: { ...p.widths, [c.id]: undefined } }))
-              }
+              onReset={() => setPrefs((p) => resetWidth(p, c.id))}
             />
-          )}
-        </span>
-      ))}
-      <ContextMenu triggerPosition={menu} items={items} onClose={() => setMenu(null)} />
+          </span>
+        ))}
+        <ContextMenu triggerPosition={menu} items={items} onClose={() => setMenu(null)} />
+      </div>
     </div>
   );
 });

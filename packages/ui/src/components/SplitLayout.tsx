@@ -26,6 +26,11 @@ interface Props {
   minWidthPx?: number;
   layout?: SplitLayoutLayout;
   resizeHandleClassName?: string;
+  /**
+   * Pixels between the panes, all of it the handle, its bar centred. Without it the panes meet
+   * and the handle straddles their edge.
+   */
+  gutter?: number;
 }
 
 const baseProperties = { minHeight: 0, minWidth: 0 };
@@ -43,6 +48,7 @@ export function SplitLayout({
   storageKey,
   layout = "responsive",
   resizeHandleClassName,
+  gutter = 0,
   defaultRatio = 0.5,
   minHeightPx = 10,
   minWidthPx = 10,
@@ -56,6 +62,7 @@ export function SplitLayout({
   if (!secondSlot) {
     height = 0;
     minHeightPx = 0;
+    gutter = 0;
   }
 
   const size = useContainerSize(containerRef);
@@ -67,19 +74,22 @@ export function SplitLayout({
   const styles = useMemo<CSSProperties>(
     () => ({
       ...style,
-      gridTemplate: splitGridTemplate(vertical, vertical ? renderedHeight : renderedWidth),
+      gridTemplate: splitGridTemplate(vertical, vertical ? renderedHeight : renderedWidth, gutter),
     }),
-    [style, vertical, renderedHeight, renderedWidth],
+    [style, vertical, renderedHeight, renderedWidth, gutter],
   );
 
   // While dragging, the split is written straight to the DOM and only saved (and rendered) when
   // the drag ends, so the panes are not re-rendered on every move.
   const liveDrag = useRef<SplitDrag | null>(null);
 
-  const applySplit = useCallback((vertical: boolean, ratio: number) => {
-    if (containerRef.current == null) return;
-    containerRef.current.style.gridTemplate = splitGridTemplate(vertical, ratio);
-  }, []);
+  const applySplit = useCallback(
+    (vertical: boolean, ratio: number) => {
+      if (containerRef.current == null) return;
+      containerRef.current.style.gridTemplate = splitGridTemplate(vertical, ratio, gutter);
+    },
+    [gutter],
+  );
 
   // Something else re-rendering mid-drag (a response arriving, say) may write the saved split
   // back; put the live one back before it is painted.
@@ -102,9 +112,16 @@ export function SplitLayout({
         const $c = containerRef.current;
         if ($c == null) return 0;
         const { paddingLeft, paddingRight, paddingTop, paddingBottom } = getComputedStyle($c);
+        // The panes share what the gutter leaves
         return vertical
-          ? $c.clientHeight - Number.parseFloat(paddingTop) - Number.parseFloat(paddingBottom)
-          : $c.clientWidth - Number.parseFloat(paddingLeft) - Number.parseFloat(paddingRight);
+          ? $c.clientHeight -
+              Number.parseFloat(paddingTop) -
+              Number.parseFloat(paddingBottom) -
+              gutter
+          : $c.clientWidth -
+              Number.parseFloat(paddingLeft) -
+              Number.parseFloat(paddingRight) -
+              gutter;
       },
       apply: (ratio) => applySplit(vertical, ratio),
       commit: (ratio) => (vertical ? setHeight(ratio) : setWidth(ratio)),
@@ -115,6 +132,7 @@ export function SplitLayout({
     renderedWidth,
     minHeightPx,
     minWidthPx,
+    gutter,
     applySplit,
     setHeight,
     setWidth,
@@ -151,8 +169,9 @@ export function SplitLayout({
             style={areaD}
             className={classNames(
               resizeHandleClassName,
-              vertical ? "-translate-y-1" : "-translate-x-1",
+              gutter === 0 && (vertical ? "-translate-y-1" : "-translate-x-1"),
             )}
+            fill={gutter > 0}
             onResizeStart={handleResizeStart}
             onResizeMove={handleResizeMove}
             onResizeEnd={handleResizeEnd}

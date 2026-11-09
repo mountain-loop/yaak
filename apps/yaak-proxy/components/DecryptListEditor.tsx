@@ -1,7 +1,7 @@
 import { Prec } from "@codemirror/state";
 import { type EditorView, keymap } from "@codemirror/view";
 import type { DecryptListEntry, SeenTargets } from "@yaakapp-internal/proxy-lib";
-import { Icon, IconButton, Input } from "@yaakapp-internal/ui";
+import { CONTROL_TOOLTIP_DELAY, Icon, IconButton, Input, Tooltip } from "@yaakapp-internal/ui";
 import { filterAutocomplete } from "@yaakapp-internal/ui/editor";
 import classNames from "classnames";
 import { useMemo, useRef, useState } from "react";
@@ -71,28 +71,29 @@ function EntryRow({
         entry.builtIn && "text-text-subtlest",
       )}
     >
-      <Icon
-        icon={negated ? "lock" : "lock_open"}
-        size="sm"
-        className={classNames("shrink-0", entry.builtIn ? "opacity-60" : "text-text-subtle")}
-        title={negated ? "Excluded" : "Decrypted"}
-      />
+      <Tooltip wrap content={negated ? "Excluded" : "Decrypted"} delay={CONTROL_TOOLTIP_DELAY}>
+        <Icon
+          icon={negated ? "lock" : "lock_open"}
+          size="sm"
+          className={classNames("shrink-0", entry.builtIn ? "opacity-60" : "text-text-subtle")}
+        />
+      </Tooltip>
       <span className={classNames("truncate", entry.entry !== "*" && "font-mono text-xs")}>
         {entryLabel(entry.entry)}
       </span>
       {entry.builtIn && (
-        <span
-          title="Ships with Yaak Proxy"
-          className="shrink-0 text-2xs rounded px-1 border border-border-subtle"
-        >
-          built-in
-        </span>
+        <Tooltip wrap content="Ships with Yaak Proxy" delay={CONTROL_TOOLTIP_DELAY}>
+          <span className="shrink-0 text-2xs rounded px-1 border border-border-subtle">
+            built-in
+          </span>
+        </Tooltip>
       )}
       <IconButton
         size="xs"
         icon="x"
         iconColor="secondary"
         title={`Remove ${entryLabel(entry.entry)}`}
+        tooltip
         disabled={disabled}
         className="ml-auto opacity-0 group-hover/entry:opacity-100 focus-visible:opacity-100"
         onClick={onRemove}
@@ -151,18 +152,20 @@ function EntryInput({
   }, [seenRef]);
 
   return (
-    <div className="grid gap-1" title="Applies to new connections">
-      <Input
-        label="Add entry"
-        hideLabel
-        size="sm"
-        stateKey={null}
-        language={null}
-        placeholder="Add host, app or *"
-        extensions={extensions}
-        onChange={() => setError(null)}
-      />
-      {error != null && <div className="text-xs text-danger">{error}</div>}
-    </div>
+    <Tooltip wrap content="Applies to new connections" delay={CONTROL_TOOLTIP_DELAY}>
+      <div className="grid gap-1">
+        <Input
+          label="Add entry"
+          hideLabel
+          size="sm"
+          stateKey={null}
+          language={null}
+          placeholder="Add host, app or *"
+          extensions={extensions}
+          onChange={() => setError(null)}
+        />
+        {error != null && <div className="text-xs text-danger">{error}</div>}
+      </div>
+    </Tooltip>
   );
 }

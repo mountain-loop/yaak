@@ -63,13 +63,14 @@ export function ProxyLayout() {
             included, falls through to the header, which drags the window. */}
         <div
           data-tauri-drag-region
-          className="grid grid-cols-[minmax(auto,1fr)_minmax(0,26rem)_minmax(auto,1fr)] gap-2 items-center w-full h-full pointer-events-none"
+          className="grid grid-cols-[minmax(auto,1fr)_minmax(0,44rem)_minmax(auto,1fr)] gap-2 items-center w-full h-full pointer-events-none"
         >
           <div data-tauri-drag-region className="flex items-center gap-1 pl-1 whitespace-nowrap">
             <IconButton
               className="pointer-events-auto"
               size="sm"
               title="Toggle sidebar"
+              tooltip
               icon={isHidden ? "left_panel_hidden" : "left_panel_visible"}
               iconColor="secondary"
               onClick={() => {
@@ -93,6 +94,7 @@ export function ProxyLayout() {
               className="pointer-events-auto"
               icon={flowLayout === "horizontal" ? "columns_2" : "rows_2"}
               title={`Change to ${flowLayout === "horizontal" ? "vertical" : "horizontal"} layout`}
+              tooltip
               size="sm"
               iconColor="secondary"
               onClick={() =>
@@ -103,6 +105,7 @@ export function ProxyLayout() {
               className="pointer-events-auto"
               icon="settings"
               title="Settings"
+              tooltip
               size="sm"
               iconColor="secondary"
               onClick={() => openSettings()}
@@ -139,6 +142,7 @@ export function ProxyLayout() {
                 <IconButton
                   size="sm"
                   title="Toggle sidebar"
+                  tooltip
                   icon="left_panel_visible"
                   iconColor="secondary"
                   onClick={() => setFloatingSidebarHidden(true)}
@@ -188,7 +192,8 @@ function FlowsOrFirstRun({ flowLayout }: { flowLayout: SplitLayoutLayout }) {
   return (
     <SplitLayout
       storageKey="proxy_detail"
-      className="gap-1"
+      // The card sits a wider gutter from the list side by side; the handle fills the gutter.
+      gutter={flowLayout === "vertical" ? 8 : 20}
       layout={flowLayout}
       defaultRatio={0.55}
       firstSlot={({ style }) => <FlowList style={style} className="pt-1" />}
