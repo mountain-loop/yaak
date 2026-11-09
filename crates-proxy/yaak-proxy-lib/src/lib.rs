@@ -1484,8 +1484,10 @@ struct ShareOnDrop<'a>(&'a Mutex<Option<std::fs::File>>);
 impl Drop for ShareOnDrop<'_> {
     fn drop(&mut self) {
         let held = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        // Let go first: Windows would otherwise add the shared lock beside the exclusive one.
+        // Unix's flock lets go between the two as well, so this is no wider a gap.
         if let Some(file) = held.as_ref()
-            && let Err(e) = file.lock_shared()
+            && let Err(e) = file.unlock().and_then(|()| file.lock_shared())
         {
             warn!("Failed to share {TRAFFIC_LOCK}: {e}");
         }
