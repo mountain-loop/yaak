@@ -1,4 +1,4 @@
-import { flushAllPendingPatches } from "@yaakapp-internal/models";
+import { flushAllModelWrites, flushAllPendingPatches } from "@yaakapp-internal/models";
 import type { ModelPayload, ModelVersion, ModelVersionReason } from "@yaakapp-internal/models";
 import { platform } from "@yaakapp-internal/platform";
 import { EditSessionTracker } from "./editSessionTracker";
@@ -16,8 +16,31 @@ const REQUEST_MODELS = ["http_request", "grpc_request", "websocket_request"];
  * anything.
  */
 export function snapshotRequestVersion(requestId: string, reason: ModelVersionReason) {
-  // Edits reach the database on a debounce, so flush before asking for a
-  // version of what is in it
+  captureRequestVersion(requestId, reason).catch((err: unknown) => {
+    console.warn("Failed to snapshot request version", err);
+  });
+}
+
+async function captureRequestVersion(requestId: string, reason: ModelVersionReason) {
+  // Edits reach the database on a debounce. Wait until every pending write has
+  // landed, or the snapshot can read the row before the edit this boundary is
+  // meant to capture. A write that failed leaves nothing newer to wait for.
+  await flushAllModelWrites().catch((err: unknown) => {
+    console.warn("A pending write failed before a request snapshot", err);
+  });
+  await rpc<ModelVersion>("models_snapshot_request", { requestId, reason });
+}
+
+/**
+ * The same, for a window that is closing, where nothing can be awaited.
+ *
+ * The pending writes go out first and the snapshot right behind them. In the
+ * browser that is enough: the worker runs commands in the order they arrive.
+ * On the desktop each command runs on its own, so the snapshot can still reach
+ * the database before the last write does. The edit itself is saved either
+ * way, and the request's next send versions it.
+ */
+function snapshotRequestVersionOnClose(requestId: string, reason: ModelVersionReason) {
   flushAllPendingPatches();
   rpc<ModelVersion>("models_snapshot_request", { requestId, reason }).catch((err: unknown) => {
     console.warn("Failed to snapshot request version", err);
@@ -46,5 +69,7 @@ export function initRequestVersionSnapshots() {
 
   // Closing is the last boundary there is. Nothing can be awaited here, but the
   // write is already on its way and the backend outlives the window.
-  window.addEventListener("beforeunload", () => tracker.noteBoundary());
+  window.addEventListener("beforeunload", () =>
+    tracker.noteBoundary(snapshotRequestVersionOnClose),
+  );
 }
