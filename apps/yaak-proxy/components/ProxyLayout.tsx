@@ -1,5 +1,6 @@
 import {
   HeaderSize,
+  HeaderTint,
   IconButton,
   SidebarLayout,
   SplitLayout,
@@ -13,7 +14,8 @@ import { useLocalStorage } from "react-use";
 import { flowLayoutAtom } from "../lib/atoms";
 import { setupIncomplete } from "../lib/firstRun";
 import { useMenuExportHar } from "../lib/flowActions";
-import { lockedAtom, noFlowsAtom, systemProxyEverOnAtom } from "../lib/store";
+import { proxyStatusOf, statusTintColor } from "../lib/proxyStatus";
+import { lockedAtom, noFlowsAtom, proxyStateAtom, systemProxyEverOnAtom } from "../lib/store";
 import { getOsType } from "../lib/tauri";
 import { AddColumnDialog } from "./AddColumnDialog";
 import { ClearFlowsButton } from "./ClearFlowsButton";
@@ -43,6 +45,7 @@ export function ProxyLayout() {
   );
   const [floating, setFloating] = useState(false);
   const isHidden = floating ? (floatingSidebarHidden ?? true) : (sidebarHidden ?? false);
+  const tint = statusTintColor(proxyStatusOf(useAtomValue(proxyStateAtom)));
 
   return (
     <div
@@ -60,6 +63,7 @@ export function ProxyLayout() {
         interfaceScale={1}
         className="x-theme-appHeader bg-surface"
       >
+        <HeaderTint color={tint} animate />
         {/* Yaak's silhouette: the sidebar toggle and the state pill where Yaak has the toggle and
             the environment, the search where it names the request, then its icons. Only the
             controls take the pointer: everything around them, the traffic lights' corner

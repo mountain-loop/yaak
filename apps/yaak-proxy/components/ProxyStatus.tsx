@@ -19,6 +19,7 @@ import { useRpcQuery } from "../hooks/useRpcQuery";
 import { helperRegisteredAtAtom } from "../lib/atoms";
 import { encryptingPercent } from "../lib/encrypting";
 import { environmentExports } from "../lib/env";
+import { proxyStatusOf } from "../lib/proxyStatus";
 import { proxyStateAtom, systemProxyEverOnAtom } from "../lib/store";
 import { helperPollInterval, recordingLabel, systemProxySwitch } from "../lib/systemProxy";
 import { onWindowFocus } from "../lib/tauri";
@@ -44,25 +45,26 @@ export function ProxyStatus() {
   const other = proxyState?.otherOwner ?? null;
   const port = proxyState?.port ?? other?.proxyPort ?? null;
   const untrusted = caStatus.data != null && !caStatus.data.trusted;
-  // Traffic stored before encryption is being encrypted; the engine starts once it is.
-  const encrypting = !running && other == null ? encryptingPercent(proxyState) : null;
+  // The same status the header's tint takes its colour from
+  const status = proxyStatusOf(proxyState);
+  const encrypting = status === "encrypting" ? encryptingPercent(proxyState) : null;
 
   const stateRow =
-    encrypting != null ? (
+    status === "encrypting" ? (
       <MenuRow
         icon={<LoadingIcon size="sm" className="text-text-subtle" />}
         title={`Encrypting stored traffic, ${encrypting}`}
         description="Traffic captured before this version is being encrypted on disk. Recording starts when it's done."
       />
-    ) : other != null ? (
+    ) : status === "cli" && other != null ? (
       <MenuRow
         icon={<StateDot state="cli" />}
         title="Running from the CLI"
         description={`Started by yaak proxy start, pid ${other.pid}, since ${timeOf(other.startedAt)}.${other.proxyPort == null ? "" : ` Port ${other.proxyPort}.`}`}
       />
-    ) : running ? (
+    ) : status === "recording" || status === "paused" ? (
       <MenuRow
-        icon={<StateDot state={recording ? "recording" : "paused"} />}
+        icon={<StateDot state={status} />}
         title={recording ? `Recording on port ${port}` : `Paused on port ${port}`}
         description={
           recording
@@ -190,20 +192,14 @@ export function ProxyStatus() {
   return (
     <>
       <Dropdown ref={dropdownRef} items={items}>
-        <Pill
-          color={
-            !running && other == null && encrypting == null && proxyState != null
-              ? "warning"
-              : undefined
-          }
-        >
-          {encrypting != null ? (
+        <Pill color={status === "stopped" ? "warning" : undefined}>
+          {status === "encrypting" ? (
             <>
               <LoadingIcon size="xs" />
               <span className="text-text">Encrypting</span>
               <span className="font-mono text-text-subtle">{encrypting}</span>
             </>
-          ) : other != null ? (
+          ) : status === "cli" && other != null ? (
             <>
               <StateDot state="cli" />
               <span className="text-text">CLI</span>
@@ -211,9 +207,9 @@ export function ProxyStatus() {
                 <span className="font-mono text-text-subtle">:{other.proxyPort}</span>
               )}
             </>
-          ) : running ? (
+          ) : status === "recording" || status === "paused" ? (
             <>
-              <StateDot state={recording ? "recording" : "paused"} />
+              <StateDot state={status} />
               <span className="text-text">{recording ? "Recording" : "Paused"}</span>
               {port != null && <span className="font-mono text-text-subtle">:{port}</span>}
             </>

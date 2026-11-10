@@ -136,6 +136,7 @@ export type { FormattableEditor } from "./components/FormatAction";
 export { FormatAction, formatEditor } from "./components/FormatAction";
 export { FormattedError } from "./components/FormattedError";
 export { HeaderSize } from "./components/HeaderSize";
+export { HeaderTint } from "./components/HeaderTint";
 export type { HeadersTableProps } from "./components/HeadersTable";
 export { HeadersTable } from "./components/HeadersTable";
 export { Heading } from "./components/Heading";

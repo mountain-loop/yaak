@@ -41,6 +41,31 @@ export const HARNESS_STATE: GetProxyStateResponse = {
   otherOwner: null,
 };
 
+/** The engine's state as `?status=paused`, `stopped`, `failed` or `cli` asks; recording otherwise */
+function harnessState(status: string | null): GetProxyStateResponse {
+  const stopped = { ...HARNESS_STATE, state: "stopped" as const, port: null };
+  switch (status) {
+    case "paused":
+      return { ...HARNESS_STATE, recording: false };
+    case "stopped":
+      return stopped;
+    case "failed":
+      return { ...stopped, startError: "Port 9090 is in use by another process." };
+    case "cli":
+      return {
+        ...stopped,
+        otherOwner: {
+          owner: "cli",
+          pid: 4242,
+          startedAt: new Date().toISOString(),
+          proxyPort: 9090,
+        },
+      };
+    default:
+      return HARNESS_STATE;
+  }
+}
+
 function answer(cmd: string, payload: unknown): unknown {
   const req = (payload ?? {}) as Record<string, unknown>;
   switch (cmd) {
@@ -62,7 +87,7 @@ function answer(cmd: string, payload: unknown): unknown {
     case "app_icon":
       return appIconPng;
     case "get_proxy_state":
-      return HARNESS_STATE;
+      return harnessState(new URLSearchParams(location.search).get("status"));
     case "get_storage_size":
       return { bytes: 412 * 1024 * 1024 };
     case "ca_status":
