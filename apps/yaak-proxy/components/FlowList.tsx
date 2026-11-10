@@ -877,8 +877,8 @@ const FlowRow = memo(function FlowRow({
           : {}),
       }}
       className={classNames(
-        "group/row absolute top-0 left-1.5 right-1.5 grid items-center px-1.5 rounded-md",
-        "whitespace-nowrap tabular-nums",
+        "absolute top-0 left-1.5 right-1.5 grid items-center px-1.5 rounded-md whitespace-nowrap",
+        "tabular-nums",
         flow.cancelled && "text-text-subtlest",
         selected
           ? "text-text bg-surface-highlight group-focus-within/flows:bg-surface-active"
@@ -945,7 +945,7 @@ function FlowMark({ flow }: { flow: Flow }) {
       ) : flow.cancelled ? (
         <Icon icon="circle_off" size="sm" className="text-text-subtlest" />
       ) : flow.tunnelled ? (
-        <Icon icon="lock" size="sm" className="text-text-subtlest" />
+        <Icon icon="lock" size="sm" className="text-text-subtle" />
       ) : open ? (
         <span aria-hidden className="w-[7px] h-[7px] rounded-full bg-info ring-3 ring-info/20" />
       ) : flow.responseTruncated ? (
@@ -996,50 +996,41 @@ interface CellProps {
 }
 
 /**
+ * The text of an encrypted or refused row: told apart by colour alone, the faintest that stays
+ * readable on the row (subtle, 4.5:1 on the surface in both default themes), and the full text
+ * colour while selected, as subtle falls under that on the dark theme's selection. No opacity,
+ * so the app icon and the mark show as on any row.
+ */
+function quietText(selected: boolean): string {
+  return selected ? "text-text" : "text-text-subtle";
+}
+
+/** A row's number, in the quiet colour */
+function quietNumber(flow: Flow, selected: boolean): ReactElement {
+  return <span className={classNames(cell, mono, quietText(selected))}>{flow.number || ""}</span>;
+}
+
+/**
  * An encrypted connection's cell: quiet, and only what is known, so its host, how much it
  * carried and for how long; nothing read from inside it, so no method, path, status, type,
- * query or field. Null for the cells that show as on any row.
+ * query or field. Null for the cells that show as on any row, the app icon among them.
  */
 function encryptedCell({ column, flow, span, selected }: CellProps): ReactElement | null {
-  const quiet = classNames(cell, mono, "text-text-subtlest");
+  const quiet = classNames(cell, mono, quietText(selected));
   switch (column) {
-    case "number":
+    case "app":
     case "started":
       return null;
-    case "app":
-      if (flow.clientPath == null) return <span className={cell} />;
-      return (
-        <Tooltip wrap content={flow.clientName ?? flow.clientPath} delay={CONTROL_TOOLTIP_DELAY}>
-          <span className={classNames(cell, "flex items-center")}>
-            <AppIcon
-              path={flow.clientPath}
-              className={classNames(
-                "size-5",
-                !selected && "opacity-50 group-hover/row:opacity-100",
-              )}
-            />
-          </span>
-        </Tooltip>
-      );
+    case "number":
+      return quietNumber(flow, selected);
     case "host": {
       const { label } = connectionOf(flow);
-      const colon = label.lastIndexOf(":");
-      const port = colon === -1 || label.endsWith("]") ? null : label.slice(colon);
-      const host = port == null ? label : label.slice(0, colon);
       return (
         <Truncated text={label}>
           <span
-            className={classNames(
-              cell,
-              "rtl text-left",
-              span && "col-span-2",
-              selected ? "text-text" : "text-text-subtlest group-hover/row:text-text-subtle",
-            )}
+            className={classNames(cell, "rtl text-left", span && "col-span-2", quietText(selected))}
           >
-            <bdi>
-              {host}
-              {port != null && <span className="opacity-60">{port}</span>}
-            </bdi>
+            <bdi>{label}</bdi>
           </span>
         </Truncated>
       );
@@ -1082,11 +1073,11 @@ function encryptedCell({ column, flow, span, selected }: CellProps): ReactElemen
 }
 
 /**
- * A refused handshake's cell: its host as any row's, the refusal across Type and Size in
- * warning, and nothing for the request it never made. Null for the cells that show as on any
- * row.
+ * A refused handshake's cell: its host, number and time in the quiet colour, the refusal across
+ * Type and Size in warning, and nothing for the request it never made. Null for the cells that
+ * show as on any row, the app icon among them.
  */
-function rejectedCell({ column, span }: CellProps): ReactElement | null {
+function rejectedCell({ column, flow, span, selected }: CellProps): ReactElement | null {
   switch (column) {
     case "method":
     case "path":
@@ -1094,6 +1085,24 @@ function rejectedCell({ column, span }: CellProps): ReactElement | null {
     case "query":
     case "size":
       return <span className={cell} />;
+    case "number":
+      return quietNumber(flow, selected);
+    case "host": {
+      const host = hostOf(flow.url);
+      return (
+        <Truncated text={host}>
+          <span className={classNames(cell, "rtl text-left", quietText(selected))}>
+            <bdi>{host}</bdi>
+          </span>
+        </Truncated>
+      );
+    }
+    case "time":
+      return (
+        <span className={classNames(cell, mono, "text-right", quietText(selected))}>
+          {flow.elapsedMs == null ? "" : formatMillis(flow.elapsedMs)}
+        </span>
+      );
     case "type":
       return (
         <span className={classNames(cell, "text-warning text-xs", span && "col-span-2")}>
