@@ -44,6 +44,7 @@ members = [
   "crates-tauri/yaak-proxy-helper",
   "crates-tauri/yaak-system-appearance",
   "crates-tauri/yaak-tauri-utils",
+  "crates-tauri/yaak-updater",
   "crates-tauri/yaak-window",
 ]
 
@@ -116,6 +117,7 @@ yaak-mac-window = { path = "crates-tauri/yaak-mac-window" }
 yaak-proxy-helper = { path = "crates-tauri/yaak-proxy-helper" }
 yaak-system-appearance = { path = "crates-tauri/yaak-system-appearance" }
 yaak-tauri-utils = { path = "crates-tauri/yaak-tauri-utils" }
+yaak-updater = { path = "crates-tauri/yaak-updater" }
 yaak-window = { path = "crates-tauri/yaak-window" }
 
 [profile.release]

@@ -6,26 +6,6 @@ export type PluginUpdateInfo = { name: string; currentVersion: string; latestVer
 
 export type PluginUpdateNotification = { updateCount: number; plugins: Array<PluginUpdateInfo> };
 
-export type UpdateInfo = {
-  replyEventId: string;
-  version: string;
-  downloaded: boolean;
-  /**
-   * How this update gets applied. Anything but `Integrated` means the app can't do it
-   * itself and the user is told how to update instead.
-   */
-  install: UpdateInstall;
-};
-
-/**
- * How an update can be applied to this install.
- */
-export type UpdateInstall = "integrated" | "flatpak" | "manual";
-
-export type UpdateResponse = { type: "ack" } | { type: "action"; action: UpdateResponseAction };
-
-export type UpdateResponseAction = "install" | "skip";
-
 export type YaakNotification = {
   timestamp: string;
   timeout: number | null;

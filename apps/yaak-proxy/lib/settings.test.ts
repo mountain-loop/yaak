@@ -67,6 +67,18 @@ describe("proxySettingsView", () => {
     ]);
     expect(view.app.name).toBe("Yaak Proxy");
   });
+
+  test("shows Updates in a build with the updater, without Yaak's notifications row", () => {
+    const view = proxySettingsView(DEFAULT_SETTINGS_VALUES, APP, "light", { checking: true });
+    expect(view.updates).toEqual({ checking: true, notificationsSetting: false });
+  });
+
+  test("follows the beta channel until set otherwise", () => {
+    expect(DEFAULT_SETTINGS_VALUES.updateChannel).toBe("beta");
+    expect(readSettingsValues(JSON.stringify({ updateChannel: "stable" })).updateChannel).toBe(
+      "stable",
+    );
+  });
 });
 
 describe("size options", () => {

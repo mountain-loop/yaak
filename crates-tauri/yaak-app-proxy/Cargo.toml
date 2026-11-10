@@ -15,6 +15,8 @@ tauri-build = { version = "2.6.1", features = [] }
 [features]
 default = ["wry"]
 wry = ["tauri/wry", "tauri/x11", "tauri/dbus", "tauri-plugin-dialog/gtk3"]
+# Checks for and installs updates, as release builds do (`tauri.release.conf.json`).
+updater = ["dep:tauri-plugin-updater"]
 
 [dependencies]
 log = { workspace = true }
@@ -23,7 +25,10 @@ tauri = { workspace = true, features = ["devtools"] }
 tauri-plugin-dialog = { workspace = true }
 tauri-plugin-opener = "2.5.4"
 tauri-plugin-os = "2.3.2"
+tauri-plugin-updater = { version = "2.10.1", optional = true }
+tokio = { workspace = true, features = ["sync"] }
 yaak-mac-window = { workspace = true }
 yaak-proxy-lib = { workspace = true }
 yaak-rpc = { workspace = true }
+yaak-updater = { workspace = true }
 yaak-window = { workspace = true }

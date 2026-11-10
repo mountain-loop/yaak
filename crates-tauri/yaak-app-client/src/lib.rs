@@ -52,6 +52,7 @@ use yaak_tauri_utils::window::WorkspaceWindowTrait;
 use yaak_templates::strip_json_comments::strip_json_comments;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
 use yaak_tls::find_client_certificate;
+use yaak_updater::restart;
 
 mod encoding;
 mod error;
@@ -67,7 +68,6 @@ mod notifications;
 mod plugin_events;
 mod plugins_ext;
 mod render;
-mod restart;
 mod rpc_ext;
 mod sync_ext;
 mod updates;

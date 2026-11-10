@@ -11,6 +11,7 @@ import { syncSettingsValues } from "./lib/interfaceSettings";
 import { syncNavigation, syncSidebarSelection } from "./lib/navigation";
 import { syncFlows, syncProxyState } from "./lib/store";
 import { currentWindowLabel } from "./lib/tauri";
+import { syncUpdates } from "./lib/updates";
 import { syncFromOtherWindows } from "./lib/windowSync";
 import { windowKind } from "./lib/windows";
 import "./main.css";
@@ -22,6 +23,8 @@ const settingsWindow = windowKind(currentWindowLabel()) === "settings";
 
 syncProxyState(jotaiStore);
 syncSettingsValues(jotaiStore);
+// Either window shows the updates it checks for; the app's window also checks in the background
+syncUpdates(jotaiStore, { background: !settingsWindow }).catch(console.error);
 syncFromOtherWindows(jotaiStore, queryClient);
 // Only the app's window lists traffic and navigates it
 if (!settingsWindow) {

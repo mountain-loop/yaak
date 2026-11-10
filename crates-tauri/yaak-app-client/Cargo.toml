@@ -99,5 +99,6 @@ yaak-system-appearance = { workspace = true }
 yaak-sync = { workspace = true }
 yaak-templates = { workspace = true }
 yaak-tls = { workspace = true }
+yaak-updater = { workspace = true }
 yaak-window = { workspace = true }
 yaak-ws = { workspace = true }

@@ -24,6 +24,19 @@ export function subscribe<T>(event: string, callback: (payload: T) => void): () 
   return subscription.unsubscribe;
 }
 
+/**
+ * Subscribe to a Tauri event sent to this window, such as the update prompt, which belongs to
+ * the window that asked. Returns an unsubscribe function, as `subscribe` does.
+ */
+export function subscribeHere<T>(event: string, callback: (payload: T) => void): () => void {
+  const subscription = unsubscribeWhenReady(
+    getCurrentWebviewWindow().listen<T>(event, (e) => {
+      if (subscription.active()) callback(e.payload);
+    }),
+  );
+  return subscription.unsubscribe;
+}
+
 /** Calls `callback` each time the window regains focus. Returns an unsubscribe function. */
 export function onWindowFocus(callback: () => void): () => void {
   const subscription = unsubscribeWhenReady(

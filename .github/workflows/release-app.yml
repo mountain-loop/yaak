@@ -2,10 +2,24 @@ name: Release App Artifacts
 on:
   push:
     tags: [v*]
+  # The Yaak Proxy dry run only: builds, signs and notarizes the proxy for the chosen ref and
+  # keeps the results as workflow artifacts. It never builds Yaak, releases, tags or publishes.
+  workflow_dispatch:
+    inputs:
+      proxy_dry_run:
+        description: "Dry-run the Yaak Proxy build (artifacts only; nothing is released)"
+        type: boolean
+        required: true
+        default: true
+      proxy_version:
+        description: "Version to stamp into the dry-run build"
+        type: string
+        required: true
+        default: "0.0.1-dryrun"
 
 jobs:
   build-artifacts:
-    if: github.repository == 'mountain-loop/yaak'
+    if: github.repository == 'mountain-loop/yaak' && github.event_name == 'push'
     permissions:
       contents: write
 
@@ -290,3 +304,174 @@ jobs:
           path: ${{ runner.temp }}/yaak-release-artifacts/
           retention-days: 7
           if-no-files-found: warn
+
+  # Yaak Proxy, macOS only, on the same tag and version as Yaak. Its own job, sharing nothing
+  # with Yaak's, so a proxy failure never stops Yaak's artifacts; it fails the run, visibly.
+  #
+  # On a v* tag it runs only once the repository variable RELEASE_PROXY is "true": the update
+  # server and the release audit pick Yaak's assets by suffix and architecture, so the proxy's
+  # must not join Yaak's release until the website tells them apart. The dry run
+  # (workflow_dispatch) runs regardless, and only keeps workflow artifacts.
+  build-proxy:
+    if: >-
+      github.repository == 'mountain-loop/yaak' && (
+        (github.event_name == 'push' && vars.RELEASE_PROXY == 'true') ||
+        (github.event_name == 'workflow_dispatch' && inputs.proxy_dry_run)
+      )
+    permissions:
+      contents: write
+
+    name: Build Yaak Proxy
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: "aarch64-apple-darwin" # for Arm-based Macs (M1 and above).
+            yaak_arch: "arm64"
+            lipo_arch: "arm64"
+            asset_arch: "aarch64"
+          - target: "x86_64-apple-darwin" # for Intel-based Macs.
+            yaak_arch: "x64"
+            lipo_arch: "x86_64"
+            asset_arch: "x64"
+    runs-on: macos-latest
+    timeout-minutes: 240
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+      # The tag, as Yaak's version is taken, or the dry run's own
+      PROXY_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.proxy_version || github.ref_name }}
+    steps:
+      - name: Checkout yaakapp/app
+        uses: actions/checkout@v4
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          cache: true
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # A cache of its own, so the proxy's builds never change what Yaak's jobs restore
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-proxy
+          key: ${{ matrix.target }}
+          cache-on-failure: true
+
+      - name: Install Protoc for plugin-runtime
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: vp install
+
+      - name: Set version
+        run: npm run replace-version -- proxy
+        env:
+          YAAK_VERSION: ${{ env.PROXY_VERSION }}
+
+      - name: Import signing certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          rm "$RUNNER_TEMP/certificate.p12"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+      # Builds the helper for the target and signs it and protoc before bundling (the bundle
+      # config's before-build step), then signs, notarizes and staples the app and makes the
+      # updater archive and its signature.
+      - name: Build, sign and notarize
+        run: >-
+          npm run proxy:bundle --
+          --target ${{ matrix.target }}
+          --bundles dmg
+          --config crates-tauri/yaak-app-proxy/tauri.release.conf.json
+        env:
+          CI: true
+          YAAK_TARGET_ARCH: ${{ matrix.yaak_arch }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # The helper only answers an app signed by this team
+          YAAK_PROXY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+
+      - name: Verify the bundle
+        run: >-
+          node scripts/verify-proxy-bundle.mjs
+          "target/${{ matrix.target }}/release/bundle/macos/Yaak Proxy.app"
+          --signed
+          --version "$PROXY_VERSION"
+          --arch ${{ matrix.lipo_arch }}
+          --team "$YAAK_PROXY_TEAM_ID"
+        env:
+          YAAK_PROXY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Named Yaak.Proxy_*, so neither people nor tools take them for Yaak's Yaak_* assets.
+      # The app refuses an update not named so (ARTIFACT_PREFIX in yaak-app-proxy's updates.rs).
+      - name: Collect the release assets
+        run: |
+          set -euo pipefail
+          bundle="target/${{ matrix.target }}/release/bundle"
+          version="${PROXY_VERSION#v}"
+          out="$RUNNER_TEMP/yaak-proxy-release"
+          mkdir -p "$out"
+          dmgs=("$bundle"/dmg/*.dmg)
+          if [ "${#dmgs[@]}" -ne 1 ] || [ ! -f "${dmgs[0]}" ]; then
+            echo "Expected one .dmg in $bundle/dmg"; exit 1
+          fi
+          cp "${dmgs[0]}" "$out/Yaak.Proxy_${version}_${{ matrix.asset_arch }}.dmg"
+          cp "$bundle/macos/Yaak Proxy.app.tar.gz" "$out/Yaak.Proxy_${{ matrix.asset_arch }}.app.tar.gz"
+          cp "$bundle/macos/Yaak Proxy.app.tar.gz.sig" "$out/Yaak.Proxy_${{ matrix.asset_arch }}.app.tar.gz.sig"
+          (cd "$out" && shasum -a 256 Yaak.Proxy_* > checksums.txt)
+          ls -l "$out"
+
+      - name: Keep the bundles as workflow artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxy-${{ env.PROXY_VERSION }}-${{ matrix.asset_arch }}-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/yaak-proxy-release/
+          retention-days: ${{ env.DRY_RUN == 'true' && 14 || 7 }}
+          if-no-files-found: error
+
+      # Yaak's jobs create the draft release; this waits for it rather than making its own,
+      # which could race theirs into two drafts.
+      - name: Upload to the release
+        if: env.DRY_RUN != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 120); do
+            if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then break; fi
+            if [ "$attempt" -eq 120 ]; then
+              echo "No release for $GITHUB_REF_NAME after two hours; Yaak's jobs make it"; exit 1
+            fi
+            sleep 60
+          done
+          for asset in "$RUNNER_TEMP"/yaak-proxy-release/Yaak.Proxy_*; do
+            for attempt in 1 2 3 4; do
+              if gh release upload "$GITHUB_REF_NAME" "$asset" --clobber; then
+                break
+              fi
+              if [ "$attempt" -eq 4 ]; then exit 1; fi
+              sleep 10
+            done
+          done

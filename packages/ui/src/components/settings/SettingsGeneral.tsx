@@ -145,12 +145,14 @@ export function SettingsUpdatesSection({
         onChange={(autoDownloadUpdates) => callbacks.onChange({ autoDownloadUpdates })}
       />
 
-      <SettingRowBoolean
-        title="Check for notifications"
-        description="Periodically ping Yaak servers to check for relevant notifications."
-        checked={values.checkNotifications}
-        onChange={(checkNotifications) => callbacks.onChange({ checkNotifications })}
-      />
+      {view.updates?.notificationsSetting !== false && (
+        <SettingRowBoolean
+          title="Check for notifications"
+          description="Periodically ping Yaak servers to check for relevant notifications."
+          checked={values.checkNotifications}
+          onChange={(checkNotifications) => callbacks.onChange({ checkNotifications })}
+        />
+      )}
 
       <SettingRowBoolean
         title="Send anonymous usage statistics"

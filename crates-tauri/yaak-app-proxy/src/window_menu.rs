@@ -11,6 +11,12 @@ pub const EXPORT_HAR_ID: &str = "file.export_har";
 /// The event the window hears File's Export All Flows as HAR by.
 pub const EXPORT_HAR_EVENT: &str = "menu_export_har";
 
+/// The app menu's Check for Updates…, in a build with the updater.
+pub const CHECK_FOR_UPDATES_ID: &str = "app.check_for_updates";
+
+/// The event the window hears Check for Updates… by, and checks on.
+pub const CHECK_FOR_UPDATES_EVENT: &str = "menu_check_for_updates";
+
 /// Go's Back and Forward, which the window carries out along its own places, and enables while
 /// there is somewhere to go.
 pub const GO_BACK_ID: &str = "go.back";
@@ -98,6 +104,9 @@ pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>>
                 true,
                 &[
                     &PredefinedMenuItem::about(app_handle, None, Some(about_metadata))?,
+                    #[cfg(feature = "updater")]
+                    &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ID, "Check for Updates…")
+                        .build(app_handle)?,
                     &PredefinedMenuItem::separator(app_handle)?,
                     &PredefinedMenuItem::services(app_handle, None)?,
                     &PredefinedMenuItem::separator(app_handle)?,
