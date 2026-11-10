@@ -35,6 +35,7 @@ use yaak_models::models::{
     HttpSendSettings, ModelVersionReason, RequestVersionComparison,
 };
 use yaak_models::models_ops;
+use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::render::render_http_request;
 use yaak_models::util::{ModelPayload, UpdateSource};
@@ -542,6 +543,9 @@ struct PreparedHttpSend {
     setting_events: Vec<HttpResponseEventData>,
     /// The jar the send starts with, so the tab can write it back with the proxy's changes.
     cookie_jar: Option<CookieJar>,
+    /// The version of the stored row this send was prepared from, taken from the same
+    /// read, so the response names exactly what was sent. `None` if it couldn't be written.
+    version_id: Option<String>,
 }
 
 /// A template callback for a host with no plugins. Variables render; a function is a clear
@@ -584,9 +588,19 @@ pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
     let req: PrepareHttpSendReq = from_js(payload)?;
 
     // Everything from the database first, then release the host borrow before rendering.
-    let (request, environment_chain, settings, cookie_jar) = with_host(|host| {
+    let (request, environment_chain, settings, cookie_jar, version_id) = with_host(|host| {
         let db = host.queries.connect();
         let request = db.get_http_request(&req.request_id).map_err(js_error)?;
+        // Version this read of the row, the one being sent, rather than reading it again
+        // where an edit could land in between. Failing to write history fails nothing.
+        let version_id = host
+            .queries
+            .with_tx(|tx| {
+                Ok::<_, yaak_models::error::Error>(
+                    tx.snapshot_request_for_send(&AnyRequest::HttpRequest(request.clone())),
+                )
+            })
+            .unwrap_or(None);
         let environment_chain = db
             .resolve_environments(
                 &request.workspace_id,
@@ -603,7 +617,7 @@ pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
             None => None,
         };
         let request = HttpRequest { authentication_type, authentication, headers, ..request };
-        Ok((request, environment_chain, settings, cookie_jar))
+        Ok((request, environment_chain, settings, cookie_jar, version_id))
     })?;
 
     let rendered = render_http_request(
@@ -634,6 +648,7 @@ pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
         settings: HttpSendSettings::from(&settings),
         setting_events: settings.timeline_events(),
         cookie_jar,
+        version_id,
     };
     // JSON-compatible, as `rpc` does: the tab posts this to the proxy with `JSON.stringify`,
     // and the default serializer's `Map` for the request body would stringify to `{}`.

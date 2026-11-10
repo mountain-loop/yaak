@@ -30,7 +30,6 @@ import type {
   HttpResponse,
   HttpResponseEventData,
   HttpSendSettings,
-  ModelVersion,
 } from "@yaakapp-internal/models";
 import type { Frame, SendRequest } from "@yaakapp-internal/web";
 import type { WorkerConnection } from "./connection";
@@ -55,6 +54,8 @@ interface PreparedHttpSend {
   settings: HttpSendSettings;
   settingEvents: HttpResponseEventData[];
   cookieJar: CookieJar | null;
+  /** The version of the stored request this send was prepared from, if one was written. */
+  versionId: string | null;
 }
 
 /** The desktop writes progress at most this often while a body streams in. */
@@ -72,13 +73,7 @@ export async function sendHttpRequest(
   // a failure to render or to reach the server lands in the response pane as
   // that response's error rather than as a toast that names no request.
   const workspaceId = await workspaceIdOfRequest(db, requestId);
-  const versionId = await snapshotRequestVersion(db, requestId);
-  const response = new ResponseWriter(db, {
-    model: "http_response",
-    requestId,
-    workspaceId,
-    versionId,
-  });
+  const response = new ResponseWriter(db, { model: "http_response", requestId, workspaceId });
   await response.create();
 
   const cancel = new AbortController();
@@ -95,29 +90,6 @@ export async function sendHttpRequest(
   return response.current();
 }
 
-/**
- * Capture what is about to be sent, so the response can offer it back later.
- * The desktop does this inside its send pipeline; this host's pipeline is here,
- * so this is where it goes. Versions are content-addressed, so repeated sends
- * of an unchanged request all point at the same one.
- */
-async function snapshotRequestVersion(
-  db: WorkerConnection,
-  requestId: string,
-): Promise<string | undefined> {
-  try {
-    const version = await db.rpc<ModelVersion>("models_snapshot_request", {
-      requestId,
-      reason: "send",
-    });
-    return version.id;
-  } catch (err) {
-    // History is not worth failing a send over
-    console.warn("Failed to snapshot request version", err);
-    return undefined;
-  }
-}
-
 async function runSend(
   db: WorkerConnection,
   response: ResponseWriter,
@@ -131,7 +103,9 @@ async function runSend(
     environmentId,
     cookieJarId,
   });
-  await response.patch({ url: prepared.request.url });
+  // The version comes from the same read of the request that was prepared, so the
+  // response can offer back exactly what it sent
+  await response.patch({ url: prepared.request.url, versionId: prepared.versionId });
 
   // The first line of the timeline says what did the sending and where. A
   // request through a proxy shows a different origin to the server than the
