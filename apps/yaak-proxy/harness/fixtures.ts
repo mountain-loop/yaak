@@ -92,10 +92,15 @@ const multipartRequest = [
   "Content-Type: application/json",
   "",
   '{"pages":12,"draft":false}',
+  `--${multipartBoundary}`,
+  'Content-Disposition: form-data; name="rows"; filename="rows.csv"',
+  "Content-Type: text/csv",
+  "",
+  "region,revenue\nnorth,1200\nsouth,980",
   `--${multipartBoundary}--`,
   "",
 ].join("\r\n");
-const textResponse = "Uploaded 2 parts";
+const textResponse = "Uploaded 3 parts";
 const htmlResponse =
   "<!doctype html><html><body style='font-family:sans-serif'><h1>Signed in</h1><p>You can close this window.</p></body></html>";
 // A 24x24 PNG gradient

@@ -1,3 +1,4 @@
+import classNames from "classnames";
 import { PINNED_ACTION } from "../ActionsBar";
 import { SegmentedControl } from "../SegmentedControl";
 import type { ResponseViewMode } from "./ResponseBodyViewer";
@@ -65,8 +66,12 @@ export function BodyViewModeSwitch({ pretty, value, onChange }: Props) {
         size="2xs"
         value={value}
         onChange={onChange}
-        containerClassName="w-auto"
-        className="p-0.5! gap-0.5! rounded-md! bg-surface! border border-border-subtle"
+        containerClassName="w-auto h-full"
+        // As tall as the bar's `sm` icon buttons, its options filling the height inside the border
+        className={classNames(
+          "h-sm! m-0! p-0.5! gap-0.5! rounded-md! bg-surface! border border-border-subtle",
+          "[&_[role=radio]]:h-full!",
+        )}
         options={[
           { value: "pretty", ...prettyOption },
           { value: "raw", ...RAW_OPTION },

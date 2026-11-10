@@ -72,4 +72,23 @@ describe("ActionsBar", () => {
     expect(markup).toContain('title="Filter"');
     expect(markup).toContain("data-pinned");
   });
+
+  test("holds every action to one height and radius, centred on the row", () => {
+    const markup = renderToStaticMarkup(
+      <ActionsBar>
+        <IconButton icon="filter" title="Filter" />
+      </ActionsBar>,
+    );
+    expect(markup).toContain("items-center");
+    expect(markup).toContain("*:h-sm");
+    expect(markup).toContain("*:rounded-md");
+  });
+
+  test("the switch is sized to the bar's small icon buttons", () => {
+    const markup = renderToStaticMarkup(
+      <BodyViewModeSwitch pretty="formatted" value="pretty" onChange={() => {}} />,
+    );
+    expect(markup).toContain("h-sm!");
+    expect(markup).toContain("[&amp;_[role=radio]]:h-full!");
+  });
 });

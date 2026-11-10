@@ -275,7 +275,7 @@ function LeafBody({
   }
 
   if (mediaType?.match(/csv|tab-separated/i)) {
-    return <CsvViewer text={content} className="bg-primary h-10 w-10" />;
+    return <CsvViewer text={content} className="pb-2" />;
   }
 
   if (mediaType?.match(/^text\/html/i) || (!binary && detectedLanguage === "html")) {
