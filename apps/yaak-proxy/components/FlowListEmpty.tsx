@@ -1,21 +1,16 @@
 import { EmptyStateText, Hotkey, Icon, InlineCode } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue, useStore } from "jotai";
 import { useEffect, useState } from "react";
+import { appliedFilterAtom } from "../lib/atoms";
+import { applyFilter } from "../lib/navigation";
 import { rpc } from "../lib/rpc";
 import { activeQuery, widerQueries } from "../lib/query";
-import {
-  hideSystemAtom,
-  pausedAtAtom,
-  proxyStateAtom,
-  searchTermsAtom,
-  searchWindowAtom,
-  setSearchTextAtom,
-} from "../lib/store";
+import { hideSystemAtom, pausedAtAtom, proxyStateAtom, searchWindowAtom } from "../lib/store";
 
 /** Nothing to list: no flows yet, recording paused, or a query nothing matches */
 export function FlowListEmpty() {
-  const text = useAtomValue(searchTermsAtom);
+  const text = useAtomValue(appliedFilterAtom);
   const search = useAtomValue(searchWindowAtom);
   const proxyState = useAtomValue(proxyStateAtom);
   if (search?.loading) return null;
@@ -69,7 +64,8 @@ export function PausedRow({ style }: { style?: React.CSSProperties }) {
  */
 function NoResults({ text }: { text: string }) {
   const hideSystem = useAtomValue(hideSystemAtom);
-  const setText = useSetAtom(setSearchTextAtom);
+  const store = useStore();
+  const setText = (wider: string) => applyFilter(store, wider);
   const [wider, setWider] = useState<{ text: string; count: number }[]>([]);
 
   useEffect(() => {

@@ -6,13 +6,16 @@ import { type ReactNode, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ProxyLayout } from "./components/ProxyLayout";
 import { useHotkeyContextValue } from "./lib/hotkeys";
-import { syncFlows, syncProxyState, syncSidebarSelection } from "./lib/store";
+import { syncNavigation, syncSidebarSelection } from "./lib/navigation";
+import { syncFlows, syncProxyState } from "./lib/store";
 import "./main.css";
 
 const queryClient = new QueryClient();
 const jotaiStore = createStore();
 
 syncProxyState(jotaiStore);
+// Before the flows load, so they load for the filter it restores
+syncNavigation(jotaiStore);
 syncFlows(jotaiStore);
 syncSidebarSelection(jotaiStore);
 

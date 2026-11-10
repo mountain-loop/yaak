@@ -5,7 +5,8 @@ import { type ReactNode, useEffect, useState } from "react";
 import { ProxyLayout } from "../components/ProxyLayout";
 import { DragRegionCheck } from "./DragRegionCheck";
 import { useHotkeyContextValue } from "../lib/hotkeys";
-import { syncFlows, syncProxyState, syncSidebarSelection } from "../lib/store";
+import { syncNavigation, syncSidebarSelection } from "../lib/navigation";
+import { syncFlows, syncProxyState } from "../lib/store";
 
 const LOCKED =
   "Traffic is locked: Yaak Proxy stores traffic encrypted and couldn't read its key from the " +
@@ -81,6 +82,7 @@ export function LockedHarness() {
   const [synced, setSynced] = useState(false);
   useEffect(() => {
     syncProxyState(store);
+    syncNavigation(store);
     syncFlows(store);
     syncSidebarSelection(store);
     setSynced(true);

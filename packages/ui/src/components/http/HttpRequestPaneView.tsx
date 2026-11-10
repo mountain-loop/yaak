@@ -116,6 +116,8 @@ export interface HttpRequestPaneViewProps {
    * request doesn't carry to the next
    */
   defaultTab?: string;
+  /** The tab to show over any remembered, while this request offers it */
+  activeTab?: string;
   /** A tab was chosen */
   onTabChange?: (tab: string) => void;
 }
@@ -168,6 +170,7 @@ export function HttpRequestPaneView({
   urlLine,
   dimEmptyTabs = false,
   defaultTab,
+  activeTab,
   onTabChange,
 }: HttpRequestPaneViewProps) {
   const { ErrorBoundary } = useEditorHost();
@@ -291,6 +294,7 @@ export function HttpRequestPaneView({
         storageKey={tabsStorageKey}
         activeTabKey={request.id}
         defaultValue={defaultTab}
+        value={activeTab}
         keyedDefault={defaultTab != null}
         onChangeValue={onTabChange}
       >

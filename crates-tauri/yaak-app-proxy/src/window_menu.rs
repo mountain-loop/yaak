@@ -11,6 +11,37 @@ pub const EXPORT_HAR_ID: &str = "file.export_har";
 /// The event the window hears File's Export All Flows as HAR by.
 pub const EXPORT_HAR_EVENT: &str = "menu_export_har";
 
+/// Go's Back and Forward, which the window carries out along its own places, and enables while
+/// there is somewhere to go.
+pub const GO_BACK_ID: &str = "go.back";
+pub const GO_FORWARD_ID: &str = "go.forward";
+
+/// The events the window hears Go's Back and Forward by.
+pub const GO_BACK_EVENT: &str = "menu_go_back";
+pub const GO_FORWARD_EVENT: &str = "menu_go_forward";
+
+/// Enables Go's Back and Forward as the window has somewhere to go.
+pub fn set_go_enabled<R: Runtime>(app_handle: &AppHandle<R>, back: bool, forward: bool) {
+    let Some(menu) = app_handle.menu() else {
+        return;
+    };
+    let Ok(items) = menu.items() else {
+        return;
+    };
+    for (id, enabled) in [(GO_BACK_ID, back), (GO_FORWARD_ID, forward)] {
+        let item = items
+            .iter()
+            .filter_map(|kind| kind.as_submenu())
+            .find_map(|submenu| submenu.get(id))
+            .and_then(|kind| kind.as_menuitem().cloned());
+        if let Some(item) = item
+            && let Err(e) = item.set_enabled(enabled)
+        {
+            log::warn!("Failed to enable {id}: {e}");
+        }
+    }
+}
+
 pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let pkg_info = app_handle.package_info();
     let config = app_handle.config();
@@ -122,6 +153,22 @@ pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>>
                 &[
                     #[cfg(target_os = "macos")]
                     &PredefinedMenuItem::fullscreen(app_handle, None)?,
+                ],
+            )?,
+            // Disabled until the window says there is somewhere to go.
+            &Submenu::with_items(
+                app_handle,
+                "Go",
+                true,
+                &[
+                    &MenuItemBuilder::with_id(GO_BACK_ID, "Back")
+                        .accelerator("CmdOrCtrl+[")
+                        .enabled(false)
+                        .build(app_handle)?,
+                    &MenuItemBuilder::with_id(GO_FORWARD_ID, "Forward")
+                        .accelerator("CmdOrCtrl+]")
+                        .enabled(false)
+                        .build(app_handle)?,
                 ],
             )?,
             &window_menu,

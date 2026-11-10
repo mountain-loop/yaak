@@ -16,7 +16,12 @@ import classNames from "classnames";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactElement, WheelEvent } from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { selectedFlowAtom, selectedFlowIdAtom } from "../lib/atoms";
+import {
+  appliedFilterAtom,
+  placeSelectionAtom,
+  revealFlowAtom,
+  selectedFlowIdAtom,
+} from "../lib/atoms";
 import { shortContentType } from "../lib/body";
 import { utcTimestamp } from "../lib/flowViews";
 import {
@@ -40,6 +45,7 @@ import {
 import { useExportShownHar, useFlowActions } from "../lib/flowActions";
 import { compareFlows } from "../lib/flowWindow";
 import { countNewFlows, isAtEnd, resumesFollowing } from "../lib/follow";
+import { applyFilter, goToPlace } from "../lib/navigation";
 import { asOneTerm } from "../lib/query";
 import { folderOf } from "../lib/search";
 import {
@@ -53,8 +59,6 @@ import {
   oldestFlowAtom,
   proxyStateAtom,
   searchLoadingAtom,
-  searchTextAtom,
-  setSearchTextAtom,
   flowsAtom,
   shownFlowsAtom,
 } from "../lib/store";
@@ -100,8 +104,8 @@ export function FlowList({ style, className }: Props) {
   const flowActions = useFlowActions();
   const cellActions = useCellActions();
   const exportShown = useExportShownHar();
+  const store = useStore();
   const selectedId = useAtomValue(selectedFlowIdAtom);
-  const setSelectedFlow = useSetAtom(selectedFlowAtom);
   const loadOlder = useSetAtom(loadOlderFlowsAtom);
   const loadMoreSorted = useSetAtom(loadMoreSortedAtom);
   const oldestFlow = useAtomValue(oldestFlowAtom);
@@ -309,22 +313,50 @@ export function FlowList({ style, className }: Props) {
     [loadOlderHeld],
   );
 
-  const select = useCallback(
-    (index: number) => {
-      const flow = latest.current.flows[index];
-      if (flow == null) return;
-      setSelectedFlow(flow);
-      hold();
+  /** Scrolls a row into view, to its middle when `center` and it is out of view */
+  const scrollToRow = useCallback(
+    (index: number, center = false) => {
       const el = scrollRef.current;
       if (el == null) return;
       const top = index * ROW_HEIGHT;
-      if (top < el.scrollTop) setScrollTop(top);
-      else if (top + ROW_HEIGHT > el.scrollTop + el.clientHeight) {
-        setScrollTop(top + ROW_HEIGHT - el.clientHeight);
-      }
+      const above = top < el.scrollTop;
+      const below = top + ROW_HEIGHT > el.scrollTop + el.clientHeight;
+      if (center && (above || below)) setScrollTop(top - (el.clientHeight - ROW_HEIGHT) / 2);
+      else if (above) setScrollTop(top);
+      else if (below) setScrollTop(top + ROW_HEIGHT - el.clientHeight);
     },
-    [hold, setSelectedFlow, setScrollTop, ROW_HEIGHT],
+    [setScrollTop, ROW_HEIGHT],
   );
+
+  // A click is a place of its own to go back to; the arrow keys move the current place along.
+  const select = useCallback(
+    (index: number, move: "add" | "update") => {
+      const flow = latest.current.flows[index];
+      if (flow == null) return;
+      goToPlace(store, move, { selection: [flow.id], flow });
+      hold();
+      scrollToRow(index);
+    },
+    [store, hold, scrollToRow],
+  );
+  const clickRow = useCallback((index: number) => select(index, "add"), [select]);
+
+  // A place gone back to scrolls its flow into view once the list has it.
+  const [reveal, setReveal] = useAtom(revealFlowAtom);
+  const placeSelection = useAtomValue(placeSelectionAtom);
+  useLayoutEffect(() => {
+    if (reveal == null) return;
+    // Selected elsewhere since
+    if (!placeSelection.has(reveal.id)) {
+      setReveal(null);
+      return;
+    }
+    const index = flows.findIndex((f) => f.id === reveal.id);
+    if (index === -1) return;
+    setReveal(null);
+    hold();
+    scrollToRow(index, true);
+  }, [reveal, placeSelection, flows, hold, scrollToRow, setReveal]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
@@ -338,11 +370,11 @@ export function FlowList({ style, className }: Props) {
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       e.preventDefault();
       const index = flows.findIndex((f) => f.id === selectedId);
-      if (index === -1) select(e.key === "ArrowDown" ? 0 : flows.length - 1);
+      if (index === -1) select(e.key === "ArrowDown" ? 0 : flows.length - 1, "update");
       else if (index === 0 && e.key === "ArrowUp") loadOlderHeld();
       else {
         if (sorted && index >= flows.length - 2 && e.key === "ArrowDown") void loadMoreSorted();
-        select(e.key === "ArrowDown" ? index + 1 : index - 1);
+        select(e.key === "ArrowDown" ? index + 1 : index - 1, "update");
       }
     },
     [flows, follow, loadOlderHeld, loadMoreSorted, select, selectedId, sorted],
@@ -353,7 +385,7 @@ export function FlowList({ style, className }: Props) {
       const flow = latest.current.flows[index];
       if (flow == null) return;
       e.preventDefault();
-      select(index);
+      select(index, "add");
       // The cell under the pointer, for the menu's items on its value
       const cellEl = (e.target as HTMLElement).closest<HTMLElement>("[data-column]");
       const column = (cellEl?.dataset.column as ColumnId | undefined) ?? null;
@@ -466,7 +498,7 @@ export function FlowList({ style, className }: Props) {
                     template={template}
                     selected={flow.id === selectedId}
                     arrivedAt={arrivals.get(flow.id) ?? null}
-                    onSelect={select}
+                    onSelect={clickRow}
                     onContextMenu={openMenu}
                   />
                 );
@@ -905,18 +937,17 @@ function clockTime(at: Date): string {
 
 /**
  * The items a cell's menu adds for its value: a search term for it, either way, where its column
- * has a field to match it by, and copying it
+ * has a field to match it by, applied at once, and copying it
  */
 function useCellActions(): (flow: Flow, column: ColumnId) => DropdownItem[] {
   const store = useStore();
-  const setSearchText = useSetAtom(setSearchTextAtom);
   const showToast = useShowToast();
   return useCallback(
     (flow: Flow, column: ColumnId) => {
       const add = (term: string) => {
         // A search with `OR` at its top is grouped first, so the term narrows all of it.
-        const text = store.get(searchTextAtom).trim();
-        setSearchText(text === "" ? term : `${asOneTerm(text)} ${term}`);
+        const text = store.get(appliedFilterAtom).trim();
+        applyFilter(store, text === "" ? term : `${asOneTerm(text)} ${term}`);
       };
       const include = cellFilterTerm(flow, column, false);
       const exclude = cellFilterTerm(flow, column, true);
@@ -944,7 +975,7 @@ function useCellActions(): (flow: Flow, column: ColumnId) => DropdownItem[] {
       }
       return items;
     },
-    [store, setSearchText, showToast],
+    [store, showToast],
   );
 }
 

@@ -79,6 +79,11 @@ export interface TabsProps {
   label: string;
   /** Default tab value. If not provided, defaults to first tab. */
   defaultValue?: string;
+  /**
+   * The tab shown, over the one stored or last chosen, while it is offered. Choosing another
+   * still calls `onChangeValue`, for the owner to pass it back.
+   */
+  value?: string;
   /** Called when active tab changes */
   onChangeValue?: (value: string) => void;
   tabs: TabItem[];
@@ -103,6 +108,7 @@ export interface TabsProps {
 export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
   {
     defaultValue,
+    value: controlledValue,
     onChangeValue: onChangeValueProp,
     label,
     children,
@@ -146,7 +152,12 @@ export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
     keyedDefault && internal?.key !== activeTabKey ? undefined : internal?.value;
   const offered = (v: string | undefined) =>
     v != null && (!keyedDefault || originalTabs.some((t) => t.value === v));
-  const value = [storedActiveTab, internalValue, defaultValue].find(offered) ?? originalTabs[0]?.value;
+  const controlled = originalTabs.some((t) => t.value === controlledValue)
+    ? controlledValue
+    : undefined;
+  const value =
+    [controlled, storedActiveTab, internalValue, defaultValue].find(offered) ??
+    originalTabs[0]?.value;
 
   // Helper to normalize storage (handle migration from old format)
   const normalizeStorage = useCallback(

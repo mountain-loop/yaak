@@ -7,6 +7,7 @@ pub mod control;
 pub mod convert;
 pub mod db;
 mod exit_gate;
+pub mod filter_history;
 pub mod flows;
 pub mod grpc;
 pub mod har;
@@ -1745,6 +1746,38 @@ pub struct CountSavedQueriesRequest {
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct SavedQueriesChangedPayload {}
 
+/// Flows by id, for showing ones the list has not loaded. Those cleared or deleted are left out.
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct GetFlowsRequest {
+    pub ids: Vec<String>,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ListFilterHistoryRequest {}
+
+/// A filter applied from the search box, or from the history itself, put at its top.
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct RecordFilterRequest {
+    pub filter: String,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct DeleteFilterHistoryRequest {
+    pub filter: String,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ClearFilterHistoryRequest {}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct FilterHistoryChangedPayload {}
+
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct ClearFlowsRequest {}
@@ -2761,6 +2794,47 @@ fn delete_saved_query(ctx: &ProxyCtx, req: DeleteSavedQueryRequest) -> Result<bo
     Ok(deleted)
 }
 
+async fn get_flows(ctx: ProxyCtx, req: GetFlowsRequest) -> Result<Vec<Flow>, RpcError> {
+    blocking(move || {
+        let db = ctx.db()?;
+        Ok(req.ids.iter().filter_map(|id| flows::find(&db, id)).collect())
+    })
+    .await
+}
+
+fn list_filter_history(
+    ctx: &ProxyCtx,
+    _req: ListFilterHistoryRequest,
+) -> Result<Vec<filter_history::FilterHistoryEntry>, RpcError> {
+    filter_history::list(&ctx.db()?).map_err(rpc_error)
+}
+
+fn record_filter(ctx: &ProxyCtx, req: RecordFilterRequest) -> Result<bool, RpcError> {
+    let recorded = filter_history::record(&ctx.db()?, &req.filter).map_err(rpc_error)?;
+    if recorded {
+        ctx.events.emit("filter_history_changed", &FilterHistoryChangedPayload {});
+    }
+    Ok(recorded)
+}
+
+fn delete_filter_history(
+    ctx: &ProxyCtx,
+    req: DeleteFilterHistoryRequest,
+) -> Result<bool, RpcError> {
+    let deleted = filter_history::delete(&ctx.db()?, &req.filter).map_err(rpc_error)?;
+    ctx.events.emit("filter_history_changed", &FilterHistoryChangedPayload {});
+    Ok(deleted)
+}
+
+fn clear_filter_history(
+    ctx: &ProxyCtx,
+    _req: ClearFilterHistoryRequest,
+) -> Result<usize, RpcError> {
+    let cleared = filter_history::clear(&ctx.db()?).map_err(rpc_error)?;
+    ctx.events.emit("filter_history_changed", &FilterHistoryChangedPayload {});
+    Ok(cleared)
+}
+
 async fn count_saved_queries(
     ctx: ProxyCtx,
     req: CountSavedQueriesRequest,
@@ -3644,6 +3718,10 @@ define_rpc! {
         create_saved_query(CreateSavedQueryRequest) -> saved_queries::SavedQuery,
         rename_saved_query(RenameSavedQueryRequest) -> saved_queries::SavedQuery,
         delete_saved_query(DeleteSavedQueryRequest) -> bool,
+        list_filter_history(ListFilterHistoryRequest) -> Vec<filter_history::FilterHistoryEntry>,
+        record_filter(RecordFilterRequest) -> bool,
+        delete_filter_history(DeleteFilterHistoryRequest) -> bool,
+        clear_filter_history(ClearFilterHistoryRequest) -> usize,
         list_grpc_schemas(ListGrpcSchemasRequest) -> Vec<GrpcSchema>,
         list_messages(ListMessagesRequest) -> ListMessagesResponse,
         remove_grpc_schema(RemoveGrpcSchemaRequest) -> bool,
@@ -3684,10 +3762,12 @@ define_rpc! {
         open_terminal(OpenTerminalRequest) -> bool,
         query_values(QueryValuesRequest) -> Vec<String>,
         match_flows(MatchFlowsRequest) -> Vec<String>,
+        get_flows(GetFlowsRequest) -> Vec<Flow>,
         count_saved_queries(CountSavedQueriesRequest) -> Vec<saved_queries::SavedQueryCount>,
     }
     events {
         decrypt_list_changed(DecryptListChangedPayload),
+        filter_history_changed(FilterHistoryChangedPayload),
         flows_cleared(FlowsClearedPayload),
         flows_removed(FlowsRemovedPayload),
         message_write(MessagePayload),
@@ -4464,6 +4544,55 @@ mod tests {
         }
     }
 
+    /// A place the app goes back to reads its flow by id, which is gone once cleared.
+    #[tokio::test]
+    async fn get_flows_leaves_out_missing_and_cleared_flows() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        flow_with_response(&ctx, "fl_a", "text/plain", b"one");
+        flow_with_response(&ctx, "fl_b", "text/plain", b"two");
+        let ids = |flows: Vec<Flow>| flows.into_iter().map(|f| f.id).collect::<Vec<_>>();
+
+        let req = GetFlowsRequest { ids: vec!["fl_b".into(), "fl_gone".into(), "fl_a".into()] };
+        assert_eq!(ids(get_flows(ctx.clone(), req).await.unwrap()), ["fl_b", "fl_a"]);
+
+        flows::clear(&ctx.db().unwrap()).unwrap();
+        let req = GetFlowsRequest { ids: vec!["fl_a".into()] };
+        assert!(get_flows(ctx.clone(), req).await.unwrap().is_empty());
+    }
+
+    /// Filters applied are listed newest first, each once, and the app hears of each change.
+    #[test]
+    fn filter_history_commands_record_list_and_forget() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        let heard = || rx.try_iter().filter(|e| e.event == "filter_history_changed").count();
+        let listed = || {
+            list_filter_history(&ctx, ListFilterHistoryRequest {})
+                .unwrap()
+                .into_iter()
+                .map(|e| e.filter)
+                .collect::<Vec<_>>()
+        };
+        heard();
+
+        for filter in ["stripe", "@status:>=400", "stripe", " "] {
+            record_filter(&ctx, RecordFilterRequest { filter: filter.into() }).unwrap();
+        }
+        assert_eq!(listed(), ["stripe", "@status:>=400"]);
+        // A blank filter is not kept, and changes nothing to hear of.
+        assert_eq!(heard(), 3);
+
+        let req = DeleteFilterHistoryRequest { filter: "stripe".into() };
+        assert!(delete_filter_history(&ctx, req).unwrap());
+        assert_eq!(listed(), ["@status:>=400"]);
+        assert_eq!(clear_filter_history(&ctx, ClearFilterHistoryRequest {}).unwrap(), 1);
+        assert!(listed().is_empty());
+        assert_eq!(heard(), 2);
+    }
+
     #[tokio::test]
     async fn the_app_still_hears_why_a_body_failed_to_decode() {
         let dir = tempfile::tempdir().unwrap();
@@ -5061,6 +5190,7 @@ mod tests {
             flow_with_response(&ctx, "fl_a", "text/plain", b"one");
             flow_with_response(&ctx, "fl_b", "text/plain", b"two");
             saved_queries::create(&ctx.db().unwrap(), "Errors", "@status:>=400").unwrap();
+            filter_history::record(&ctx.db().unwrap(), "@host:api.stripe.com").unwrap();
             assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 2);
         }
         if let Some(settings) = settings {
@@ -5070,7 +5200,8 @@ mod tests {
         ProxyCtx::new(dir, events, keys.clone()).unwrap()
     }
 
-    /// By default a launch starts with no traffic, bodies included, and keeps saved searches.
+    /// By default a launch starts with no traffic, bodies included, and keeps saved searches
+    /// and the filter history.
     #[test]
     fn a_launch_clears_captured_traffic_by_default() {
         let dir = tempfile::tempdir().unwrap();
@@ -5081,6 +5212,11 @@ mod tests {
         assert_eq!(blobs_of(&ctx, "fl_a", 0), 0);
         let saved = saved_queries::list(&db).unwrap();
         assert_eq!(saved.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Errors"]);
+        let history = filter_history::list(&db).unwrap();
+        assert_eq!(
+            history.iter().map(|h| h.filter.as_str()).collect::<Vec<_>>(),
+            ["@host:api.stripe.com"]
+        );
         // New traffic is written as before.
         flow_with_response(&ctx, "fl_c", "text/plain", b"three");
         assert_eq!(flows::count(&db).unwrap(), 1);
