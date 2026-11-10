@@ -1,3 +1,13 @@
+import {
+  DndContext,
+  DragOverlay,
+  type DragMoveEvent,
+  type DragStartEvent,
+  PointerSensor,
+  useDraggable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import type { FlowSortKey } from "@yaakapp-internal/proxy-lib";
 import {
   ContextMenu,
@@ -9,7 +19,16 @@ import {
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue, useSetAtom } from "jotai";
-import { memo, type MouseEvent, useCallback, useRef, useState } from "react";
+import {
+  memo,
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   addSortKey,
   allColumns,
@@ -21,7 +40,10 @@ import {
   canHide,
   hideOtherColumns,
   isCustomColumn,
+  moveColumn,
+  moveColumnBy,
   removeCustomColumn,
+  resetOrder,
   resetWidth,
   resetWidths,
   resizeColumn,
@@ -30,6 +52,13 @@ import {
 } from "../lib/columns";
 import { columnPrefsAtom, hasAppsAtom } from "../lib/store";
 import { addColumnDialogAtom } from "./AddColumnDialog";
+
+/** Pixels a press on a label moves before it drags the column rather than sorting by it */
+const DRAG_DISTANCE = 4;
+/** How near the list's side edge, in pixels, a dragged column scrolls the list that way */
+const EDGE = 40;
+/** The most the list scrolls sideways a frame, at the very edge */
+const EDGE_SPEED = 18;
 
 interface Props {
   columns: Column[];
@@ -43,13 +72,18 @@ interface Props {
   /** Sets the sort from the menus; empty goes back to arrival order */
   onSetSort: (sort: FlowSortKey[]) => void;
   onResetSort: () => void;
+  /** The rows' scrolling element, which a column dragged to its edge scrolls sideways */
+  scrollElement: () => HTMLElement | null;
+  /** Where a dragged column would drop, in the window's coordinates, or null for nowhere */
+  onDropLine: (x: number | null) => void;
 }
 
 /**
  * The list's only control surface: a click on a label sorts by it alone, a second reverses it
  * and a third goes back to arrival order; Option-click adds it to the sort as a further key.
- * Dragging the edge after a label resizes its column and a double-click on it resets it. A
- * right-click on a label opens the column's menu; the picker sits in the empty corner on hover.
+ * Dragging a label moves its column, and Escape puts it back. Dragging the edge after a label
+ * resizes its column and a double-click on it resets it. A right-click on a label opens the
+ * column's menu; the picker sits in the empty corner on hover.
  */
 export const FlowListHeader = memo(function FlowListHeader({
   columns,
@@ -60,6 +94,8 @@ export const FlowListHeader = memo(function FlowListHeader({
   onSort,
   onSetSort: setSort,
   onResetSort,
+  scrollElement,
+  onDropLine,
 }: Props) {
   const setPrefs = useSetAtom(columnPrefsAtom);
   const unavailable = unavailableColumns(useAtomValue(hasAppsAtom));
@@ -67,6 +103,12 @@ export const FlowListHeader = memo(function FlowListHeader({
   const [menu, setMenu] = useState<{ x: number; y: number; column: ColumnDef | null } | null>(null);
   // Widths when a drag began, so each move sets the width from where it started.
   const startWidth = useRef(0);
+  const { dragging, sensors, dndHandlers, gridRef } = useColumnDrag({
+    columns,
+    scrollElement,
+    onDropLine,
+    onDrop: (id, to) => setPrefs((p) => moveColumn(p, id, to, unavailable)),
+  });
 
   // Taking out the sort's only key goes back to arrival order, as Reset Sort does
   const removeColumn = (id: CustomColumnId) => {
@@ -110,17 +152,34 @@ export const FlowListHeader = memo(function FlowListHeader({
     { type: "separator" },
     { label: "Reset Sort", disabled: sort.length === 0, onSelect: onResetSort },
     { label: "Reset Column Widths", onSelect: () => setPrefs((p) => resetWidths(p)) },
+    {
+      label: "Reset Column Order",
+      disabled: prefs.order.length === 0,
+      onSelect: () => setPrefs((p) => resetOrder(p)),
+    },
   ];
 
   const columnItems = (c: ColumnDef): DropdownItem[] => {
     const sortBy = (descending: boolean) => setSort([{ column: c.id, descending }]);
     const addTo = (descending: boolean) => setSort(addSortKey(sort, c.id, descending));
+    const at = columns.findIndex((col) => col.id === c.id);
     return [
       { label: "Sort Ascending", onSelect: () => sortBy(false) },
       { label: "Sort Descending", onSelect: () => sortBy(true) },
       { label: "Add to Sort Ascending", onSelect: () => addTo(false) },
       { label: "Add to Sort Descending", onSelect: () => addTo(true) },
       { label: "Clear Sorting", disabled: sort.length === 0, onSelect: onResetSort },
+      { type: "separator" },
+      {
+        label: "Move Left",
+        disabled: at <= 0,
+        onSelect: () => setPrefs((p) => moveColumnBy(p, c.id, -1, unavailable)),
+      },
+      {
+        label: "Move Right",
+        disabled: at === -1 || at >= columns.length - 1,
+        onSelect: () => setPrefs((p) => moveColumnBy(p, c.id, 1, unavailable)),
+      },
       { type: "separator" },
       {
         label: "Hide Column",
@@ -163,6 +222,7 @@ export const FlowListHeader = memo(function FlowListHeader({
     <div style={{ width, minWidth: "100%" }} className="px-1.5">
       {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- a right-click opens the column's menu */}
       <div
+        ref={gridRef}
         onContextMenu={openMenu}
         style={{ gridTemplateColumns: template }}
         className={classNames(
@@ -182,60 +242,40 @@ export const FlowListHeader = memo(function FlowListHeader({
             />
           </Dropdown>
         </span>
-        {columns.map((c) => {
-          const at = sort.findIndex((k) => k.column === c.id);
-          const key = sort[at];
-          const label = (
-            <>
-              {key != null && (
-                <Icon
-                  icon="chevron_down"
-                  size="xs"
-                  className={classNames("shrink-0", !key.descending && "rotate-180")}
-                />
-              )}
-              {key != null && sort.length > 1 && (
-                <span className="shrink-0 -ml-0.5 text-2xs tabular-nums">{at + 1}</span>
-              )}
-              <span className="truncate">{c.id === "app" ? "" : c.label}</span>
-            </>
-          );
-          const labelClass = classNames(
-            "flex items-center gap-0.5 min-w-0 w-full h-full whitespace-nowrap",
-            c.align === "right" && "justify-end",
-            key != null && "text-text-subtle",
-          );
-          return (
-            <span
+        <DndContext sensors={sensors} autoScroll={false} {...dndHandlers}>
+          {columns.map((c) => (
+            <HeaderCell
               key={c.id}
-              data-column={c.id}
-              className="relative h-full flex items-center min-w-0 px-1.5"
-            >
-              <button
-                type="button"
-                onClick={(e) => onSort(c.id, e.altKey)}
-                // No tooltip: the header sits under the search field, and a tooltip here covered it
-                aria-label={`Sort by ${c.label}`}
-                className={classNames(labelClass, "hover:text-text-subtle")}
-              >
-                {label}
-              </button>
-              {/* On the column's right edge, the boundary with the next, resizing this one */}
-              <ResizeHandle
-                side="right"
-                justify="center"
-                className="absolute top-0 translate-x-1/2"
-                onResizeStart={() => {
-                  startWidth.current = c.current;
-                }}
-                onResizeMove={(e) =>
-                  setPrefs((p) => resizeColumn(p, c.id, startWidth.current + e.x - e.xStart))
-                }
-                onReset={() => setPrefs((p) => resetWidth(p, c.id))}
-              />
-            </span>
-          );
-        })}
+              column={c}
+              sort={sort}
+              dragging={dragging?.id === c.id}
+              onSort={onSort}
+              onResizeStart={() => {
+                startWidth.current = c.current;
+              }}
+              onResizeMove={(dx) => setPrefs((p) => resizeColumn(p, c.id, startWidth.current + dx))}
+              onResetWidth={() => setPrefs((p) => resetWidth(p, c.id))}
+            />
+          ))}
+          {/* Over everything, as the header clips what overflows it */}
+          {createPortal(
+            <DragOverlay dropAnimation={null}>
+              {dragging != null && (
+                <div
+                  className={classNames(
+                    // As wide as its name, however narrow the column
+                    "flex items-center gap-0.5 h-full w-max px-1.5 rounded-sm",
+                    "cursor-grabbing whitespace-nowrap",
+                    "text-xs text-text bg-surface-highlight border border-border shadow-lg",
+                  )}
+                >
+                  <ColumnLabel column={dragging} sort={sort} ghost />
+                </div>
+              )}
+            </DragOverlay>,
+            document.body,
+          )}
+        </DndContext>
         <ContextMenu
           triggerPosition={menu}
           items={menu == null ? [] : menu.column == null ? pickerItems : columnItems(menu.column)}
@@ -245,3 +285,219 @@ export const FlowListHeader = memo(function FlowListHeader({
     </div>
   );
 });
+
+interface HeaderCellProps {
+  column: Column;
+  sort: FlowSortKey[];
+  /** Being dragged, so it dims where it was */
+  dragging: boolean;
+  onSort: (column: ColumnId, add: boolean) => void;
+  onResizeStart: () => void;
+  /** How far the edge moved since the resize began */
+  onResizeMove: (dx: number) => void;
+  onResetWidth: () => void;
+}
+
+function HeaderCell({
+  column: c,
+  sort,
+  dragging,
+  onSort,
+  onResizeStart,
+  onResizeMove,
+  onResetWidth,
+}: HeaderCellProps) {
+  // The label drags the column; the resize handle beside it is outside it, so it still resizes.
+  const { listeners, setNodeRef } = useDraggable({ id: c.id });
+  const sorted = sort.some((k) => k.column === c.id);
+  return (
+    <span
+      data-column={c.id}
+      className={classNames(
+        "relative h-full flex items-center min-w-0 px-1.5",
+        dragging && "opacity-40",
+      )}
+    >
+      <button
+        ref={setNodeRef}
+        type="button"
+        {...listeners}
+        // A press that moves drags instead; dnd-kit swallows the click that ends a drag.
+        onClick={(e) => onSort(c.id, e.altKey)}
+        // No tooltip: the header sits under the search field, and a tooltip here covered it
+        aria-label={`Sort by ${c.label}`}
+        className={classNames(
+          "flex items-center gap-0.5 min-w-0 w-full h-full whitespace-nowrap",
+          "hover:text-text-subtle",
+          c.align === "right" && "justify-end",
+          sorted && "text-text-subtle",
+        )}
+      >
+        <ColumnLabel column={c} sort={sort} />
+      </button>
+      {/* On the column's right edge, the boundary with the next, resizing this one */}
+      <ResizeHandle
+        side="right"
+        justify="center"
+        className="absolute top-0 translate-x-1/2"
+        onResizeStart={onResizeStart}
+        onResizeMove={(e) => onResizeMove(e.x - e.xStart)}
+        onReset={onResetWidth}
+      />
+    </span>
+  );
+}
+
+/**
+ * A column's name, after its sort direction and, sorted by several, its place in the sort. App's
+ * column is as narrow as its icons, so only its dragged ghost names it.
+ */
+function ColumnLabel({
+  column: c,
+  sort,
+  ghost = false,
+}: {
+  column: Column;
+  sort: FlowSortKey[];
+  ghost?: boolean;
+}) {
+  const at = sort.findIndex((k) => k.column === c.id);
+  const key = sort[at];
+  return (
+    <>
+      {key != null && (
+        <Icon
+          icon="chevron_down"
+          size="xs"
+          className={classNames("shrink-0", !key.descending && "rotate-180")}
+        />
+      )}
+      {key != null && sort.length > 1 && (
+        <span className="shrink-0 -ml-0.5 text-2xs tabular-nums">{at + 1}</span>
+      )}
+      <span className="truncate">{c.id === "app" && !ghost ? "" : c.label}</span>
+    </>
+  );
+}
+
+/**
+ * Dragging a column's label: where it would drop, the boundary between the labels nearest the
+ * pointer, and the list scrolling sideways while the pointer is near its edge. The columns only
+ * move on the drop, so the rows lay out once.
+ */
+function useColumnDrag({
+  columns,
+  scrollElement,
+  onDropLine,
+  onDrop,
+}: {
+  columns: Column[];
+  scrollElement: () => HTMLElement | null;
+  onDropLine: (x: number | null) => void;
+  /** Moves the column to the boundary `to` between those shown */
+  onDrop: (id: ColumnId, to: number) => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: DRAG_DISTANCE } }),
+  );
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState<Column | null>(null);
+  // Live while dragging, read each frame
+  const state = useRef<{
+    /** The column dragged */
+    id: ColumnId;
+    /** The pointer when the press began, and now */
+    start: number;
+    x: number;
+    /** The boundary it would drop at, and that boundary's line, or null where it would not move */
+    to: number | null;
+    line: number | null;
+    frame: number;
+  } | null>(null);
+  const latest = useRef({ columns, scrollElement, onDropLine, onDrop });
+  useLayoutEffect(() => {
+    latest.current = { columns, scrollElement, onDropLine, onDrop };
+  });
+
+  const stop = useCallback(() => {
+    const s = state.current;
+    state.current = null;
+    if (s != null) cancelAnimationFrame(s.frame);
+    setDragging(null);
+    latest.current.onDropLine(null);
+    return s;
+  }, []);
+
+  // A drag never outlives the header
+  useEffect(
+    () => () => {
+      stop();
+    },
+    [stop],
+  );
+
+  const onDragStart = useCallback((e: DragStartEvent) => {
+    const column = latest.current.columns.find((c) => c.id === e.active.id);
+    if (column == null) return;
+    const x = pointerX(e);
+    state.current = { id: column.id, start: x, x, to: null, line: null, frame: 0 };
+    setDragging(column);
+
+    const tick = () => {
+      const s = state.current;
+      if (s == null) return;
+      // Near an edge, the list scrolls that way, faster the nearer; the header follows it.
+      const list = latest.current.scrollElement();
+      if (list != null) {
+        const { left, right } = list.getBoundingClientRect();
+        const near =
+          s.x < left + EDGE ? s.x - left - EDGE : s.x > right - EDGE ? s.x - right + EDGE : 0;
+        if (near !== 0) {
+          const speed = Math.min(1, Math.abs(near) / EDGE) * EDGE_SPEED;
+          list.scrollLeft += Math.sign(near) * Math.max(1, speed);
+        }
+      }
+      // The boundary before the first label whose middle is right of the pointer
+      const cells = Array.from(
+        gridRef.current?.querySelectorAll<HTMLElement>(":scope > [data-column]") ?? [],
+      ).map((el) => el.getBoundingClientRect());
+      let to = cells.findIndex((r) => s.x < r.left + r.width / 2);
+      if (to === -1) to = cells.length;
+      // Where it already is, it would not move, so no line. Its place is read each frame, as
+      // the columns can change under a drag: Operation shows itself when a flow has one.
+      const from = latest.current.columns.findIndex((c) => c.id === s.id);
+      const moves = from !== -1 && to !== from && to !== from + 1;
+      s.to = moves ? to : null;
+      const line = moves ? (cells[to]?.left ?? cells.at(-1)?.right ?? null) : null;
+      // Told again only when it changes: another boundary, or the same one scrolled
+      if (line !== s.line) latest.current.onDropLine(line);
+      s.line = line;
+      s.frame = requestAnimationFrame(tick);
+    };
+    state.current.frame = requestAnimationFrame(tick);
+  }, []);
+
+  // The pointer, from where the press began; the frames above read it, scrolling or not.
+  const onDragMove = useCallback((e: DragMoveEvent) => {
+    const s = state.current;
+    if (s != null) s.x = s.start + e.delta.x;
+  }, []);
+
+  const onDragEnd = useCallback(() => {
+    const s = stop();
+    if (s?.to != null) latest.current.onDrop(s.id, s.to);
+  }, [stop]);
+
+  return {
+    dragging,
+    sensors,
+    gridRef,
+    dndHandlers: { onDragStart, onDragMove, onDragEnd, onDragCancel: stop },
+  };
+}
+
+/** Where the press that began a drag was, across the window */
+function pointerX(e: DragStartEvent): number {
+  const event = e.activatorEvent;
+  return event instanceof globalThis.MouseEvent ? event.clientX : 0;
+}

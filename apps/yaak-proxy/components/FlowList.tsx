@@ -301,6 +301,15 @@ export function FlowList({ style, className }: Props) {
     el.scrollLeft += e.deltaX;
   }, []);
 
+  // A dragged column's drop line, from the window's coordinates to the list's
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [dropLine, setDropLine] = useState<number | null>(null);
+  const getScrollElement = useCallback(() => scrollRef.current, []);
+  const handleDropLine = useCallback((x: number | null) => {
+    const root = rootRef.current;
+    setDropLine(x == null || root == null ? null : x - root.getBoundingClientRect().left);
+  }, []);
+
   // A list too short to scroll still loads older flows on scrolling up.
   const handleWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {
@@ -407,10 +416,11 @@ export function FlowList({ style, className }: Props) {
 
   return (
     <div
+      ref={rootRef}
       style={style}
       className={classNames(
         className,
-        "grid grid-rows-[auto_minmax(0,1fr)] grid-cols-[minmax(0,1fr)] min-h-0 text-sm",
+        "relative grid grid-rows-[auto_minmax(0,1fr)] grid-cols-[minmax(0,1fr)] min-h-0 text-sm",
       )}
     >
       {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- scrolls the list sideways */}
@@ -430,8 +440,23 @@ export function FlowList({ style, className }: Props) {
           onSort={handleSort}
           onSetSort={handleSetSort}
           onResetSort={follow}
+          scrollElement={getScrollElement}
+          onDropLine={handleDropLine}
         />
       </div>
+      {/* Where a dragged column would drop, down the header and the rows in view */}
+      {dropLine != null && (
+        <div
+          aria-hidden
+          style={{ right: scrollbarWidth }}
+          className="pointer-events-none absolute inset-y-0 left-0 overflow-hidden"
+        >
+          <div
+            style={{ left: dropLine }}
+            className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-primary"
+          />
+        </div>
+      )}
       <div className="relative min-h-0">
         <div
           ref={scrollRef}
