@@ -243,10 +243,11 @@ export function toggleColumn(
 /**
  * Puts a column just shown after the others shown, unless the person placed it before, so it
  * goes back to that place. The columns shown before it are placed too, where they are, so the
- * ones not listed don't jump ahead of it.
+ * ones not listed don't jump ahead of it. Until the person has ordered the columns, each keeps
+ * its default place: a built-in one among the others, an added one at the end.
  */
 function placeAtEnd(prefs: ColumnPrefs, id: ColumnId): ColumnPrefs {
-  if (prefs.order.includes(id)) return prefs;
+  if (prefs.order.length === 0 || prefs.order.includes(id)) return prefs;
   const all = allColumns(prefs);
   if (all.filter((c) => isVisible(prefs, c)).at(-1)?.id === id) return prefs;
   const placed = all.filter(

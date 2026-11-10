@@ -14,7 +14,14 @@ import {
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
-import type { CSSProperties, KeyboardEvent, MouseEvent, ReactElement, WheelEvent } from "react";
+import type {
+  CSSProperties,
+  KeyboardEvent,
+  MouseEvent,
+  ReactElement,
+  RefObject,
+  WheelEvent,
+} from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { selectedFlowAtom, selectedFlowIdAtom } from "../lib/atoms";
 import { shortContentType } from "../lib/body";
@@ -61,7 +68,7 @@ import {
 import { useShowToast } from "../lib/toast";
 import { AppIcon } from "./AppIcon";
 import { FlowListEmpty, PausedRow } from "./FlowListEmpty";
-import { FlowListHeader } from "./FlowListHeader";
+import { type ColumnDragEvent, FlowListHeader } from "./FlowListHeader";
 
 const BOTTOM_PADDING = 6;
 /** Rows from the top at which older flows start loading, or from the bottom, sorted, more */
@@ -305,6 +312,7 @@ export function FlowList({ style, className }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [dropLine, setDropLine] = useState<number | null>(null);
   const getScrollElement = useCallback(() => scrollRef.current, []);
+  const { ghostColumn, onColumnDrag } = useColumnGhost(rootRef, headerScrollRef, scrollRef);
   const handleDropLine = useCallback((x: number | null) => {
     const root = rootRef.current;
     setDropLine(x == null || root == null ? null : x - root.getBoundingClientRect().left);
@@ -442,14 +450,19 @@ export function FlowList({ style, className }: Props) {
           onResetSort={follow}
           scrollElement={getScrollElement}
           onDropLine={handleDropLine}
+          onColumnDrag={onColumnDrag}
         />
       </div>
-      {/* Where a dragged column would drop, down the header and the rows in view */}
+      {/* A dragged column's cells dim where they are, in one rule rather than a render a row */}
+      {ghostColumn != null && (
+        <style>{`[data-flow-rows] [data-column="${ghostColumn}"] > * { opacity: 0.4; }`}</style>
+      )}
+      {/* Where a dragged column would drop, down the header and the rows in view, over its ghost */}
       {dropLine != null && (
         <div
           aria-hidden
           style={{ right: scrollbarWidth }}
-          className="pointer-events-none absolute inset-y-0 left-0 overflow-hidden"
+          className="pointer-events-none absolute inset-y-0 left-0 z-30 overflow-hidden"
         >
           <div
             style={{ left: dropLine }}
@@ -460,6 +473,7 @@ export function FlowList({ style, className }: Props) {
       <div className="relative min-h-0">
         <div
           ref={scrollRef}
+          data-flow-rows
           role="listbox"
           aria-label="Flows"
           tabIndex={0}
@@ -567,6 +581,135 @@ function useArrivals(flows: Flow[], following: boolean): Map<string, number> {
     s.arrivals = next;
     return next;
   }, [flows, following]);
+}
+
+/**
+ * The ghost of a dragged column: its header and the cells of the rows in view, copied once when
+ * the drag starts, at the column's width and the list's height. It follows the pointer sideways,
+ * kept within the list, by a transform, so the rows don't render while it moves; flows arriving
+ * or the list scrolling sideways meanwhile leave the copy as it was.
+ */
+function useColumnGhost(
+  rootRef: RefObject<HTMLDivElement | null>,
+  headerRef: RefObject<HTMLDivElement | null>,
+  listRef: RefObject<HTMLDivElement | null>,
+): { ghostColumn: ColumnId | null; onColumnDrag: (event: ColumnDragEvent) => void } {
+  const [ghostColumn, setGhostColumn] = useState<ColumnId | null>(null);
+  const ghost = useRef<ColumnGhost | null>(null);
+
+  const onColumnDrag = useCallback(
+    (event: ColumnDragEvent) => {
+      if (event.type === "move") {
+        ghost.current?.move(event.x);
+        return;
+      }
+      ghost.current?.remove();
+      ghost.current = null;
+      if (event.type === "end") {
+        setGhostColumn(null);
+        return;
+      }
+      const root = rootRef.current;
+      const header = headerRef.current;
+      const list = listRef.current;
+      if (root == null || header == null || list == null) return;
+      ghost.current = snapshotColumn(event.id, event.x, root, header, list);
+      setGhostColumn(event.id);
+    },
+    [rootRef, headerRef, listRef],
+  );
+
+  useEffect(() => () => ghost.current?.remove(), []);
+  return { ghostColumn, onColumnDrag };
+}
+
+interface ColumnGhost {
+  /** Follows the pointer, across the window */
+  move: (x: number) => void;
+  remove: () => void;
+}
+
+function snapshotColumn(
+  id: ColumnId,
+  startX: number,
+  root: HTMLElement,
+  header: HTMLElement,
+  list: HTMLElement,
+): ColumnGhost | null {
+  const cell = header.querySelector<HTMLElement>(`[data-column="${id}"]`);
+  if (cell == null) return null;
+  const rootBox = root.getBoundingClientRect();
+  const cellBox = cell.getBoundingClientRect();
+  const listBox = list.getBoundingClientRect();
+  const listHeight = list.clientHeight;
+
+  const el = document.createElement("div");
+  el.setAttribute("aria-hidden", "true");
+  el.className = classNames(
+    "pointer-events-none absolute top-0 z-20 overflow-hidden rounded-sm",
+    // Lifted: a shadow, and just enough opacity to read as held, not enough to show text through
+    "bg-surface border border-border-subtle shadow-lg opacity-95",
+  );
+  Object.assign(el.style, {
+    left: `${cellBox.left - rootBox.left}px`,
+    width: `${cellBox.width}px`,
+    height: `${rootBox.height}px`,
+    willChange: "transform",
+  });
+
+  // The header's label, without its resize handle
+  const head = place(cellBox.top - rootBox.top, cellBox.height, "text-xs text-text-subtlest");
+  const label = cell.cloneNode(true) as HTMLElement;
+  for (const handle of label.querySelectorAll(".cursor-col-resize")) handle.remove();
+  label.style.width = "100%";
+  head.append(label);
+  el.append(head);
+
+  // The rows in view, clipped to the list as it shows them
+  const rows = document.createElement("div");
+  rows.className = "absolute left-0 right-0 overflow-hidden";
+  Object.assign(rows.style, { top: `${listBox.top - rootBox.top}px`, height: `${listHeight}px` });
+  for (const row of list.querySelectorAll<HTMLElement>('[role="option"]')) {
+    const rowBox = row.getBoundingClientRect();
+    if (rowBox.bottom <= listBox.top || rowBox.top >= listBox.top + listHeight) continue;
+    const source = row.querySelector(`[data-column="${id}"]`);
+    if (source == null) continue;
+    const copy = place(
+      rowBox.top - listBox.top,
+      rowBox.height,
+      classNames(
+        "whitespace-nowrap tabular-nums",
+        row.getAttribute("aria-selected") === "true" && "text-text bg-surface-highlight",
+        row.classList.contains("text-text-subtlest") && "text-text-subtlest",
+      ),
+    );
+    for (const child of source.children) {
+      const clone = child.cloneNode(true) as HTMLElement;
+      clone.style.width = "100%";
+      copy.append(clone);
+    }
+    rows.append(copy);
+  }
+  el.append(rows);
+  root.append(el);
+
+  // Kept within the list's visible width
+  const min = listBox.left;
+  const max = Math.max(min, listBox.left + list.clientWidth - cellBox.width);
+  const move = (x: number) => {
+    const left = Math.min(max, Math.max(min, cellBox.left + x - startX));
+    el.style.transform = `translateX(${left - cellBox.left}px)`;
+  };
+  move(startX);
+  return { move, remove: () => el.remove() };
+}
+
+/** A line of the ghost, `top` pixels down its box */
+function place(top: number, height: number, className: string): HTMLElement {
+  const el = document.createElement("div");
+  el.className = classNames("absolute left-0 right-0 flex items-center", className);
+  Object.assign(el.style, { top: `${top}px`, height: `${height}px` });
+  return el;
 }
 
 interface RowProps {

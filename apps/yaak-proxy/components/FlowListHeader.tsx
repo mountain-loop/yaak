@@ -1,6 +1,5 @@
 import {
   DndContext,
-  DragOverlay,
   type DragStartEvent,
   PointerSensor,
   useDraggable,
@@ -28,7 +27,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import {
   addSortKey,
   allColumns,
@@ -77,7 +75,15 @@ interface Props {
   scrollElement: () => HTMLElement | null;
   /** Where a dragged column would drop, in the window's coordinates, or null for nowhere */
   onDropLine: (x: number | null) => void;
+  /** A column's drag: its start, the pointer's moves, and its end, for the list's ghost */
+  onColumnDrag: (event: ColumnDragEvent) => void;
 }
+
+/** A column's drag, for the ghost the list draws of it; `x` is the pointer, across the window */
+export type ColumnDragEvent =
+  | { type: "start"; id: ColumnId; x: number }
+  | { type: "move"; x: number }
+  | { type: "end" };
 
 /**
  * The list's only control surface: a click on a label sorts by it alone, a second reverses it
@@ -97,6 +103,7 @@ export const FlowListHeader = memo(function FlowListHeader({
   onResetSort,
   scrollElement,
   onDropLine,
+  onColumnDrag,
 }: Props) {
   const setPrefs = useSetAtom(columnPrefsAtom);
   const unavailable = unavailableColumns(useAtomValue(hasAppsAtom));
@@ -108,6 +115,7 @@ export const FlowListHeader = memo(function FlowListHeader({
     columns,
     scrollElement,
     onDropLine,
+    onColumnDrag,
     onDrop: (id, to) => setPrefs((p) => moveColumn(p, id, to, unavailable)),
   });
 
@@ -259,24 +267,6 @@ export const FlowListHeader = memo(function FlowListHeader({
               onResetWidth={() => setPrefs((p) => resetWidth(p, c.id))}
             />
           ))}
-          {/* Over everything, as the header clips what overflows it */}
-          {createPortal(
-            <DragOverlay dropAnimation={null}>
-              {dragging != null && (
-                <div
-                  className={classNames(
-                    // As wide as its name, however narrow the column
-                    "flex items-center gap-0.5 h-full w-max px-1.5 rounded-sm",
-                    "cursor-grabbing whitespace-nowrap",
-                    "text-xs text-text bg-surface-highlight border border-border shadow-lg",
-                  )}
-                >
-                  <ColumnLabel column={dragging} sort={sort} ghost />
-                </div>
-              )}
-            </DragOverlay>,
-            document.body,
-          )}
         </DndContext>
         <ContextMenu
           triggerPosition={menu}
@@ -350,19 +340,8 @@ function HeaderCell({
   );
 }
 
-/**
- * A column's name, after its sort direction and, sorted by several, its place in the sort. App's
- * column is as narrow as its icons, so only its dragged ghost names it.
- */
-function ColumnLabel({
-  column: c,
-  sort,
-  ghost = false,
-}: {
-  column: Column;
-  sort: FlowSortKey[];
-  ghost?: boolean;
-}) {
+/** A column's name, after its sort direction and, sorted by several, its place in the sort */
+function ColumnLabel({ column: c, sort }: { column: Column; sort: FlowSortKey[] }) {
   const at = sort.findIndex((k) => k.column === c.id);
   const key = sort[at];
   return (
@@ -377,7 +356,7 @@ function ColumnLabel({
       {key != null && sort.length > 1 && (
         <span className="shrink-0 -ml-0.5 text-2xs tabular-nums">{at + 1}</span>
       )}
-      <span className="truncate">{c.id === "app" && !ghost ? "" : c.label}</span>
+      <span className="truncate">{c.id === "app" ? "" : c.label}</span>
     </>
   );
 }
@@ -391,11 +370,13 @@ function useColumnDrag({
   columns,
   scrollElement,
   onDropLine,
+  onColumnDrag,
   onDrop,
 }: {
   columns: Column[];
   scrollElement: () => HTMLElement | null;
   onDropLine: (x: number | null) => void;
+  onColumnDrag: (event: ColumnDragEvent) => void;
   /** Moves the column to the boundary `to` between those shown */
   onDrop: (id: ColumnId, to: number) => void;
 }) {
@@ -413,11 +394,13 @@ function useColumnDrag({
     /** The boundary it would move to, null where it would stay, and the line drawn on it */
     to: number | null;
     line: number | null;
+    /** The pointer the ghost was last moved to */
+    ghostX: number;
     frame: number;
   } | null>(null);
-  const latest = useRef({ columns, scrollElement, onDropLine, onDrop });
+  const latest = useRef({ columns, scrollElement, onDropLine, onColumnDrag, onDrop });
   useLayoutEffect(() => {
-    latest.current = { columns, scrollElement, onDropLine, onDrop };
+    latest.current = { columns, scrollElement, onDropLine, onColumnDrag, onDrop };
   });
 
   const stop = useCallback(() => {
@@ -426,13 +409,17 @@ function useColumnDrag({
     if (s != null) cancelAnimationFrame(s.frame);
     setDragging(null);
     latest.current.onDropLine(null);
+    if (s != null) latest.current.onColumnDrag({ type: "end" });
     return s;
   }, []);
 
   const onDragStart = useCallback((e: DragStartEvent) => {
     const column = latest.current.columns.find((c) => c.id === e.active.id);
     if (column == null) return;
-    state.current = { id: column.id, x: pointer.current, to: null, line: null, frame: 0 };
+    const x = pointer.current;
+    state.current = { id: column.id, x, to: null, line: null, ghostX: x, frame: 0 };
+    // Before the column dims, so the ghost is of it as it shows
+    latest.current.onColumnDrag({ type: "start", id: column.id, x });
     setDragging(column);
     // The line shows from the drag's first movement, not a frame later
     target(state.current);
@@ -452,6 +439,10 @@ function useColumnDrag({
         }
       }
       target(s);
+      if (s.x !== s.ghostX) {
+        s.ghostX = s.x;
+        latest.current.onColumnDrag({ type: "move", x: s.x });
+      }
       s.frame = requestAnimationFrame(tick);
     };
     state.current.frame = requestAnimationFrame(tick);

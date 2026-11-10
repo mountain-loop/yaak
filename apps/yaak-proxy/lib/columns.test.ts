@@ -269,17 +269,30 @@ describe("column order", () => {
     ]);
   });
 
-  test("a column turned on goes at the end, unless it had a place", () => {
+  test("never reordered, a built-in column turned on takes its default place", () => {
     // Request Size's default place is before Size
-    let prefs = toggleColumn(defaultColumnPrefs, "requestSize");
+    const prefs = toggleColumn(defaultColumnPrefs, "requestSize");
+    expect(prefs.order).toEqual([]);
+    expect(ids(prefs).slice(-4)).toEqual(["type", "requestSize", "size", "time"]);
+    // Among the built-in ones, so a custom column stays at the end
+    const custom = addCustomColumn(defaultColumnPrefs, "header.x-cache");
+    expect(ids(custom).at(-1)).toBe("field:header.x-cache");
+    const both = toggleColumn(custom, "requestSize");
+    expect(both.order).toEqual([]);
+    expect(ids(both).slice(-4)).toEqual(["requestSize", "size", "time", "field:header.x-cache"]);
+  });
+
+  test("once reordered, a column turned on goes at the end, unless it had a place", () => {
+    let prefs = moveColumn(defaultColumnPrefs, "time", 0);
+    prefs = toggleColumn(prefs, "requestSize");
     expect(ids(prefs).at(-1)).toBe("requestSize");
-    expect(ids(prefs).slice(0, -1)).toEqual(defaults);
     // Moved, hidden and shown again, it goes back where it was moved to
-    prefs = moveColumn(prefs, "requestSize", defaults.indexOf("size"));
+    const before = ids(prefs).indexOf("size");
+    prefs = moveColumn(prefs, "requestSize", before);
     prefs = toggleColumn(toggleColumn(prefs, "requestSize"), "requestSize");
-    expect(ids(prefs).slice(-3)).toEqual(["requestSize", "size", "time"]);
-    // Already last of those shown, nothing needs placing
-    expect(toggleColumn(defaultColumnPrefs, "remote").order).toEqual([]);
+    expect(ids(prefs).slice(-3)).toEqual(["type", "requestSize", "size"]);
+    // A custom column added goes at the end too
+    expect(ids(addCustomColumn(prefs, "query.page")).at(-1)).toBe("field:query.page");
   });
 
   test("a custom column is added at the end and leaves the order when removed", () => {
