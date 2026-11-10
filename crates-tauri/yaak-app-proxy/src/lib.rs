@@ -22,6 +22,12 @@ fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) {
     #[cfg(not(target_os = "linux"))]
     win.app_handle().set_menu(menu).expect("Failed to set app menu");
 
+    handle_menu_events(win);
+}
+
+/// Carries out the app menu's items while `win` is focused. A window opened after the main one
+/// takes the menu as it is, so the state its items are in, such as Go's, is kept.
+fn handle_menu_events<R: Runtime>(win: &WebviewWindow<R>) {
     let webview_window = win.clone();
     win.on_menu_event(move |w, event| {
         if !w.is_focused().unwrap() {
@@ -80,6 +86,89 @@ fn bundled_protoc<R: Runtime>(app: &tauri::AppHandle<R>) -> Option<yaak_proxy_li
     protoc_bin_path
         .is_file()
         .then_some(yaak_proxy_lib::GrpcConfig { protoc_include_dir, protoc_bin_path })
+}
+
+/// The main window's label.
+const MAIN_WINDOW_LABEL: &str = "main_0";
+/// The Settings window's label, by which its page renders the settings alone.
+const SETTINGS_WINDOW_LABEL: &str = "settings";
+/// The event that moves an open Settings window to another tab.
+const SETTINGS_TAB_EVENT: &str = "settings_tab";
+/// The Settings window's size, as Yaak's.
+const SETTINGS_WINDOW_SIZE: (f64, f64) = (750.0, 600.0);
+/// The smallest the Settings window goes, still showing the tabs beside their content.
+const SETTINGS_WINDOW_MIN_SIZE: (f64, f64) = (600.0, 450.0);
+
+/// Sets the tab a new Settings window opens on, before its page loads, so it needs no URL.
+fn settings_tab_script(tab: &str) -> String {
+    let tab = serde_json::to_string(tab).unwrap_or_else(|_| "null".to_string());
+    format!("window.__YAAK_SETTINGS_TAB__ = {tab};")
+}
+
+/// Opens Settings in its own window on `tab`, or, when it is open, brings it forward and moves
+/// it to `tab` if one is given.
+#[tauri::command]
+async fn cmd_open_settings(
+    app_handle: tauri::AppHandle,
+    tab: Option<String>,
+) -> Result<(), String> {
+    if let Some(win) = app_handle.get_webview_window(SETTINGS_WINDOW_LABEL) {
+        if win.is_minimized().unwrap_or(false) {
+            win.unminimize().map_err(|e| e.to_string())?;
+        }
+        win.set_focus().map_err(|e| e.to_string())?;
+        if let Some(tab) = tab {
+            win.emit_to(SETTINGS_WINDOW_LABEL, SETTINGS_TAB_EVENT, tab)
+                .map_err(|e| e.to_string())?;
+        }
+        return Ok(());
+    }
+
+    // Over the middle of the main window the first time, as Yaak's; after that, where it was left
+    let position = app_handle
+        .get_webview_window(MAIN_WINDOW_LABEL)
+        .and_then(|main| centered_over(&main, SETTINGS_WINDOW_SIZE).ok());
+    let config = CreateWindowConfig {
+        url: "/",
+        label: SETTINGS_WINDOW_LABEL,
+        title: "Yaak Proxy Settings",
+        inner_size: Some(SETTINGS_WINDOW_SIZE),
+        position,
+        initialization_script: tab.as_deref().map(settings_tab_script),
+        hidden: true,
+        hide_titlebar: true,
+        ..Default::default()
+    };
+    let win = yaak_window::window::create_window(&app_handle, config).map_err(|e| e.to_string())?;
+    let (width, height) = SETTINGS_WINDOW_MIN_SIZE;
+    win.set_min_size(Some(tauri::LogicalSize::new(width, height))).map_err(|e| e.to_string())?;
+    handle_menu_events(&win);
+    Ok(())
+}
+
+/// Where a window of `size` sits centred over `parent`, in logical pixels.
+fn centered_over<R: Runtime>(
+    parent: &WebviewWindow<R>,
+    (width, height): (f64, f64),
+) -> tauri::Result<(f64, f64)> {
+    let scale = parent.scale_factor()?;
+    let pos = parent.inner_position()?.to_logical::<f64>(scale);
+    let size = parent.inner_size()?.to_logical::<f64>(scale);
+    Ok((pos.x + (size.width - width) / 2.0, pos.y + (size.height - height) / 2.0))
+}
+
+/// Closing the main window closes Settings with it, which would otherwise keep the app open
+/// with nothing to set.
+fn close_settings_with<R: Runtime>(main: &WebviewWindow<R>) {
+    let app_handle = main.app_handle().clone();
+    main.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { .. } = event
+            && let Some(settings) = app_handle.get_webview_window(SETTINGS_WINDOW_LABEL)
+            && let Err(e) = settings.close()
+        {
+            warn!("Failed to close the settings window: {e}");
+        }
+    });
 }
 
 #[tauri::command]
@@ -151,7 +240,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![rpc, set_go_menu])
+        .invoke_handler(tauri::generate_handler![rpc, set_go_menu, cmd_open_settings])
         .build(tauri::generate_context!())
         .expect("error while building yaak proxy tauri application")
         .run(|app_handle, event| {
@@ -165,7 +254,7 @@ pub fn run() {
             if let RunEvent::Ready = event {
                 let config = CreateWindowConfig {
                     url: "/",
-                    label: "main_0",
+                    label: MAIN_WINDOW_LABEL,
                     title: "Yaak Proxy",
                     inner_size: Some((1000.0, 700.0)),
                     hidden: true,
@@ -173,7 +262,10 @@ pub fn run() {
                     ..Default::default()
                 };
                 match yaak_window::window::create_window(app_handle, config) {
-                    Ok(win) => setup_window_menu(&win),
+                    Ok(win) => {
+                        setup_window_menu(&win);
+                        close_settings_with(&win);
+                    }
                     Err(e) => error!("Failed to create proxy window: {e:?}"),
                 }
             }
@@ -214,5 +306,40 @@ mod tests {
         for needed in ["opener:allow-open-url", "opener:allow-reveal-item-in-dir"] {
             assert!(permissions.contains(&needed), "{needed} missing from {permissions:?}");
         }
+    }
+
+    /// The Settings window gets the main window's permissions: without them its links, folders,
+    /// Escape closing it and the events that keep both windows in step would all be refused.
+    #[test]
+    fn the_settings_window_has_the_main_windows_permissions() {
+        let capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        let windows: Vec<&str> =
+            capability["windows"].as_array().unwrap().iter().filter_map(|w| w.as_str()).collect();
+        for label in [MAIN_WINDOW_LABEL, SETTINGS_WINDOW_LABEL] {
+            assert!(
+                windows.contains(&"*") || windows.contains(&label),
+                "{label} missing from {windows:?}"
+            );
+        }
+        let permissions: Vec<&str> = capability["permissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p.as_str())
+            .collect();
+        for needed in ["core:default", "core:window:allow-close"] {
+            assert!(permissions.contains(&needed), "{needed} missing from {permissions:?}");
+        }
+    }
+
+    /// The tab reaches the new window's page as a string literal, whatever it holds.
+    #[test]
+    fn the_settings_tab_script_quotes_the_tab() {
+        assert_eq!(settings_tab_script("proxy"), r#"window.__YAAK_SETTINGS_TAB__ = "proxy";"#);
+        assert_eq!(
+            settings_tab_script(r#"a";alert(1);""#),
+            r#"window.__YAAK_SETTINGS_TAB__ = "a\";alert(1);\"";"#
+        );
     }
 }

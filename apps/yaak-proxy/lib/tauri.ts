@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen as tauriListen } from "@tauri-apps/api/event";
+import { emit as tauriEmit, listen as tauriListen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { type as tauriOsType } from "@tauri-apps/plugin-os";
 import { unsubscribeWhenReady } from "./unsubscribe";
@@ -37,6 +37,21 @@ export function onWindowFocus(callback: () => void): () => void {
 /** Show the current webview window. */
 export function showWindow(): Promise<void> {
   return getCurrentWebviewWindow().show();
+}
+
+/** Close the current webview window. */
+export function closeWindow(): Promise<void> {
+  return getCurrentWebviewWindow().close();
+}
+
+/** The current window's label. */
+export function currentWindowLabel(): string {
+  return getCurrentWebviewWindow().label;
+}
+
+/** Send an event to every window of the app, this one included. */
+export function broadcast(event: string, payload: unknown): Promise<void> {
+  return tauriEmit(event, payload);
 }
 
 /** Get the current OS type (e.g. "macos", "linux", "windows"). */

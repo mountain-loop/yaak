@@ -29,7 +29,7 @@ import { HelperDialog } from "./HelperDialog";
 import { SaveDialog } from "./SaveDialog";
 import { SavedSearchDialog } from "./SavedSearchDialog";
 import { SearchBar } from "./SearchBar";
-import { SettingsWindow, useOpenSettings } from "./Settings";
+import { SettingsDialogFallback, useOpenSettings } from "./Settings";
 import { Sidebar } from "./Sidebar";
 import { TakeOverBanner } from "./TakeOverBanner";
 
@@ -175,7 +175,7 @@ export function ProxyLayout() {
       <SavedSearchDialog />
       <AddColumnDialog />
       <HelperDialog />
-      <SettingsWindow />
+      <SettingsDialogFallback />
       <Toasts />
     </div>
   );
