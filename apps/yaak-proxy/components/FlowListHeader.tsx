@@ -262,7 +262,7 @@ export const FlowListHeader = memo(function FlowListHeader({
               sort={sort}
               onSort={onSort}
               onResizeStart={() => {
-                startWidth.current = c.current;
+                startWidth.current = shownWidth(gridRef.current, c);
               }}
               onResizeMove={(dx) => setPrefs((p) => resizeColumn(p, c.id, startWidth.current + dx))}
               onResetWidth={() => setPrefs((p) => resetWidth(p, c.id))}
@@ -278,6 +278,20 @@ export const FlowListHeader = memo(function FlowListHeader({
     </div>
   );
 });
+
+/**
+ * A column's content width as laid out, so a resize starts from what shows: a numeric column's
+ * can be wider than its width in pixels, at its default or its least width, at a larger
+ * interface size
+ */
+function shownWidth(grid: HTMLElement | null, c: Column): number {
+  if (c.fitChars == null) return c.current;
+  const cell = grid?.querySelector<HTMLElement>(`[data-column="${c.id}"]`);
+  if (cell == null) return c.current;
+  const style = getComputedStyle(cell);
+  const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+  return cell.getBoundingClientRect().width - padding;
+}
 
 interface HeaderCellProps {
   column: Column;

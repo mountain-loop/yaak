@@ -11,8 +11,9 @@ import { type FlowFixture, fixtures } from "./fixtures";
 /**
  * Dev only: captured flows in the detail card, over fixtures. Open
  * `/harness.html?flow=0&theme=dark`; `&list` puts the flow list beside the card (its halves
- * stacked), `&below` puts it above (side by side), and `&tab=info` opens the response half on a
- * tab, as though it were chosen by hand for flows of that shape.
+ * stacked), `&below` puts it above (side by side), `&tab=info` opens the response half on a
+ * tab, as though it were chosen by hand for flows of that shape, and `&numbers` gives the flows
+ * the widest sizes and times.
  */
 export function FlowPanesHarness() {
   const params = new URLSearchParams(location.search);
@@ -40,13 +41,28 @@ export function FlowPanesHarness() {
   );
 }
 
+const NUMBERS = [
+  { responseSize: 999_949, requestSize: 1000, elapsedMs: 3_599_000, elapsedHeadersMs: 999 },
+  { responseSize: 124_700, requestSize: 999_949, elapsedMs: 999, elapsedHeadersMs: 3_599_000 },
+  { responseSize: 20_200, requestSize: 812, elapsedMs: 9_949, elapsedHeadersMs: 59_499 },
+  { responseSize: 999_949_000, requestSize: 41_800, elapsedMs: 59_999_000, elapsedHeadersMs: 600 },
+  { responseSize: 1000, requestSize: 7_600_000, elapsedMs: 234, elapsedHeadersMs: 5_900 },
+  { responseSize: 9_000, requestSize: 999_949_000_000, elapsedMs: 400_000, elapsedHeadersMs: 12 },
+];
+
 function FixtureCard({ fixture }: { fixture: FlowFixture }) {
   const params = new URLSearchParams(location.search);
   const store = useStore();
   const setWindow = useSetAtom(flowWindowAtom);
   const [ready, setReady] = useState(false);
   useLayoutEffect(() => {
-    const flows = fixtures.map((f, i) => ({ ...f.flow, number: 1401 + i }));
+    // `&numbers`: sizes and times of every unit, the widest of each among them
+    const numbers = params.has("numbers");
+    const flows = fixtures.map((f, i) => ({
+      ...f.flow,
+      number: 1401 + i,
+      ...(numbers && f.flow.elapsedMs != null && NUMBERS[i % NUMBERS.length]),
+    }));
     const tab = params.get("tab");
     if (tab != null) {
       browserTabMemory()?.setItem(learnedTabKey("response", flowShape(fixture.flow)), tab);

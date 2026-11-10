@@ -1,11 +1,17 @@
+import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow, FlowSortKey } from "@yaakapp-internal/proxy-lib";
+// The formatter alone: the package index reaches for the window as it loads
+import { formatMillis } from "../../../packages/ui/src/components/tags/HttpResponseDurationTag";
 import { describe, expect, test } from "vite-plus/test";
 import customSortFixture from "../../../crates-proxy/yaak-proxy-lib/tests/fixtures/custom_column_sort.json";
 import {
   addCustomColumn,
   addSortKey,
   allColumns,
+  BASE_FONT_SIZE,
+  CHAR_REM,
   cellFilterTerm,
+  columnDef,
   columnShifts,
   type ColumnPrefs,
   customPath,
@@ -35,6 +41,7 @@ import {
   toggleSortKey,
   urlParts,
 } from "./columns";
+import { DEFAULT_SETTINGS_VALUES } from "./settings";
 
 function flow(number: number, extra: Partial<Flow> = {}): Flow {
   return {
@@ -109,10 +116,67 @@ describe("shownColumns", () => {
     prefs = resizeColumn(prefs, "path", 500);
     const columns = shownColumns(prefs);
     const pad = (w: number) => `calc(${w}px + 0.75rem)`;
+    // Size and Time at their defaults, which grow with the interface size, and never narrower
+    // than their widest values
+    const size = "calc(max(4.8rem, 4rem) + 0.75rem)";
+    const time = `calc(max(${64 / 15}rem, 4rem) + 0.75rem)`;
     expect(gridTemplate(columns)).toBe(
-      ["24px", ...[46, 20, 50, 240, 500, 120, 46, 50, 72, 64].map(pad)].join(" "),
+      ["24px", ...[46, 20, 50, 240, 500, 120, 46, 50].map(pad), size, time].join(" "),
     );
-    expect(gridWidth(columns)).toBe("calc(1232px + 10 * 0.75rem)");
+    expect(gridWidth(columns)).toBe(
+      `calc(1096px + max(4.8rem, 4rem) + max(${64 / 15}rem, 4rem) + 10 * 0.75rem)`,
+    );
+    // Resized, a numeric column keeps the pixels it was given
+    const resized = shownColumns(resizeColumn(prefs, "size", 90));
+    expect(gridTemplate(resized)).toContain("calc(max(90px, 4rem) + 0.75rem)");
+  });
+});
+
+describe("numeric column widths", () => {
+  // Every format the cells show: each unit's widest, and around each rounding edge
+  const sizes = [0, 9, 999, 1000, 1001, 1049, 99_949, 99_951, 999_949, 999_999, 1_000_001];
+  const giga = 999_949_000_000;
+  const durations = [0, 999, 1000, 9_949, 9_999, 59_499, 59_999, 60_000, 3_599_499, 59_999_999];
+  const numeric = ["size", "requestSize", "time", "latency"] as const;
+
+  test("the formats' widest values are as many characters as each numeric column holds", () => {
+    const widest = (values: string[]) => Math.max(...values.map((v) => v.length));
+    const sizeChars = widest([...sizes, giga].map(formatSize));
+    const timeChars = widest(durations.map(formatMillis));
+    expect(sizeChars).toBe(8);
+    expect(timeChars).toBe(8);
+    for (const id of numeric) {
+      const def = columnDef(id);
+      const chars = id === "size" || id === "requestSize" ? sizeChars : timeChars;
+      expect(def.fitChars).toBeGreaterThanOrEqual(chars);
+      // In pixels at the default interface size, as the row's font sets them
+      const fit = (def.fitChars ?? 0) * CHAR_REM * BASE_FONT_SIZE;
+      expect(def.minWidth).toBeGreaterThanOrEqual(fit);
+      expect(def.width).toBeGreaterThanOrEqual(fit);
+    }
+  });
+
+  test("the room for a character fits JetBrains Mono at text-xs", () => {
+    // A monospace advance of 0.6em, at 0.8rem
+    expect(CHAR_REM).toBeGreaterThanOrEqual(0.6 * 0.8);
+    expect(BASE_FONT_SIZE).toBe(DEFAULT_SETTINGS_VALUES.interfaceFontSize);
+  });
+
+  test("defaults fit each label sorted, with the sort's arrow and place", () => {
+    // Measured in the harness at the default interface size, sorted by four columns
+    const header = { size: 46, requestSize: 96, time: 50, latency: 67 };
+    for (const id of numeric) expect(columnDef(id).width).toBeGreaterThanOrEqual(header[id]);
+  });
+
+  test("a stored width narrower than the least is raised, and a wider one kept", () => {
+    const parsed = parseColumnPrefs({ widths: { size: 44, time: 50, requestSize: 120, host: 20 } });
+    expect(parsed.widths).toEqual({ size: 60, time: 60, requestSize: 120, host: 60 });
+    expect(shownColumns(parsed).find((c) => c.id === "size")?.current).toBe(60);
+    expect(resizeColumn(defaultColumnPrefs, "latency", 10).widths).toEqual({ latency: 60 });
+    // Reset, the defaults are back
+    const reset = shownColumns(resetWidths(parsed)).find((c) => c.id === "size");
+    expect(reset).toMatchObject({ current: 72, resized: false });
+    expect(resetWidth(parsed, "time").widths).toEqual({ size: 60, requestSize: 120, host: 60 });
   });
 });
 
