@@ -298,6 +298,25 @@ export function resetOrder(prefs: ColumnPrefs): ColumnPrefs {
   return { ...prefs, order: [] };
 }
 
+/**
+ * Where a dragged column would drop, from the pointer and the shown columns' edges, left to
+ * right: the boundary before the first column whose middle is right of the pointer, and the
+ * line's place on it. Over its own column or the near half of a neighbour, that is an edge of
+ * its own slot, where it would stay, so `to` is null; the line still shows there. Left of the
+ * first column, over the fixed mark column, it is the first boundary.
+ */
+export function dropBoundary(
+  x: number,
+  cells: { left: number; right: number }[],
+  from: number,
+): { to: number | null; line: number | null } {
+  let at = cells.findIndex((r) => x < (r.left + r.right) / 2);
+  if (at === -1) at = cells.length;
+  const line = cells[at]?.left ?? cells.at(-1)?.right ?? null;
+  const stays = from === -1 || at === from || at === from + 1;
+  return { to: stays ? null : at, line };
+}
+
 /** Shows `id` alone */
 export function hideOtherColumns(prefs: ColumnPrefs, id: ColumnId): ColumnPrefs {
   const visible: ColumnPrefs["visible"] = {};

@@ -11,6 +11,7 @@ import {
   customPathProblem,
   customValue,
   defaultColumnPrefs,
+  dropBoundary,
   fieldReference,
   fieldReferenceChanges,
   gridTemplate,
@@ -320,6 +321,27 @@ describe("column order", () => {
       "size",
     ]);
     expect(parseColumnPrefs({ order: "time" }).order).toEqual([]);
+  });
+
+  test("the drop line shows at every boundary, its own slot's edges included", () => {
+    // Four columns 100px wide from x 24, after the mark column; the third is dragged
+    const cells = [24, 124, 224, 324].map((left) => ({ left, right: left + 100 }));
+    const at = (x: number) => dropBoundary(x, cells, 2);
+    // Over the mark column or the first's left half: the first boundary
+    expect(at(5)).toEqual({ to: 0, line: 24 });
+    expect(at(60)).toEqual({ to: 0, line: 24 });
+    expect(at(80)).toEqual({ to: 1, line: 124 });
+    // The left neighbour's near half and its own left half: its left edge, staying
+    expect(at(190)).toEqual({ to: null, line: 224 });
+    expect(at(250)).toEqual({ to: null, line: 224 });
+    // Its own right half and the right neighbour's near half: its right edge, staying
+    expect(at(290)).toEqual({ to: null, line: 324 });
+    expect(at(350)).toEqual({ to: null, line: 324 });
+    // Past the right neighbour's middle, and past the end
+    expect(at(380)).toEqual({ to: 4, line: 424 });
+    expect(at(900)).toEqual({ to: 4, line: 424 });
+    // The last column dragged to the end stays
+    expect(dropBoundary(900, cells, 3)).toEqual({ to: null, line: 424 });
   });
 
   test("Reset Column Order puts every column back", () => {

@@ -38,6 +38,7 @@ import {
   type ColumnPrefs,
   type CustomColumnId,
   canHide,
+  dropBoundary,
   hideOtherColumns,
   isCustomColumn,
   moveColumn,
@@ -409,7 +410,7 @@ function useColumnDrag({
     id: ColumnId;
     /** The pointer, across the window */
     x: number;
-    /** The boundary it would drop at, and that boundary's line, or null where it would not move */
+    /** The boundary it would move to, null where it would stay, and the line drawn on it */
     to: number | null;
     line: number | null;
     frame: number;
@@ -433,6 +434,8 @@ function useColumnDrag({
     if (column == null) return;
     state.current = { id: column.id, x: pointer.current, to: null, line: null, frame: 0 };
     setDragging(column);
+    // The line shows from the drag's first movement, not a frame later
+    target(state.current);
 
     const tick = () => {
       const s = state.current;
@@ -511,18 +514,14 @@ function useColumnDrag({
 
   /** Sets where the drag would drop, from the pointer and the labels where they are now */
   function target(s: NonNullable<typeof state.current>) {
-    // The boundary before the first label whose middle is right of the pointer
     const cells = Array.from(
       gridRef.current?.querySelectorAll<HTMLElement>(":scope > [data-column]") ?? [],
     ).map((el) => el.getBoundingClientRect());
-    let to = cells.findIndex((r) => s.x < r.left + r.width / 2);
-    if (to === -1) to = cells.length;
-    // Where it already is, it would not move, so no line. Its place is read each time, as the
-    // columns can change under a drag: Operation shows itself when a flow has one.
+    // Its place is read each time, as the columns can change under a drag: Operation shows
+    // itself when a flow has one.
     const from = latest.current.columns.findIndex((c) => c.id === s.id);
-    const moves = from !== -1 && to !== from && to !== from + 1;
-    s.to = moves ? to : null;
-    const line = moves ? (cells[to]?.left ?? cells.at(-1)?.right ?? null) : null;
+    const { to, line } = dropBoundary(s.x, cells, from);
+    s.to = to;
     // Told again only when it changes: another boundary, or the same one scrolled
     if (line !== s.line) latest.current.onDropLine(line);
     s.line = line;
