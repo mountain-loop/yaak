@@ -14,6 +14,7 @@ import { useLocalStorage } from "react-use";
 import { flowLayoutAtom } from "../lib/atoms";
 import { setupIncomplete } from "../lib/firstRun";
 import { useMenuExportHar } from "../lib/flowActions";
+import { useNavigationControls } from "../lib/navigation";
 import { proxyStatusOf, statusTintColor } from "../lib/proxyStatus";
 import { lockedAtom, noFlowsAtom, proxyStateAtom, systemProxyEverOnAtom } from "../lib/store";
 import { getOsType } from "../lib/tauri";
@@ -37,6 +38,7 @@ export function ProxyLayout() {
   const [flowLayout, setFlowLayout] = useAtom(flowLayoutAtom);
   const openSettings = useOpenSettings();
   useMenuExportHar();
+  useNavigationControls();
   const [sidebarWidth, setSidebarWidth] = useLocalStorage("sidebar_width", 250);
   const [sidebarHidden, setSidebarHidden] = useLocalStorage("sidebar_hidden", false);
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useLocalStorage(

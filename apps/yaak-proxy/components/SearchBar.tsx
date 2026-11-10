@@ -1,9 +1,16 @@
-import { autocompletion, startCompletion } from "@codemirror/autocomplete";
+import {
+  autocompletion,
+  closeCompletion,
+  type Completion,
+  completionStatus,
+  startCompletion,
+} from "@codemirror/autocomplete";
 import type { Extension } from "@codemirror/state";
-import { Compartment } from "@codemirror/state";
-import { EditorView, tooltips, ViewPlugin, type ViewUpdate } from "@codemirror/view";
+import { Compartment, Prec } from "@codemirror/state";
+import { EditorView, keymap, tooltips, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import {
   Dropdown,
+  type DropdownItem,
   Icon,
   IconButton,
   Input,
@@ -22,36 +29,37 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRpcQueryWithEvent } from "../hooks/useRpcQueryWithEvent";
 import { useRpcQuery } from "../hooks/useRpcQuery";
+import { appliedFilterAtom } from "../lib/atoms";
+import { isUnapplied, pressEnter, pressEscape, type Recall, stepHistory } from "../lib/filterBox";
 import { useExportShownHar } from "../lib/flowActions";
+import { applyFilter, searchDraftAtom, searchDraftVersionAtom } from "../lib/navigation";
+import { rpc } from "../lib/rpc";
 import { loadSeenValues, savedCompletions, searchProblems } from "../lib/searchBox";
-import {
-  allTrafficTotalAtom,
-  lockedAtom,
-  savedQueriesAtom,
-  searchTermsAtom,
-  searchTextAtom,
-  searchTextVersionAtom,
-  setSearchTextAtom,
-} from "../lib/store";
+import { allTrafficTotalAtom, lockedAtom, savedQueriesAtom, type Store } from "../lib/store";
+import { useShowToast } from "../lib/toast";
 import { savedSearchDialogAtom } from "./SavedSearchDialog";
 
-/** How long typing settles before the search runs */
-const SEARCH_DEBOUNCE_MS = 200;
+/** Recent filters listed above the fields when the empty box is focused */
+const RECENT_IN_COMPLETIONS = 5;
+
+const NO_HISTORY: string[] = [];
 
 /**
  * The header's search over every flow in the database, in the query language: bare words match
  * the URL, method, status and content type, and `@field:value` terms the rest, highlighted and
- * completed as Yaak's sidebar filter is, with the values the proxy has seen. The backend runs
- * it and marks what it cannot. Its placeholder counts the flows. ⌘F focuses it and Escape
- * clears it. Focused, it wraps a long query over as many lines as it needs, as Yaak's URL bar
+ * completed as Yaak's sidebar filter is, with the values the proxy has seen. The box composes a
+ * filter and Enter applies it, as Yaak's URL bar sends; until then a return key at its right
+ * says so, and Escape puts the applied filter back. The magnifier lists the filters applied
+ * before, which Up in the empty box steps through too. Its placeholder counts the flows. ⌘F
+ * focuses it. Focused, it wraps a long query over as many lines as it needs, as Yaak's URL bar
  * does, over what is below; blurred, it is one line again.
  */
 export const SearchBar = memo(function SearchBar() {
-  const [text, setText] = useAtom(searchTextAtom);
-  const setTerms = useSetAtom(searchTermsAtom);
-  const setSearchText = useSetAtom(setSearchTextAtom);
-  const version = useAtomValue(searchTextVersionAtom);
+  const [draft, setDraft] = useAtom(searchDraftAtom);
+  const version = useAtomValue(searchDraftVersionAtom);
+  const applied = useAtomValue(appliedFilterAtom);
   const total = useAtomValue(allTrafficTotalAtom);
   const store = useStore();
   const setSavedDialog = useSetAtom(savedSearchDialogAtom);
@@ -59,11 +67,24 @@ export const SearchBar = memo(function SearchBar() {
   // Nothing to search while captured traffic is locked.
   const locked = useAtomValue(lockedAtom) != null;
   const schema = useRpcQuery("query_schema", {}, { staleTime: Infinity }).data?.schema;
+  const historyQuery = useRpcQueryWithEvent("list_filter_history", {}, "filter_history_changed", {
+    enabled: !locked,
+  });
+  const history = useMemo(
+    () => historyQuery.data?.map((e) => e.filter) ?? NO_HISTORY,
+    [historyQuery.data],
+  );
   const handleRef = useRef<InputHandle | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
   // Where the box is while focused, so it grows over the list from the header's place for it
   const [place, setPlace] = useState<CSSProperties | null>(null);
+
+  // Read by the editor's keys, which are made once
+  const latest = useRef({ applied, history });
+  useLayoutEffect(() => {
+    latest.current = { applied, history };
+  });
 
   useLayoutEffect(() => {
     if (!focused) {
@@ -78,11 +99,6 @@ export const SearchBar = memo(function SearchBar() {
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, [focused]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setTerms(text), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [text, setTerms]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -107,20 +123,30 @@ export const SearchBar = memo(function SearchBar() {
             loadValues: loadSeenValues,
             // Read as completion opens, so saved searches are current without remaking it.
             moreCompletions: (typed) => savedCompletions(store.get(savedQueriesAtom), typed),
+            leadCompletions: () => recentCompletions(latest.current.history),
             problems: searchProblems,
           }),
     [schema, store],
   );
-  const extensions = useMemo(() => [compartment.current.of(filter), completionAcrossBox], [filter]);
+  const keys = useMemo(() => boxKeys(store, latest), [store]);
+  const extensions = useMemo(
+    () => [compartment.current.of(filter), completionAcrossBox, keys],
+    [filter, keys],
+  );
   useEffect(() => {
     handleRef.current?.dispatch({ effects: compartment.current.reconfigure(filter) });
   }, [filter]);
 
-  // The field is replaced to take a value from outside, so focus moves to the new one.
+  // Applies no filter at once, leaving the box focused and empty.
   const clear = () => {
-    setSearchText("");
+    const handle = handleRef.current;
+    handle?.dispatch({ changes: { from: 0, to: handle.value().length, insert: "" } });
+    applyFilter(store, "");
     requestAnimationFrame(() => handleRef.current?.focus());
   };
+
+  const unapplied = isUnapplied({ draft, applied });
+  const hasText = draft !== "" || applied !== "";
 
   return (
     // Holds the header's place for the box, which floats over the list while focused
@@ -148,66 +174,250 @@ export const SearchBar = memo(function SearchBar() {
           onBlur={() => setFocused(false)}
           placeholder={locked ? "Traffic is locked" : placeholderFor(total)}
           disabled={locked}
-          defaultValue={text}
+          defaultValue={draft}
           forceUpdateKey={String(version)}
-          onChange={setText}
+          onChange={setDraft}
           extensions={extensions}
-          onKeyDown={(e) => {
-            if (e.key === "Escape" && handleRef.current?.value() !== "") {
-              e.stopPropagation();
-              clear();
-            }
-          }}
           leftSlot={
-            <Icon icon="search" size="sm" className="ml-2 mr-1 self-center text-text-subtlest" />
+            // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- keeps focus in the editor
+            <div
+              onMouseDown={(e) => e.preventDefault()}
+              className="flex items-center self-center ml-0.5"
+            >
+              <FilterHistory history={history} store={store} disabled={locked} />
+            </div>
           }
           rightSlot={
-            text === "" ? (
-              <kbd className="self-center ml-2 mr-2 px-1 rounded-sm border border-border-subtle font-sans text-2xs text-text-subtlest">
-                ⌘F
-              </kbd>
-            ) : (
-              // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- keeps focus in the editor
-              <div
-                // Pressing these leaves the editor focused, so a wrapped box does not collapse and
-                // move them before the click lands.
-                onMouseDown={(e) => e.preventDefault()}
-                className="flex items-center self-center ml-1 mr-0.5"
-              >
-                <Dropdown
-                  items={[
-                    {
-                      label: "Save search",
-                      leftSlot: <Icon icon="bookmark" />,
-                      onSelect: () => setSavedDialog({ mode: "save", query: text.trim() }),
-                    },
-                    exportShown(),
-                  ]}
-                >
+            // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- keeps focus in the editor
+            <div
+              // Pressing these leaves the editor focused, so a wrapped box does not collapse and
+              // move them before the click lands.
+              onMouseDown={(e) => e.preventDefault()}
+              className="flex items-center self-center ml-1 mr-0.5"
+            >
+              {unapplied ? (
+                <Key className="mr-1">↵</Key>
+              ) : hasText ? null : (
+                <Key className="ml-1 mr-1.5">⌘F</Key>
+              )}
+              {hasText && (
+                <>
+                  <Dropdown
+                    items={[
+                      {
+                        label: "Save search",
+                        leftSlot: <Icon icon="bookmark" />,
+                        onSelect: () =>
+                          setSavedDialog({
+                            mode: "save",
+                            query: (draft.trim() === "" ? applied : draft).trim(),
+                          }),
+                      },
+                      exportShown(),
+                    ]}
+                  >
+                    <IconButton
+                      size="xs"
+                      icon="ellipsis"
+                      title="Search actions"
+                      tooltip
+                      iconColor="secondary"
+                    />
+                  </Dropdown>
                   <IconButton
                     size="xs"
-                    icon="ellipsis"
-                    title="Search actions"
+                    icon="x"
+                    title="Clear search"
                     tooltip
                     iconColor="secondary"
+                    onClick={clear}
                   />
-                </Dropdown>
-                <IconButton
-                  size="xs"
-                  icon="x"
-                  title="Clear search"
-                  tooltip
-                  iconColor="secondary"
-                  onClick={clear}
-                />
-              </div>
-            )
+                </>
+              )}
+            </div>
           }
         />
       </div>
     </div>
   );
 });
+
+function Key({ children, className }: { children: string; className?: string }) {
+  return (
+    <kbd
+      className={classNames(
+        className,
+        "px-1 rounded-sm border border-border-subtle font-sans text-2xs text-text-subtlest",
+      )}
+    >
+      {children}
+    </kbd>
+  );
+}
+
+/**
+ * The magnifier, which lists the filters applied before, newest first: choosing one applies it
+ * again, and each can be saved as a search or forgotten
+ */
+function FilterHistory({
+  history,
+  store,
+  disabled,
+}: {
+  history: string[];
+  store: Store;
+  disabled: boolean;
+}) {
+  const setSavedDialog = useSetAtom(savedSearchDialogAtom);
+  const showToast = useShowToast();
+  const fail = (err: unknown) =>
+    showToast({ id: "filter-history", message: String(err), color: "danger" });
+
+  const items: DropdownItem[] =
+    history.length === 0
+      ? [{ label: "No recent filters", disabled: true }]
+      : [
+          ...history.map((filter): DropdownItem => ({
+            label: (
+              <span className="block font-mono text-xs truncate max-w-md" title={filter}>
+                {filter}
+              </span>
+            ),
+            onSelect: () => applyFilter(store, filter, { record: true }),
+            actions: [
+              {
+                icon: "bookmark",
+                title: "Save search",
+                closeMenu: true,
+                onSelect: () => setSavedDialog({ mode: "save", query: filter }),
+              },
+              {
+                icon: "x",
+                title: "Remove",
+                onSelect: () => void rpc("delete_filter_history", { filter }).catch(fail),
+              },
+            ],
+          })),
+          { type: "separator" },
+          {
+            label: "Clear History",
+            leftSlot: <Icon icon="trash" />,
+            onSelect: () => void rpc("clear_filter_history", {}).catch(fail),
+          },
+        ];
+
+  return (
+    <Dropdown items={items}>
+      <IconButton
+        size="xs"
+        icon="search"
+        title="Recent filters"
+        tooltip
+        iconColor="secondary"
+        disabled={disabled}
+      />
+    </Dropdown>
+  );
+}
+
+/** The recent filters the empty box's completions start with */
+function recentCompletions(history: string[]): Completion[] {
+  return history.slice(0, RECENT_IN_COMPLETIONS).map((filter) => ({
+    label: filter,
+    detail: "Recent",
+    type: "text",
+    apply: filter,
+  }));
+}
+
+/** The menu of completions is open, so the keys are its own */
+function menuOpen(view: EditorView): boolean {
+  return completionStatus(view.state) === "active";
+}
+
+function replaceText(view: EditorView, text: string) {
+  view.dispatch({
+    changes: { from: 0, to: view.state.doc.length, insert: text },
+    selection: { anchor: text.length },
+  });
+}
+
+/**
+ * Enter, Escape, Up and Down in the box, over the editor's own and under its completions': Enter
+ * applies the draft, Escape puts the applied filter back or clears it, and Up and Down step
+ * through the filter history from an empty box. Each is the completion menu's while it is open,
+ * except Up from an empty box, which the history has.
+ */
+function boxKeys(
+  store: Store,
+  latest: { current: { applied: string; history: string[] } },
+): Extension {
+  let recall: Recall | null = null;
+  const step = (view: EditorView, key: "up" | "down") => {
+    const next = stepHistory(latest.current.history, recall, view.state.doc.toString(), key);
+    if (next == null) return false;
+    recall = next.recall;
+    closeCompletion(view);
+    replaceText(view, next.draft);
+    return true;
+  };
+  const box = (view: EditorView) => ({
+    draft: view.state.doc.toString(),
+    applied: latest.current.applied,
+  });
+  return [
+    Prec.high(
+      keymap.of([
+        {
+          key: "Enter",
+          stopPropagation: true,
+          run: (view) => {
+            if (menuOpen(view)) return false;
+            const next = pressEnter(box(view));
+            recall = null;
+            applyFilter(store, next.apply ?? "", { record: next.record });
+            return true;
+          },
+        },
+        {
+          key: "Escape",
+          stopPropagation: true,
+          run: (view) => {
+            if (menuOpen(view)) return false;
+            const next = pressEscape(box(view));
+            if (next == null) return false;
+            recall = null;
+            replaceText(view, next.draft);
+            if (next.apply != null) applyFilter(store, next.apply);
+            return true;
+          },
+        },
+        {
+          key: "ArrowUp",
+          run: (view) => {
+            const draft = view.state.doc.toString();
+            const stepping = recall != null && recall.text === draft;
+            if (menuOpen(view) && draft !== "" && !stepping) return false;
+            return step(view, "up");
+          },
+        },
+        {
+          key: "ArrowDown",
+          run: (view) => (menuOpen(view) ? false : step(view, "down")),
+        },
+      ]),
+    ),
+    // The empty box lists the recent filters as it is focused.
+    EditorView.domEventHandlers({
+      focus: (_e, view) => {
+        if (view.state.doc.length > 0 || latest.current.history.length === 0) return;
+        requestAnimationFrame(() => {
+          if (view.hasFocus && view.state.doc.length === 0) startCompletion(view);
+        });
+      },
+    }),
+  ];
+}
 
 /** The search box's width, which its completions take */
 const BOX_WIDTH_VAR = "--proxy-search-width";

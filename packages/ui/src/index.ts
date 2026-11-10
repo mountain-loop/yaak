@@ -16,6 +16,7 @@ export { DropMarker } from "./components/DropMarker";
 export type {
   ContextMenuProps,
   DropdownItem,
+  DropdownItemAction,
   DropdownItemContent,
   DropdownItemDefault,
   DropdownItemSeparator,

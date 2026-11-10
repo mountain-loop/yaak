@@ -78,7 +78,17 @@ export type DropdownItemDefault = {
    */
   submenuTrigger?: "row" | "button";
   icon?: IconProps["icon"];
+  /** Buttons over the row's right end, shown while it is hovered, each acting without selecting it */
+  actions?: DropdownItemAction[];
 };
+
+export interface DropdownItemAction {
+  icon: IconProps["icon"];
+  title: string;
+  onSelect: () => void;
+  /** Closes the menu after, as one opening a dialog does; the menu stays open otherwise */
+  closeMenu?: boolean;
+}
 
 export type DropdownItem = DropdownItemDefault | DropdownItemSeparator | DropdownItemContent;
 
@@ -819,6 +829,7 @@ const Menu = forwardRef<Omit<DropdownRef, "open" | "isOpen" | "toggle" | "items"
                 onSelect={handleSelect}
                 onHover={handleItemHover}
                 onOpenSubmenu={(item, el) => setActiveSubmenu({ item, parent: el })}
+                onCloseAll={handleCloseAll}
                 // oxlint-disable-next-line no-array-index-key -- It's fine
                 key={i}
                 item={item}
@@ -891,9 +902,14 @@ interface MenuItemProps {
   onFocus: (item: DropdownItemDefault) => void;
   onHover: (item: DropdownItemDefault, el: HTMLButtonElement) => void;
   onOpenSubmenu: (item: DropdownItemDefault, el: HTMLButtonElement) => void;
+  /** Closes the whole menu, for an action that asks to */
+  onCloseAll?: () => void;
   focused: boolean;
   isParentOfActiveSubmenu?: boolean;
 }
+
+/** Room the row leaves at its right for the buttons over it, by how many there are */
+const ROW_BUTTONS_PADDING = ["", "pr-8", "pr-14", "pr-20"];
 
 function MenuItem({
   className,
@@ -903,6 +919,7 @@ function MenuItem({
   item,
   onSelect,
   onOpenSubmenu,
+  onCloseAll,
   isParentOfActiveSubmenu,
   ...props
 }: MenuItemProps) {
@@ -939,6 +956,9 @@ function MenuItem({
   };
 
   const hasButtonSubmenu = item.submenu != null && item.submenuTrigger === "button";
+  const actions = item.actions ?? [];
+  // Buttons over the row: its actions, then its submenu's trigger
+  const overlaid = actions.length + (hasButtonSubmenu ? 1 : 0);
 
   const rightSlot =
     item.submenu && !hasButtonSubmenu ? (
@@ -952,8 +972,8 @@ function MenuItem({
       ref={initRef}
       size="sm"
       tabIndex={-1}
-      onMouseEnter={hasButtonSubmenu ? undefined : handleMouseEnter}
-      onMouseLeave={hasButtonSubmenu ? undefined : (e) => e.currentTarget.blur()}
+      onMouseEnter={overlaid > 0 ? undefined : handleMouseEnter}
+      onMouseLeave={overlaid > 0 ? undefined : (e) => e.currentTarget.blur()}
       disabled={item.disabled}
       onFocus={handleFocus}
       onClick={handleClick}
@@ -974,7 +994,7 @@ function MenuItem({
         "min-w-32 outline-hidden px-2 mx-1.5 flex whitespace-nowrap",
         "focus:bg-surface-highlight focus:text rounded-sm focus:outline-hidden focus-visible:outline-1",
         isParentOfActiveSubmenu && "bg-surface-highlight text rounded-sm",
-        hasButtonSubmenu && "pr-8",
+        ROW_BUTTONS_PADDING[overlaid],
         item.color === "danger" && "text-danger!",
         item.color === "primary" && "text-primary!",
         item.color === "success" && "text-success!",
@@ -988,13 +1008,13 @@ function MenuItem({
     </Button>
   );
 
-  if (!hasButtonSubmenu) {
+  if (overlaid === 0) {
     return button;
   }
 
-  // The submenu trigger overlays the row as a sibling (not a child) because the row is
-  // itself a button and buttons cannot nest. Hover handling lives on this wrapper so the
-  // row keeps its focus highlight while the mouse is over the trigger.
+  // The actions and submenu trigger overlay the row as siblings (not children) because the row
+  // is itself a button and buttons cannot nest. Hover handling lives on this wrapper so the
+  // row keeps its focus highlight while the mouse is over them.
   return (
     <div
       className="relative grid group/menuitem"
@@ -1013,23 +1033,44 @@ function MenuItem({
           "opacity-0 group-hover/menuitem:opacity-100 group-focus-within/menuitem:opacity-100",
         )}
       >
-        <IconButton
-          color="custom"
-          size="2xs"
-          tabIndex={-1}
-          icon="ellipsis_vertical"
-          iconColor="secondary"
-          title="More actions"
-          className="h-full! w-7!"
-          onMouseDown={(e) => {
-            // Prevent the trigger from stealing focus, which would unhighlight the row
-            e.preventDefault();
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenSubmenu(item, e.currentTarget);
-          }}
-        />
+        {actions.map((action) => (
+          <IconButton
+            key={action.title}
+            color="custom"
+            size="2xs"
+            tabIndex={-1}
+            icon={action.icon}
+            iconColor="secondary"
+            title={action.title}
+            className="h-full! w-6!"
+            // Prevent the button from stealing focus, which would unhighlight the row
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.stopPropagation();
+              action.onSelect();
+              if (action.closeMenu) onCloseAll?.();
+            }}
+          />
+        ))}
+        {hasButtonSubmenu && (
+          <IconButton
+            color="custom"
+            size="2xs"
+            tabIndex={-1}
+            icon="ellipsis_vertical"
+            iconColor="secondary"
+            title="More actions"
+            className="h-full! w-7!"
+            onMouseDown={(e) => {
+              // Prevent the trigger from stealing focus, which would unhighlight the row
+              e.preventDefault();
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenSubmenu(item, e.currentTarget);
+            }}
+          />
+        )}
       </div>
     </div>
   );

@@ -57,6 +57,45 @@ export function nodeText(node: Node, source: string, nested = false): string {
 
 /** The terms of a query, each as written and with a `-` when it is excluded, lowercased */
 export function termKeys(text: string): string[] {
+  const root = parseQuery(text);
+  return root == null ? [] : nodeKeys(root, text);
+}
+
+/**
+ * A query's shape, for telling whether two say the same: its terms lowercased, with its `AND`
+ * and `OR` groups kept apart and their members in a set's order. Null for an empty query.
+ */
+export function queryShape(text: string): string | null {
+  const root = parseQuery(text);
+  return root == null ? null : shapeOf(root, text);
+}
+
+/**
+ * The shape of each group `OR` separates at the top of a query: one for a query with no `OR`
+ * there, none for an empty one
+ */
+export function orGroupShapes(text: string): string[] {
+  const root = parseQuery(text);
+  if (root == null) return [];
+  const groups = root.type === "Or" ? root.children : [root];
+  return groups.map((g) => shapeOf(g, text));
+}
+
+function shapeOf(node: Node, text: string): string {
+  switch (node.type) {
+    case "And":
+    case "Or": {
+      const members = [...new Set(node.children.map((c) => shapeOf(c, text)))].sort();
+      return `${node.type}(${members.join(",")})`;
+    }
+    case "Not":
+      return `-${shapeOf(node.node, text)}`;
+    default:
+      return text.slice(node.span.start, node.span.end).toLowerCase();
+  }
+}
+
+function nodeKeys(node: Node, text: string): string[] {
   const keys: string[] = [];
   const walk = (node: Node, negated: boolean) => {
     switch (node.type) {
@@ -73,8 +112,7 @@ export function termKeys(text: string): string[] {
         );
     }
   };
-  const root = parseQuery(text);
-  if (root != null) walk(root, false);
+  walk(node, false);
   return keys;
 }
 

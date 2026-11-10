@@ -18,9 +18,10 @@ import {
   Tooltip,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useMemo } from "react";
 import { BODY_TYPE_FORM_URLENCODED } from "@yaakapp-internal/ui/httpTypes";
+import { placeTabsAtom } from "../lib/atoms";
 import { findHeader } from "../lib/body";
 import {
   browserTabMemory,
@@ -48,6 +49,7 @@ import {
   flowResponseToView,
 } from "../lib/flowViews";
 import { messagesTabLabel } from "../lib/messages";
+import { goToPlace } from "../lib/navigation";
 import { FlowBodyViewer, useFlowBody } from "./FlowBodyViewer";
 import { FlowInfo } from "./FlowInfo";
 import { FlowRequestBody } from "./FlowRequestBody";
@@ -86,16 +88,24 @@ export function FlowCard({ flow, listBeside }: { flow: Flow; listBeside: boolean
   );
 }
 
-/** The tab a half opens on, and learning from the ones chosen by hand */
+/**
+ * The tab a half opens on, and learning from the ones chosen by hand. The tab chosen is part of
+ * the window's place, so going back to it, or reloading, opens it again.
+ */
 function useShapeTab(pane: FlowPane, flow: Flow, available: string[]) {
+  const store = useStore();
   const memory = browserTabMemory();
+  const activeTab = useAtomValue(placeTabsAtom)[pane];
   // Read again for every flow, so a tab learned on one opens the next of its shape
   const defaultTab = defaultTabFor(pane, flow, available, memory);
   const onTabChange = useCallback(
-    (tab: string) => learnTab(pane, flow, tab, memory),
-    [pane, flow, memory],
+    (tab: string) => {
+      learnTab(pane, flow, tab, memory);
+      goToPlace(store, "update", { tabs: { ...store.get(placeTabsAtom), [pane]: tab } });
+    },
+    [pane, flow, memory, store],
   );
-  return { defaultTab, onTabChange };
+  return { activeTab, defaultTab, onTabChange };
 }
 
 /** A body read through the engine's body RPC, as the shared panes' loaders ask for it */
@@ -147,7 +157,7 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
     ...(request.auth == null ? [] : [REQUEST_TAB_AUTH]),
     REQUEST_TAB_COOKIES,
   ];
-  const { defaultTab, onTabChange } = useShapeTab("request", flow, available);
+  const { activeTab, defaultTab, onTabChange } = useShapeTab("request", flow, available);
 
   const forceUpdateKey = `${flow.updatedAt}.${body.data == null ? "" : "loaded"}`;
 
@@ -163,6 +173,7 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
       bodyLoader={loader}
       extraTabs={extraTabs}
       defaultTab={defaultTab}
+      activeTab={activeTab}
       onTabChange={onTabChange}
       urlLine={<UrlLine flow={flow} />}
       renderBody={() => (
@@ -270,7 +281,7 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
     RESPONSE_TAB_INFO,
     ...(messagesLabel == null ? [] : [RESPONSE_TAB_MESSAGES]),
   ];
-  const { defaultTab, onTabChange } = useShapeTab("response", flow, available);
+  const { activeTab, defaultTab, onTabChange } = useShapeTab("response", flow, available);
   const saved = flow.savedRequestId != null;
 
   return (
@@ -285,6 +296,7 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
       tabsStorageKey="proxy_response_tabs"
       activeTabKey={flow.id}
       defaultTab={defaultTab}
+      activeTab={activeTab}
       onTabChange={onTabChange}
       extraTabs={extraTabs}
       renderBodyViewer={() => <FlowBodyViewer flow={flow} which="response" />}

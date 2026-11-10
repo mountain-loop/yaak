@@ -28,7 +28,13 @@ import { useAtomValue, useStore } from "jotai";
 import { draggingIdsFamily, focusIdsFamily, hoveredParentFamily, selectedIdsFamily } from "./atoms";
 import { type CollapsedAtom, CollapsedAtomContext } from "./context";
 import type { ContextMenuRenderer, TreeNode } from "./common";
-import { closestVisibleNode, equalSubtree, getSelectedItems, hasAncestor } from "./common";
+import {
+  closestVisibleNode,
+  equalSubtree,
+  getSelectedItems,
+  hasAncestor,
+  tabbableSelection,
+} from "./common";
 import { TreeDragOverlay } from "./TreeDragOverlay";
 import type { TreeItemClickEvent, TreeItemHandle, TreeItemProps } from "./TreeItem";
 import type { TreeItemListProps } from "./TreeItemList";
@@ -222,9 +228,12 @@ function TreeInner<T extends { id: string }>(
     }
 
     const closest = closestVisibleNode(store, collapsedAtom, lastSelectedItem.node);
-    if (closest != null) {
+    if (closest != null && lastSelectedId != null) {
       const id = closest.item.id;
-      store.set(selectedIdsFamily(treeId), [id]);
+      const selected = store.get(selectedIdsFamily(treeId));
+      const next = tabbableSelection(selected, lastSelectedId, id);
+      if (next == null) return;
+      store.set(selectedIdsFamily(treeId), next);
       store.set(focusIdsFamily(treeId), { anchorId: id, lastId: id });
     }
   }, [selectableItems, treeId]);

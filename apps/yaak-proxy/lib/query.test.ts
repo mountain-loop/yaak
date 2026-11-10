@@ -5,7 +5,9 @@ import {
   asOneTerm,
   countsBackFromNow,
   fieldTerm,
+  orGroupShapes,
   pathTerm,
+  queryShape,
   termKeys,
   widerQueries,
 } from "./query";
@@ -31,6 +33,22 @@ describe("terms", () => {
       "-b",
     ]);
     expect(termKeys("")).toEqual([]);
+  });
+
+  test("come in the groups `OR` separates at the top, a parenthesised one whole", () => {
+    expect(orGroupShapes("@host:x.com @app:Slack OR (a OR b) OR -@is:system")).toEqual([
+      "And(@app:slack,@host:x.com)",
+      "Or(a,b)",
+      "-@is:system",
+    ]);
+    expect(orGroupShapes("@app:Slack")).toEqual(["@app:slack"]);
+    expect(orGroupShapes(" ")).toEqual([]);
+  });
+
+  test("have a shape that keeps AND and OR apart, whatever the order or case", () => {
+    expect(queryShape("@app:Slack @host:x.com")).toBe(queryShape("@HOST:x.com @app:slack"));
+    expect(queryShape("a OR b")).not.toBe(queryShape("a b"));
+    expect(queryShape("")).toBeNull();
   });
 });
 

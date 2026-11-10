@@ -1,4 +1,9 @@
-import type { Flow, FlowSortKey, GetProxyStateResponse } from "@yaakapp-internal/proxy-lib";
+import type {
+  Flow,
+  FlowSortKey,
+  GetProxyStateResponse,
+  SavedQuery,
+} from "@yaakapp-internal/proxy-lib";
 import { sortFlows } from "../lib/columns";
 import { appIconPng, fixtures } from "./fixtures";
 
@@ -9,9 +14,25 @@ import { appIconPng, fixtures } from "./fixtures";
 export function installFixtureBackend() {
   const internals = (window as unknown as { __TAURI_INTERNALS__: Record<string, unknown> })
     .__TAURI_INTERNALS__;
-  internals.invoke = async (cmd: string, args?: { cmd?: string; payload?: unknown }) => {
+  // For checking the window as traffic arrives: `__harnessEmit("model_write", payload)`
+  (window as unknown as { __harnessEmit: typeof emit }).__harnessEmit = emit;
+  internals.transformCallback = (callback: (event: unknown) => void) => {
+    const id = callbacks.size + 1;
+    callbacks.set(id, callback);
+    return id;
+  };
+  internals.invoke = async (
+    cmd: string,
+    args?: { cmd?: string; payload?: unknown; event?: string; handler?: number },
+  ) => {
     if (cmd === "rpc") return answer(args?.cmd ?? "", args?.payload);
+    if (cmd === "plugin:event|listen" && args?.event != null && args.handler != null) {
+      listeners.set(args.event, [...(listeners.get(args.event) ?? []), args.handler]);
+      return args.handler;
+    }
     if (cmd.startsWith("plugin:event|")) return 0;
+    // The app menu's Go items, which the harness has none of
+    if (cmd === "set_go_menu") return null;
     throw new Error(`Not in the harness: ${cmd}`);
   };
   (
@@ -66,9 +87,128 @@ function harnessState(status: string | null): GetProxyStateResponse {
   }
 }
 
+/** Callbacks the window registered, by id, and the ids listening to each event */
+const callbacks = new Map<number, (event: unknown) => void>();
+const listeners = new Map<string, number[]>();
+
+/** Sends an event to the window, as the engine does */
+function emit(event: string, payload: unknown = {}) {
+  for (const id of listeners.get(event) ?? []) callbacks.get(id)?.({ event, id, payload });
+}
+
+/** Filters applied, newest first, and saved searches, kept across reloads as the database is */
+const HISTORY_KEY = "harness_filter_history";
+const SAVED_KEY = "harness_saved_queries";
+const LAST_FILTER_KEY = "harness_last_filter";
+
+function stored<T>(key: string): T[] {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? "[]") as T[];
+  } catch {
+    return [];
+  }
+}
+
+function store(key: string, value: unknown[]) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+/**
+ * A rough stand-in for the engine's search: `@host:`, `@method:` and `@status:` terms, and bare
+ * words in the method, URL and status
+ */
+function matches(flow: Flow, query: string): boolean {
+  const host = (() => {
+    try {
+      return new URL(flow.url).host;
+    } catch {
+      return flow.url;
+    }
+  })();
+  const text = `${flow.method} ${flow.url} ${flow.status ?? ""}`.toLowerCase();
+  // `OR` between groups, as the sidebar writes several rows
+  const groups = query.replace(/[()]/g, " ").split(/\s+OR\s+/);
+  if (groups.length > 1) return groups.some((g) => matches(flow, g));
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t !== "")
+    .every((term) => {
+      const [, field, value = ""] = /^@([a-z.]+):(.*)$/.exec(term) ?? [];
+      if (field === "host") return host.toLowerCase().includes(value.replaceAll("*", ""));
+      if (field === "method") return flow.method.toLowerCase() === value;
+      if (field === "status") return String(flow.status ?? "").startsWith(value.replace(/x+$/, ""));
+      return field == null ? text.includes(term) : true;
+    });
+}
+
+function allFlows(): Flow[] {
+  const many = Number(new URLSearchParams(location.search).get("many") ?? 0);
+  return (many > 0 ? manyFlows(many) : fixtures.map((f) => f.flow)).map((f, i) => ({
+    ...f,
+    number: 1401 + i,
+  }));
+}
+
 function answer(cmd: string, payload: unknown): unknown {
   const req = (payload ?? {}) as Record<string, unknown>;
   switch (cmd) {
+    case "get_flows": {
+      const ids = new Set(req.ids as string[]);
+      return allFlows().filter((f) => ids.has(f.id));
+    }
+    case "list_filter_history":
+      return stored<string>(HISTORY_KEY).map((filter) => ({ filter, appliedAt: "" }));
+    case "record_filter": {
+      const filter = String(req.filter).trim();
+      if (filter === "") return false;
+      store(HISTORY_KEY, [filter, ...stored<string>(HISTORY_KEY).filter((f) => f !== filter)]);
+      emit("filter_history_changed");
+      return true;
+    }
+    case "delete_filter_history":
+      store(
+        HISTORY_KEY,
+        stored<string>(HISTORY_KEY).filter((f) => f !== req.filter),
+      );
+      emit("filter_history_changed");
+      return true;
+    case "clear_filter_history":
+      store(HISTORY_KEY, []);
+      emit("filter_history_changed");
+      return 0;
+    // Held by the engine for as long as the app runs; the tab's session here
+    case "get_window_places":
+      return sessionStorage.getItem("harness_window_places");
+    case "set_window_places":
+      sessionStorage.setItem("harness_window_places", String(req.places));
+      return true;
+    case "get_last_filter":
+      return localStorage.getItem(LAST_FILTER_KEY) ?? "";
+    case "set_last_filter":
+      localStorage.setItem(LAST_FILTER_KEY, String(req.filter));
+      return true;
+    case "list_saved_queries":
+      return stored<SavedQuery>(SAVED_KEY);
+    case "create_saved_query": {
+      const saved = stored<SavedQuery>(SAVED_KEY);
+      const query = {
+        id: `sq_${saved.length + 1}`,
+        name: String(req.name),
+        query: String(req.query),
+        sortOrder: saved.length,
+      };
+      store(SAVED_KEY, [...saved, query]);
+      emit("saved_queries_changed");
+      return query;
+    }
+    case "count_saved_queries":
+      return stored<SavedQuery>(SAVED_KEY).map((s) => ({
+        id: s.id,
+        count: allFlows().filter((f) => matches(f, s.query)).length,
+      }));
+    case "watch_query":
+      return true;
     case "get_flow_body": {
       // A copy from `?many` reads its original's body
       const id = String(req.flowId).split("~")[0];
@@ -123,20 +263,24 @@ function answer(cmd: string, payload: unknown): unknown {
           ],
           [
             { scope: "global", action: "flows_clear" },
-            { label: "Clear Traffic", defaultHotkey: "Meta+Shift+K" },
+            { label: "Clear Flows", defaultHotkey: "Meta+Shift+K" },
           ],
         ],
       };
     case "list_flows": {
-      const many = Number(new URLSearchParams(location.search).get("many") ?? 0);
-      const all = (many > 0 ? manyFlows(many) : fixtures.map((f) => f.flow)).map((f, i) => ({
-        ...f,
-        number: 1401 + i,
-      }));
+      const all = allFlows();
+      const query = typeof req.query === "string" ? req.query : "";
+      const matching = all.filter((f) => matches(f, query));
       // In a sort's order, as the database lists it, all in one page
       const sort = (req.sort ?? []) as FlowSortKey[];
-      const flows = sort.length > 0 ? sortFlows(all, sort) : all.reverse();
-      return { flows, total: flows.length, matching: null, cursor: null };
+      const flows = sort.length > 0 ? sortFlows(matching, sort) : matching.reverse();
+      const page = req.limit === 0 ? [] : flows;
+      return {
+        flows: page,
+        total: all.length,
+        matching: query === "" ? null : matching.length,
+        cursor: null,
+      };
     }
     case "list_seen":
       return { hosts: [], apps: [] };

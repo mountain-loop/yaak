@@ -6,10 +6,9 @@ import type {
   SavedQuery,
   SortValue,
 } from "@yaakapp-internal/proxy-lib";
-import { selectedIdsFamily } from "@yaakapp-internal/ui";
 import { atom, type createStore } from "jotai";
 import { atomWithStorage } from "jotai/utils";
-import { followingAtom, SIDEBAR_TREE_ID, selectedFlowAtom } from "./atoms";
+import { appliedFilterAtom, dropSelectedAtom, followingAtom, selectedFlowAtom } from "./atoms";
 import {
   type ColumnPrefs,
   defaultColumnPrefs,
@@ -31,19 +30,9 @@ import {
 import { activeQuery, anyCountsBackFromNow, countsBackFromNow, type FlowQuery } from "./query";
 import { listen, rpc } from "./rpc";
 import { changesFor, FlowEvents } from "./searchChanges";
-import {
-  ALL_ID,
-  APPS_ID,
-  buildSidebarTree,
-  DOMAINS_ID,
-  itemsById,
-  queryInText,
-  SAVED_ID,
-  type SavedRow,
-  selectionText,
-} from "./sidebarTree";
+import { buildSidebarTree, type SavedRow } from "./sidebarTree";
 
-type Store = ReturnType<typeof createStore>;
+export type Store = ReturnType<typeof createStore>;
 
 /** How long new flows gather before they reach the list, so a burst renders once */
 const FLUSH_MS = 100;
@@ -76,7 +65,7 @@ export const flowsLoadedAtom = atom(false);
  * does not re-render what reads it.
  */
 export const noFlowsAtom = atom(
-  (get) => get(flowsLoadedAtom) && get(flowTotalAtom) === 0 && get(searchTextAtom).trim() === "",
+  (get) => get(flowsLoadedAtom) && get(flowTotalAtom) === 0 && get(appliedFilterAtom).trim() === "",
 );
 
 /** The system proxy has been on at some point since this install, which first run waits for */
@@ -87,23 +76,14 @@ export const systemProxyEverOnAtom = atomWithStorage("system_proxy_ever_on", fal
 /** Some flow held names the app that sent it, which only some platforms can tell */
 export const hasAppsAtom = atom((get) => get(flowsAtom).some((f) => f.clientName != null));
 
-/** The search box's text as typed, which the sidebar's selection writes too */
-export const searchTextAtom = atom("");
-
-/** Bumped when the text changes from outside the box, such as the sidebar, so the box takes it */
-export const searchTextVersionAtom = atom(0);
-
-/** The search box's text once typing settles */
-export const searchTermsAtom = atom("");
-
 /** System's flows are left out of All traffic, by the eye on System's row */
 export const hideSystemAtom = atomWithStorage("sidebar_hide_system", false, undefined, {
   getOnInit: true,
 });
 
-/** The search the list shows, from the search box's settled text, or null for all traffic */
+/** The search the list shows, from the filter applied, or null for all traffic */
 export const activeQueryAtom = atom<FlowQuery | null>((get) =>
-  activeQuery(get(searchTermsAtom), get(hideSystemAtom)),
+  activeQuery(get(appliedFilterAtom), get(hideSystemAtom)),
 );
 
 /** The saved searches, in their order */
@@ -121,13 +101,6 @@ const savedRowsAtom = atom<SavedRow[]>((get) => {
     query: s.query,
     count: counts[s.id] ?? 0,
   }));
-});
-
-/** Writes `text` into the search box at once, as the sidebar does, without waiting for typing */
-export const setSearchTextAtom = atom(null, (_get, set, text: string) => {
-  set(searchTextAtom, text);
-  set(searchTermsAtom, text);
-  set(searchTextVersionAtom, (v) => v + 1);
 });
 
 /** Flows All traffic covers in the database: every one, or all but System's while hidden */
@@ -454,9 +427,8 @@ export function syncFlows(store: Store) {
     applySortedChangesTo(store, changes);
     const selected = store.get(selectedFlowAtom);
     const change = changes.findLast((c) => c.model.id === selected?.id);
-    if (change != null) {
-      store.set(selectedFlowAtom, change.change.type === "delete" ? null : change.model);
-    }
+    if (change?.change.type === "delete") store.set(dropSelectedAtom, new Set([change.model.id]));
+    else if (change != null) store.set(selectedFlowAtom, change.model);
     if (recountTimer == null) recountTimer = setTimeout(recount, RECOUNT_MS);
   }
 
@@ -573,7 +545,7 @@ export function syncFlows(store: Store) {
         : s.flows;
       return { ...s, flows, buffered };
     });
-    if (removed.has(store.get(selectedFlowAtom)?.id ?? "")) store.set(selectedFlowAtom, null);
+    store.set(dropSelectedAtom, removed);
     if (recountTimer == null) recountTimer = setTimeout(recount, RECOUNT_MS);
   });
 
@@ -805,7 +777,7 @@ const emptyFlowsAtom = atom(null, (_get, set) => {
   set(sortedWindowAtom, (s) =>
     s == null ? s : { ...s, flows: [], boundary: null, cursor: null, buffered: [] },
   );
-  set(selectedFlowAtom, null);
+  set(dropSelectedAtom);
   set(followingAtom, true);
 });
 
@@ -823,71 +795,6 @@ export const clearFlowsAtom = atom(null, async (_get, set) => {
     throw err;
   }
 });
-
-/** When the person last clicked or pressed a key in the sidebar */
-let lastSidebarInput = 0;
-
-/** How soon after a click or key a change of the sidebar's selection counts as theirs */
-const SIDEBAR_INPUT_MS = 500;
-
-/** Notes a click or key in the sidebar, so the selection change it makes writes the search */
-export function noteSidebarInput() {
-  lastSidebarInput = Date.now();
-}
-
-/**
- * Keeps the sidebar's selection and the search box in step. Selecting rows writes their query
- * into the box; typing keeps a row selected while its query is still one of the box's terms,
- * and All traffic selected while the box is empty.
- */
-export function syncSidebarSelection(store: Store) {
-  const selectedAtom = selectedIdsFamily(SIDEBAR_TREE_ID);
-  let syncing = false;
-
-  // The tree writes its selection again as it renders, the same rows in a new array, or its last
-  // row when the selection was emptied; only a change of rows right after a click or a key in
-  // the sidebar is the person selecting.
-  let lastRows = store.get(selectedAtom).join("\n");
-  store.sub(selectedAtom, () => {
-    const ids = store.get(selectedAtom);
-    const key = ids.join("\n");
-    if (key === lastRows) return;
-    lastRows = key;
-    if (syncing || Date.now() - lastSidebarInput > SIDEBAR_INPUT_MS) return;
-    // Group headings are not filters.
-    const rows = ids.filter((id) => id !== APPS_ID && id !== DOMAINS_ID && id !== SAVED_ID);
-    if (rows.length === 0) return;
-    const items = itemsById(store.get(sidebarTreeAtom));
-    const selected = rows.flatMap((id) => {
-      const item = items.get(id);
-      return item == null ? [] : [item];
-    });
-    if (selected.length === 0) return;
-    const text = selectionText(selected);
-    if (text === store.get(searchTextAtom)) return;
-    syncing = true;
-    store.set(setSearchTextAtom, text);
-    syncing = false;
-  });
-
-  store.sub(searchTextAtom, () => {
-    if (syncing) return;
-    const text = store.get(searchTextAtom);
-    const items = itemsById(store.get(sidebarTreeAtom));
-    const ids = store.get(selectedAtom);
-    const kept = ids.filter((id) => {
-      const item = items.get(id);
-      return item != null && item.query !== "" && queryInText(item.query, text);
-    });
-    const next = text.trim() === "" ? [ALL_ID] : kept;
-    if (next.length === ids.length && next.every((id, i) => id === ids[i])) return;
-    syncing = true;
-    store.set(selectedAtom, next);
-    syncing = false;
-  });
-
-  if (store.get(selectedAtom).length === 0) store.set(selectedAtom, [ALL_ID]);
-}
 
 /**
  * Keeps `proxyStateAtom` current: on each state change, and polled while the engine is not

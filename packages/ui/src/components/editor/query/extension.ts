@@ -34,6 +34,11 @@ export interface QueryFilterOptions {
    * searches. `typed` is the word, and the completions replace it.
    */
   moreCompletions?: (typed: string) => Completion[];
+  /**
+   * Completions above the engine's while the box is empty, such as recent searches, each
+   * replacing the whole text
+   */
+  leadCompletions?: () => Completion[];
   /** The terms of a query the search cannot run, underlined as typing settles */
   problems?: (text: string) => Promise<QueryProblem[]>;
   /**
@@ -139,6 +144,7 @@ function completionSource({
   values,
   loadValues,
   moreCompletions,
+  leadCompletions,
   fieldsOnly,
 }: QueryFilterOptions) {
   return async (ctx: CompletionContext): Promise<CompletionResult | null> => {
@@ -179,11 +185,14 @@ function completionSource({
         if (from === word.from) options.push(...more);
       }
     }
-    if (options.length === 0) return null;
-
     // Field names pop up for something typed; on an empty spot, only when asked for
     const onlyFields = options.every((o) => o.type === "field");
-    if (onlyFields && from === to && !ctx.explicit) return null;
+    if (onlyFields && from === to && !ctx.explicit) options.length = 0;
+
+    // In an empty box, both they and the leading ones start at its start
+    const lead = text === "" ? (leadCompletions?.() ?? []) : [];
+    options.unshift(...lead);
+    if (options.length === 0) return null;
 
     // The engine has already filtered and ranked the options
     return { from, to, options, filter: false };

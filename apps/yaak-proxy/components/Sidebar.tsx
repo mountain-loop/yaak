@@ -19,7 +19,8 @@ import { blockerOf, decryptMenuAction, isDecrypted, listEdit, setDecrypted } fro
 import { revealLabel, revealPath } from "../lib/opener";
 import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
 import { type SidebarItem, SYSTEM_ID } from "../lib/sidebarTree";
-import { hideSystemAtom, noteSidebarInput, sidebarTreeAtom } from "../lib/store";
+import { noteSidebarInput } from "../lib/navigation";
+import { hideSystemAtom, sidebarTreeAtom } from "../lib/store";
 import { getOsType } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
 import { AppIcon } from "./AppIcon";

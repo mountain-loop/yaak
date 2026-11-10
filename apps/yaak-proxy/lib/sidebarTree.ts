@@ -1,7 +1,15 @@
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import type { TreeNode } from "@yaakapp-internal/ui";
 import type { DecryptSubject } from "./decrypt";
-import { fieldTerm, pathTerm, siteTerm, termKeys } from "./query";
+import {
+  asOneTerm,
+  fieldTerm,
+  orGroupShapes,
+  pathTerm,
+  queryShape,
+  siteTerm,
+  termKeys,
+} from "./query";
 import { appKeyOf, folderOf, isSystemFlow, runtimeFolderOf, sidebarPath, siteOf } from "./search";
 
 export type SidebarKind =
@@ -365,11 +373,49 @@ export function itemsById(root: TreeNode<SidebarItem>): Map<string, SidebarItem>
   return map;
 }
 
-/** The search text for the selected rows: their queries, OR'd; empty for All traffic */
+/**
+ * The search text for the selected rows: their queries, OR'd, one with `OR` of its own in
+ * parentheses so it stays one group; empty for All traffic
+ */
 export function selectionText(items: SidebarItem[]): string {
   const queries = [...new Set(items.map((i) => i.query))];
   if (queries.includes("")) return "";
-  return queries.join(" OR ");
+  return queries.length === 1 ? (queries[0] ?? "") : queries.map(asOneTerm).join(" OR ");
+}
+
+/**
+ * All traffic is selected alone: chosen beside other rows it takes their place, and another row
+ * chosen beside it takes its. `before` is the selection as it was.
+ */
+export function exclusiveAll(ids: string[], before: string[]): string[] {
+  if (!ids.includes(ALL_ID) || ids.length === 1) return ids;
+  return before.includes(ALL_ID) ? ids.filter((id) => id !== ALL_ID) : [ALL_ID];
+}
+
+/**
+ * The rows a filter applied leaves selected: those selected whose query is still in it, and,
+ * with `add`, every row whose query is one of its `OR` groups whole, as the filter the rows
+ * wrote is when Back returns to it. All traffic alone for no filter.
+ */
+export function rowsForFilter(
+  text: string,
+  selected: string[],
+  items: Map<string, SidebarItem>,
+  add: boolean,
+): string[] {
+  if (text.trim() === "") return [ALL_ID];
+  const rows = selected.filter((id) => {
+    const item = items.get(id);
+    return item != null && item.query !== "" && queryInText(item.query, text);
+  });
+  if (!add) return rows;
+  const groups = new Set(orGroupShapes(text));
+  for (const [id, item] of items) {
+    if (item.query === "" || rows.includes(id)) continue;
+    const shape = queryShape(item.query);
+    if (shape != null && groups.has(shape)) rows.push(id);
+  }
+  return rows;
 }
 
 /**

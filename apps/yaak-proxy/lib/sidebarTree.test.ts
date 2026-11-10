@@ -3,9 +3,12 @@ import type { TreeNode } from "@yaakapp-internal/ui";
 import { describe, expect, test } from "vite-plus/test";
 import { parseQuery } from "@yaakapp-internal/query";
 import {
+  ALL_ID,
   buildSidebarTree,
+  exclusiveAll,
   itemsById,
   queryInText,
+  rowsForFilter,
   type SidebarItem,
   selectionText,
 } from "./sidebarTree";
@@ -260,6 +263,52 @@ describe("selection and the search text", () => {
     expect(selectionText([a])).toBe("@app:Slack");
     expect(selectionText([a, b])).toBe("@app:Slack OR @host:*.github.com");
     expect(selectionText([a, all])).toBe("");
+  });
+
+  test("puts a saved search with `OR` of its own in parentheses beside other rows", () => {
+    const saved = { query: "@status:5xx OR @status:4xx" } as SidebarItem;
+    const host = { query: "@host:*.github.com" } as SidebarItem;
+    expect(selectionText([saved, host])).toBe("(@status:5xx OR @status:4xx) OR @host:*.github.com");
+    expect(selectionText([saved])).toBe("@status:5xx OR @status:4xx");
+  });
+
+  test("All traffic is selected alone, whichever was chosen last", () => {
+    expect(exclusiveAll(["a", ALL_ID], ["a"])).toEqual([ALL_ID]);
+    expect(exclusiveAll([ALL_ID, "a"], [ALL_ID])).toEqual(["a"]);
+    const rows = ["a", "b"];
+    expect(exclusiveAll(rows, ["a"])).toBe(rows);
+    expect(exclusiveAll([ALL_ID], ["a"])).toEqual([ALL_ID]);
+  });
+
+  test("a filter keeps the rows still in it, and finds those whose query is a group of it", () => {
+    const items = itemsById(buildSidebarTree(flows, 4));
+    const github = "app:fieldwork|host:api.github.com";
+    const slack = "app:Slack|site:slack.com";
+    const both = selectionText([items.get(github), items.get(slack)] as SidebarItem[]);
+
+    // Applied from the box: kept while in it, dropped once not, none added.
+    expect(rowsForFilter(`${both} card`, [github, slack], items, false)).toEqual([github, slack]);
+    expect(rowsForFilter("@app:Slack @host:*.slack.com", [github, slack], items, false)).toEqual([
+      slack,
+    ]);
+    // Gone back to, the rows that wrote it are found again, from none selected.
+    expect(rowsForFilter(both, [], items, true).sort()).toEqual([github, slack].sort());
+    // A group that is only part of a row's query finds nothing.
+    expect(rowsForFilter("@app:Slack", [], items, true)).not.toContain(slack);
+    expect(rowsForFilter(" ", [github], items, true)).toEqual([ALL_ID]);
+  });
+
+  test("a row is found only by a group that says what its query says", () => {
+    const either = { id: "saved:either", kind: "saved", query: "@method:GET OR @host:x.com" };
+    const system = { id: "system", kind: "group", query: "@is:system" };
+    const items = new Map([either, system].map((i) => [i.id, i as SidebarItem]));
+    // Both terms, but together rather than either
+    expect(rowsForFilter("@method:GET @host:x.com", [], items, true)).toEqual([]);
+    expect(rowsForFilter("(@method:GET OR @host:x.com) OR @app:a", [], items, true)).toEqual([
+      "saved:either",
+    ]);
+    // A heading with a query of its own, as System's, is found as any row is.
+    expect(rowsForFilter("@is:system", [], items, true)).toEqual(["system"]);
   });
 
   test("keeps a row selected while every term of its query is in the text", () => {

@@ -519,11 +519,13 @@ mod tests {
             tables,
             vec![
                 "_sqlx_migrations",
+                "filter_history",
                 "flow_clear_mark",
                 "flow_messages",
                 "flow_sweep_pending",
                 "flows",
                 "grpc_schemas",
+                "last_filter",
                 "saved_queries"
             ]
         );
@@ -615,7 +617,8 @@ mod tests {
         assert_eq!(
             &applied[6..],
             [
-                "00000007", "00000008", "00000009", "00000010", "00000011", "00000012", "00000013"
+                "00000007", "00000008", "00000009", "00000010", "00000011", "00000012", "00000013",
+                "00000014"
             ]
         );
         let mark_columns = columns(&conn, "flow_clear_mark");

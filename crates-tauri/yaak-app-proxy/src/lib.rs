@@ -41,6 +41,16 @@ fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) {
                     error!("Failed to emit the HAR export: {e}");
                 }
             }
+            window_menu::GO_BACK_ID | window_menu::GO_FORWARD_ID => {
+                let event = if event_id == window_menu::GO_BACK_ID {
+                    window_menu::GO_BACK_EVENT
+                } else {
+                    window_menu::GO_FORWARD_EVENT
+                };
+                if let Err(e) = webview_window.emit(event, ()) {
+                    error!("Failed to emit {event}: {e}");
+                }
+            }
             "dev.refresh" => webview_window.eval("location.reload()").unwrap(),
             "dev.toggle_devtools" => {
                 if webview_window.is_devtools_open() {
@@ -80,6 +90,12 @@ async fn rpc(
     payload: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     router.dispatch(&cmd, payload, &ctx).await.map_err(|e| e.message)
+}
+
+/// Go's Back and Forward, enabled as the window has somewhere to go.
+#[tauri::command]
+fn set_go_menu(app: tauri::AppHandle, back: bool, forward: bool) {
+    window_menu::set_go_enabled(&app, back, forward);
 }
 
 pub fn run() {
@@ -135,7 +151,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![rpc])
+        .invoke_handler(tauri::generate_handler![rpc, set_go_menu])
         .build(tauri::generate_context!())
         .expect("error while building yaak proxy tauri application")
         .run(|app_handle, event| {
