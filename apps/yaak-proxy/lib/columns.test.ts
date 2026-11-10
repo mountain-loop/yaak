@@ -26,6 +26,7 @@ import {
   hideOtherColumns,
   moveColumn,
   moveColumnBy,
+  NUMERIC_FIT_CHARS,
   nextSort,
   operationOf,
   parseColumnPrefs,
@@ -34,6 +35,7 @@ import {
   resetWidth,
   resetWidths,
   resizeColumn,
+  resizeDistance,
   showOperationFor,
   shownColumns,
   sortFlows,
@@ -116,19 +118,16 @@ describe("shownColumns", () => {
     prefs = resizeColumn(prefs, "path", 500);
     const columns = shownColumns(prefs);
     const pad = (w: number) => `calc(${w}px + 0.75rem)`;
-    // Size and Time at their defaults, which grow with the interface size, and never narrower
-    // than their widest values
-    const size = "calc(max(4.8rem, 4rem) + 0.75rem)";
-    const time = `calc(max(${64 / 15}rem, 4rem) + 0.75rem)`;
+    // Size and Time, in pixels at the default interface size of 15, grow with it
+    const size = "calc(4.8rem + 0.75rem)";
+    const time = `calc(${64 / 15}rem + 0.75rem)`;
     expect(gridTemplate(columns)).toBe(
       ["24px", ...[46, 20, 50, 240, 500, 120, 46, 50].map(pad), size, time].join(" "),
     );
-    expect(gridWidth(columns)).toBe(
-      `calc(1096px + max(4.8rem, 4rem) + max(${64 / 15}rem, 4rem) + 10 * 0.75rem)`,
-    );
-    // Resized, a numeric column keeps the pixels it was given
-    const resized = shownColumns(resizeColumn(prefs, "size", 90));
-    expect(gridTemplate(resized)).toContain("calc(max(90px, 4rem) + 0.75rem)");
+    expect(gridWidth(columns)).toBe(`calc(1096px + 4.8rem + ${64 / 15}rem + 10 * 0.75rem)`);
+    // Resized, too, and at its least width it holds its widest value: eight characters of 0.5rem
+    const resized = shownColumns(resizeColumn(prefs, "size", 10));
+    expect(gridTemplate(resized)).toContain(" calc(4rem + 0.75rem)");
   });
 });
 
@@ -148,9 +147,10 @@ describe("numeric column widths", () => {
     for (const id of numeric) {
       const def = columnDef(id);
       const chars = id === "size" || id === "requestSize" ? sizeChars : timeChars;
-      expect(def.fitChars).toBeGreaterThanOrEqual(chars);
+      expect(NUMERIC_FIT_CHARS).toBeGreaterThanOrEqual(chars);
+      expect(def.scales).toBe(true);
       // In pixels at the default interface size, as the row's font sets them
-      const fit = (def.fitChars ?? 0) * CHAR_REM * BASE_FONT_SIZE;
+      const fit = NUMERIC_FIT_CHARS * CHAR_REM * BASE_FONT_SIZE;
       expect(def.minWidth).toBeGreaterThanOrEqual(fit);
       expect(def.width).toBeGreaterThanOrEqual(fit);
     }
@@ -168,6 +168,14 @@ describe("numeric column widths", () => {
     for (const id of numeric) expect(columnDef(id).width).toBeGreaterThanOrEqual(header[id]);
   });
 
+  test("a resize moves a numeric column's edge with the pointer at any interface size", () => {
+    const size = columnDef("size");
+    // At 30, twice the default, a 20px drag is 10 of the pixels its width is kept in
+    expect(resizeDistance(size, 20, 30)).toBe(10);
+    expect(resizeDistance(size, -12, 12)).toBe(-15);
+    expect(resizeDistance(columnDef("host"), 20, 30)).toBe(20);
+  });
+
   test("a stored width narrower than the least is raised, and a wider one kept", () => {
     const parsed = parseColumnPrefs({ widths: { size: 44, time: 50, requestSize: 120, host: 20 } });
     expect(parsed.widths).toEqual({ size: 60, time: 60, requestSize: 120, host: 60 });
@@ -175,7 +183,7 @@ describe("numeric column widths", () => {
     expect(resizeColumn(defaultColumnPrefs, "latency", 10).widths).toEqual({ latency: 60 });
     // Reset, the defaults are back
     const reset = shownColumns(resetWidths(parsed)).find((c) => c.id === "size");
-    expect(reset).toMatchObject({ current: 72, resized: false });
+    expect(reset?.current).toBe(72);
     expect(resetWidth(parsed, "time").widths).toEqual({ size: 60, requestSize: 120, host: 60 });
   });
 });

@@ -24,10 +24,10 @@ export interface ColumnDef {
   /** The header or query parameter a custom column shows: `header.x-request-id` */
   path?: string;
   /**
-   * A numeric column's widest value, in characters of the row's monospace font: it is never
-   * narrower than that at any interface size, and its default width grows with the interface size
+   * A numeric column's: its width, resized or not, grows with the interface size, as its values
+   * do, so the least width always holds the widest value
    */
-  fitChars?: number;
+  scales?: boolean;
 }
 
 const builtin = (
@@ -37,8 +37,8 @@ const builtin = (
   minWidth: number,
   align: "left" | "right",
   defaultVisible: boolean,
-  fitChars?: number,
-): ColumnDef => ({ id, label, width, minWidth, align, defaultVisible, fitChars });
+  scales?: boolean,
+): ColumnDef => ({ id, label, width, minWidth, align, defaultVisible, scales });
 
 /**
  * The widest size and duration a numeric cell shows, in characters: `999.9 KB` and `999m 59s`,
@@ -55,7 +55,10 @@ export const CHAR_REM = 0.5;
 /** The default interface font size, `DEFAULT_SETTINGS_VALUES.interfaceFontSize`, widths are at */
 export const BASE_FONT_SIZE = 15;
 
-/** A numeric column's least width, in pixels at the default interface size: its widest value */
+/**
+ * A numeric column's least width, in pixels at the default interface size, which grow with it:
+ * its widest value
+ */
 const NUMERIC_MIN = NUMERIC_FIT_CHARS * CHAR_REM * BASE_FONT_SIZE;
 
 export const COLUMNS: ColumnDef[] = [
@@ -68,10 +71,10 @@ export const COLUMNS: ColumnDef[] = [
   builtin("status", "Status", 46, 34, "left", true),
   builtin("type", "Type", 50, 34, "left", true),
   // Each default fits its label sorted, with the sort's arrow and place, and its widest value
-  builtin("requestSize", "Request Size", 96, NUMERIC_MIN, "right", false, NUMERIC_FIT_CHARS),
-  builtin("size", "Size", 72, NUMERIC_MIN, "right", true, NUMERIC_FIT_CHARS),
-  builtin("time", "Time", 64, NUMERIC_MIN, "right", true, NUMERIC_FIT_CHARS),
-  builtin("latency", "Latency", 68, NUMERIC_MIN, "right", false, NUMERIC_FIT_CHARS),
+  builtin("requestSize", "Request Size", 96, NUMERIC_MIN, "right", false, true),
+  builtin("size", "Size", 72, NUMERIC_MIN, "right", true, true),
+  builtin("time", "Time", 64, NUMERIC_MIN, "right", true, true),
+  builtin("latency", "Latency", 68, NUMERIC_MIN, "right", false, true),
   builtin("started", "Started", 92, 60, "left", false),
   builtin("remote", "Remote Address", 150, 60, "left", false),
   builtin("version", "HTTP Version", 70, 44, "left", false),
@@ -197,8 +200,6 @@ export const defaultColumnPrefs: ColumnPrefs = {
 export interface Column extends ColumnDef {
   /** Its width now, in pixels of content */
   current: number;
-  /** Whether the person set its width, rather than leaving it at its default */
-  resized: boolean;
 }
 
 /**
@@ -225,11 +226,7 @@ export function shownColumns(prefs: ColumnPrefs, unavailable: ColumnId[] = []): 
   const all = allColumns(prefs).filter((c) => !unavailable.includes(c.id));
   const shown = all.filter((c) => isVisible(prefs, c));
   const columns = shown.length > 0 ? shown : all.filter((c) => c.id === "path");
-  return columns.map((c) => ({
-    ...c,
-    current: columnWidth(prefs, c.id),
-    resized: prefs.widths[c.id] != null,
-  }));
+  return columns.map((c) => ({ ...c, current: columnWidth(prefs, c.id) }));
 }
 
 /** Columns the platform has nothing for: App, where it cannot tell which app sent a flow */
@@ -242,14 +239,17 @@ export function columnWidth(prefs: ColumnPrefs, id: ColumnId): number {
   return Math.max(def.minWidth, Math.round(prefs.widths[id] ?? def.width));
 }
 
-/**
- * A column's content width, as CSS. A numeric column's default grows with the interface size,
- * and at any width it holds its widest value, which grows with the interface size too.
- */
+/** A column's content width, as CSS: a numeric column's grows with the interface size */
 function columnTrack(c: Column): string {
-  if (c.fitChars == null) return `${c.current}px`;
-  const width = c.resized ? `${c.current}px` : `${c.current / BASE_FONT_SIZE}rem`;
-  return `max(${width}, ${c.fitChars * CHAR_REM}rem)`;
+  return c.scales ? `${c.current / BASE_FONT_SIZE}rem` : `${c.current}px`;
+}
+
+/**
+ * How far a resize moved, in the pixels a column's width is kept in: a numeric column's are at
+ * the default interface size, `rootFontSize` being the size now
+ */
+export function resizeDistance(c: ColumnDef, dx: number, rootFontSize: number): number {
+  return c.scales && rootFontSize > 0 ? (dx * BASE_FONT_SIZE) / rootFontSize : dx;
 }
 
 /** The grid template for the header and every row: the mark, then each column and its padding */
@@ -260,10 +260,9 @@ export function gridTemplate(columns: Column[]): string {
 
 /** The width of a row's grid, as CSS: the list scrolls sideways when it is wider than the list */
 export function gridWidth(columns: Column[]): string {
-  const fixed = columns.filter((c) => c.fitChars == null);
-  const px = fixed.reduce((sum, c) => sum + c.current, MARK_WIDTH);
-  const numeric = columns.filter((c) => c.fitChars != null).map((c) => ` + ${columnTrack(c)}`);
-  return `calc(${px}px${numeric.join("")} + ${columns.length} * ${CELL_PADDING})`;
+  const px = columns.filter((c) => !c.scales).reduce((sum, c) => sum + c.current, MARK_WIDTH);
+  const scaled = columns.filter((c) => c.scales).map((c) => ` + ${columnTrack(c)}`);
+  return `calc(${px}px${scaled.join("")} + ${columns.length} * ${CELL_PADDING})`;
 }
 
 /** Whether the picker may uncheck `id`: any column but the last one shown */
