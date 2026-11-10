@@ -4,6 +4,7 @@ pub mod cookies;
 pub mod decompress;
 pub mod dns;
 pub mod error;
+pub mod graphql;
 pub mod manager;
 mod proto;
 pub mod sender;

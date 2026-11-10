@@ -5,6 +5,12 @@ use tauri::menu::{
     WINDOW_SUBMENU_ID,
 };
 
+/// File's Export All Flows as HAR, which the window carries out, as the list's menus do.
+pub const EXPORT_HAR_ID: &str = "file.export_har";
+
+/// The event the window hears File's Export All Flows as HAR by.
+pub const EXPORT_HAR_EVENT: &str = "menu_export_har";
+
 pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let pkg_info = app_handle.package_info();
     let config = app_handle.config();
@@ -87,6 +93,9 @@ pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>>
                 "File",
                 true,
                 &[
+                    &MenuItemBuilder::with_id(EXPORT_HAR_ID, "Export All Flows as HAR")
+                        .build(app_handle)?,
+                    &PredefinedMenuItem::separator(app_handle)?,
                     &PredefinedMenuItem::close_window(app_handle, None)?,
                     #[cfg(not(target_os = "macos"))]
                     &PredefinedMenuItem::quit(app_handle, None)?,

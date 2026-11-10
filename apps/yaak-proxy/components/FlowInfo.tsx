@@ -35,7 +35,7 @@ export function FlowInfo({ flow }: { flow: Flow }) {
             "Name",
             flow.clientName == null ? null : (
               <span className="flex items-center gap-1.5">
-                {flow.clientPath != null && <AppIcon path={flow.clientPath} className="size-4" />}
+                {flow.clientPath != null && <AppIcon path={flow.clientPath} className="size-5" />}
                 {flow.clientName}
                 {folder != null && <span className="text-text-subtlest">{folder}</span>}
               </span>

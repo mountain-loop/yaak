@@ -1,5 +1,6 @@
 import { useSetAtom } from "jotai";
 import { useLayoutEffect, useState } from "react";
+import { AddColumnDialog } from "../components/AddColumnDialog";
 import { FlowDetail } from "../components/FlowDetail";
 import { FlowList } from "../components/FlowList";
 import { selectedFlowAtom } from "../lib/atoms";
@@ -34,6 +35,7 @@ export function FlowPanesHarness() {
         ))}
       </div>
       <FixtureCard key={fixture.flow.id} fixture={fixture} />
+      <AddColumnDialog />
     </div>
   );
 }

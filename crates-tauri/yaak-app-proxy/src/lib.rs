@@ -36,6 +36,11 @@ fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) {
                     let _ = w.close();
                 });
             }
+            window_menu::EXPORT_HAR_ID => {
+                if let Err(e) = webview_window.emit(window_menu::EXPORT_HAR_EVENT, ()) {
+                    error!("Failed to emit the HAR export: {e}");
+                }
+            }
             "dev.refresh" => webview_window.eval("location.reload()").unwrap(),
             "dev.toggle_devtools" => {
                 if webview_window.is_devtools_open() {

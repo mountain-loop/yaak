@@ -690,6 +690,13 @@ fn sample(count: usize) -> Vec<Flow> {
                 client_pid: rng.chance(50).then(|| (rng.next() % 1000) as i32),
                 stream_kind: *rng.pick(&streams),
                 grpc_status: *rng.pick(&[None, Some(0), Some(5)]),
+                grpc_service: rng
+                    .chance(20)
+                    .then(|| rng.pick(&["pkg.Greeter", "Users"]).to_string()),
+                grpc_method: rng.chance(20).then(|| rng.pick(&["SayHello", "getUser"]).to_string()),
+                graphql_operation: rng
+                    .chance(25)
+                    .then(|| rng.pick(&["GetUser", "", "Feed +2", "createÉtat"]).to_string()),
                 error: rng.chance(15).then(|| "connection reset".to_string()),
                 cancelled: rng.chance(10),
                 saved_request_id: rng.chance(15).then(|| "rq_x".to_string()),
@@ -859,6 +866,18 @@ const BATTERY: &[&str] = &[
     "@is:ws",
     "@is:sse",
     "@is:grpc",
+    "@is:graphql",
+    "-@is:graphql",
+    "@graphql.operation:getuser",
+    "@graphql.operation:feed*",
+    "@graphql.operation:*",
+    "-@graphql.operation:*",
+    "@graphql.operation:createétat",
+    "@grpc.service:pkg.greeter",
+    "@grpc.service:*",
+    "@grpc.method:SayHello",
+    "-@grpc.method:*",
+    "@grpc.service:users @grpc.method:get*",
     "@is:*",
     "-@is:*",
     "@is:s*",
@@ -961,11 +980,58 @@ fn seen_values_for_completion() {
         "size",
         "duration",
         "time",
-        "query",
         "query.page",
     ] {
         assert!(values(path).is_empty(), "{path}");
     }
+    // A query parameter's names, for `@query.`, but not its values
+    let mut params = values("query");
+    params.sort();
+    assert_eq!(params, vec!["page", "sort"]);
+}
+
+/// GraphQL operations and gRPC calls, by name and by flag, and offered for completion.
+#[test]
+fn graphql_and_grpc_fields() {
+    let base = |id: &str, url: &str| Flow {
+        id: id.into(),
+        url: url.into(),
+        method: "POST".into(),
+        started_at: now().naive_utc(),
+        ..Default::default()
+    };
+    let flows = vec![
+        Flow {
+            graphql_operation: Some("GetUser".into()),
+            ..base("fl_named", "https://api.example.com/graphql")
+        },
+        Flow {
+            graphql_operation: Some(String::new()),
+            ..base("fl_anonymous", "https://api.example.com/graphql")
+        },
+        Flow {
+            grpc_service: Some("pkg.Greeter".into()),
+            grpc_method: Some("SayHello".into()),
+            ..base("fl_call", "https://grpc.example.com/pkg.Greeter/SayHello")
+        },
+        base("fl_plain", "https://example.com/"),
+    ];
+    let (_dir, db, all) = db_of(flows);
+    let finds = |query: &str| {
+        let prepared = FlowQuery::at(query, false, now());
+        let sql = sql_ids(&db, &prepared);
+        assert_eq!(sql, memory_ids(&all, &prepared), "the two disagree on {query:?}");
+        sql
+    };
+    assert_eq!(finds("@is:graphql"), ids(&["fl_anonymous", "fl_named"]));
+    assert_eq!(finds("@graphql.operation:getuser"), ids(&["fl_named"]));
+    assert_eq!(finds("@graphql.operation:*"), ids(&["fl_named"]));
+    assert_eq!(finds("@grpc.service:pkg.Greeter"), ids(&["fl_call"]));
+    assert_eq!(finds("@grpc.method:say*"), ids(&["fl_call"]));
+    assert_eq!(finds("-@grpc.method:*"), ids(&["fl_anonymous", "fl_named", "fl_plain"]));
+    assert_eq!(seen_values(&db, "graphql.operation").unwrap(), vec!["GetUser"]);
+    assert_eq!(seen_values(&db, "grpc.service").unwrap(), vec!["pkg.Greeter"]);
+    assert_eq!(seen_values(&db, "grpc.method").unwrap(), vec!["SayHello"]);
 }
 
 #[test]

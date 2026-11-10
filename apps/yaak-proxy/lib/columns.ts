@@ -1,18 +1,15 @@
-import type { Flow } from "@yaakapp-internal/proxy-lib";
-import { appKeyOf } from "./search";
+import type { Flow, FlowSortKey, SortColumn } from "@yaakapp-internal/proxy-lib";
+import { compareFlows } from "./flowWindow";
+import { fieldTerm } from "./query";
+import { sidebarPath } from "./search";
 
-export type ColumnId =
-  | "number"
-  | "app"
-  | "method"
-  | "host"
-  | "path"
-  | "status"
-  | "type"
-  | "size"
-  | "time"
-  | "remote"
-  | "version";
+/** The columns the list has built in; each sorts by the `SortColumn` of the same name */
+export type BuiltinColumnId = SortColumn;
+
+/** A column of a header or query parameter the person added, by its field's path */
+export type CustomColumnId = `field:${string}`;
+
+export type ColumnId = BuiltinColumnId | CustomColumnId;
 
 export interface ColumnDef {
   id: ColumnId;
@@ -24,102 +21,81 @@ export interface ColumnDef {
   align: "left" | "right";
   /** Shown until the person hides it */
   defaultVisible: boolean;
+  /** Sorted by in the database; custom columns are not */
+  sortable: boolean;
+  /** The header or query parameter a custom column shows: `header.x-request-id` */
+  path?: string;
 }
 
+const builtin = (
+  id: BuiltinColumnId,
+  label: string,
+  width: number,
+  minWidth: number,
+  align: "left" | "right",
+  defaultVisible: boolean,
+): ColumnDef => ({ id, label, width, minWidth, align, defaultVisible, sortable: true });
+
 export const COLUMNS: ColumnDef[] = [
-  {
-    id: "number",
-    label: "#",
-    width: 46,
-    minWidth: 30,
-    align: "right",
-    defaultVisible: true,
-  },
-  {
-    id: "app",
-    label: "App",
-    width: 18,
-    minWidth: 18,
-    align: "left",
-    defaultVisible: true,
-  },
-  {
-    id: "method",
-    label: "Method",
-    width: 50,
+  builtin("number", "#", 46, 30, "left", true),
+  builtin("app", "App", 20, 20, "left", true),
+  builtin("method", "Method", 50, 40, "left", true),
+  builtin("host", "Host", 190, 60, "left", true),
+  builtin("path", "Path", 300, 60, "left", true),
+  builtin("query", "Query", 120, 40, "left", true),
+  builtin("status", "Status", 46, 34, "left", true),
+  builtin("type", "Type", 50, 34, "left", true),
+  builtin("requestSize", "Request Size", 80, 44, "right", false),
+  builtin("size", "Size", 72, 44, "right", true),
+  builtin("time", "Time", 64, 44, "right", true),
+  builtin("latency", "Latency", 64, 44, "right", false),
+  builtin("started", "Started", 92, 60, "left", false),
+  builtin("remote", "Remote Address", 150, 60, "left", false),
+  builtin("version", "HTTP Version", 70, 44, "left", false),
+  builtin("tls", "TLS Version", 70, 34, "left", false),
+  builtin("operation", "Operation", 160, 60, "left", false),
+];
+
+const DEFS = new Map<ColumnId, ColumnDef>(COLUMNS.map((c) => [c.id, c]));
+
+/** Map fields a custom column can show, as the query language names them */
+const CUSTOM_MAPS = ["req.header.", "res.header.", "header.", "query."];
+
+/** `header.x-request-id` from what was typed, `@header.X-Request-Id:` included, or null */
+export function customPath(typed: string): string | null {
+  const path = typed.trim().replace(/^@/, "").replace(/:$/, "").trim();
+  const map = CUSTOM_MAPS.find((m) => path.toLowerCase().startsWith(m));
+  if (map == null) return null;
+  const key = path.slice(map.length);
+  // As a field path takes it, so the column's filter items make a term the search can run
+  if (!/^[A-Za-z0-9_-]+$/.test(key)) return null;
+  return map + key.toLowerCase();
+}
+
+export function customColumnId(path: string): CustomColumnId {
+  return `field:${path}`;
+}
+
+export function isCustomColumn(id: ColumnId): id is CustomColumnId {
+  return id.startsWith("field:");
+}
+
+function customDef(id: CustomColumnId): ColumnDef {
+  const path = id.slice("field:".length);
+  return {
+    id,
+    label: path,
+    width: 140,
     minWidth: 40,
     align: "left",
     defaultVisible: true,
-  },
-  {
-    id: "host",
-    label: "Host",
-    width: 190,
-    minWidth: 60,
-    align: "left",
-    defaultVisible: true,
-  },
-  {
-    id: "path",
-    label: "Path",
-    width: 360,
-    minWidth: 80,
-    align: "left",
-    defaultVisible: true,
-  },
-  {
-    id: "status",
-    label: "Status",
-    width: 46,
-    minWidth: 34,
-    align: "left",
-    defaultVisible: true,
-  },
-  {
-    id: "type",
-    label: "Type",
-    width: 50,
-    minWidth: 34,
-    align: "left",
-    defaultVisible: true,
-  },
-  {
-    id: "size",
-    label: "Size",
-    width: 72,
-    minWidth: 44,
-    align: "right",
-    defaultVisible: true,
-  },
-  {
-    id: "time",
-    label: "Time",
-    width: 64,
-    minWidth: 44,
-    align: "right",
-    defaultVisible: true,
-  },
-  {
-    id: "remote",
-    label: "Remote Address",
-    width: 150,
-    minWidth: 60,
-    align: "left",
-    defaultVisible: false,
-  },
-  {
-    id: "version",
-    label: "HTTP Version",
-    width: 70,
-    minWidth: 44,
-    align: "left",
-    defaultVisible: false,
-  },
-];
-
-const DEFS = new Map(COLUMNS.map((c) => [c.id, c]));
+    sortable: false,
+    path,
+  };
+}
 
 export function columnDef(id: ColumnId): ColumnDef {
+  if (isCustomColumn(id)) return customDef(id);
   const def = DEFS.get(id);
   if (def == null) throw new Error(`No column ${id}`);
   return def;
@@ -131,27 +107,48 @@ export const MARK_WIDTH = 24;
 /** Each cell's padding, both sides together, added to its column's width; `px-1.5` per side */
 export const CELL_PADDING = "0.75rem";
 
-/** What the person chose: which columns show, and the widths they dragged, by id */
+/**
+ * What the person chose: which columns show, the widths they dragged, by id, the header and
+ * query parameter columns they added, in order, and the list's sort
+ */
 export interface ColumnPrefs {
   visible: Partial<Record<ColumnId, boolean>>;
   widths: Partial<Record<ColumnId, number>>;
+  custom: CustomColumnId[];
+  /** The keys in order; empty for the order flows arrive in */
+  sort: FlowSortKey[];
 }
 
-export const defaultColumnPrefs: ColumnPrefs = { visible: {}, widths: {} };
+export const defaultColumnPrefs: ColumnPrefs = { visible: {}, widths: {}, custom: [], sort: [] };
 
 export interface Column extends ColumnDef {
   /** Its width now, in pixels of content */
   current: number;
 }
 
+/** Every column the picker lists: the built-in ones, then those the person added */
+export function allColumns(prefs: ColumnPrefs): ColumnDef[] {
+  return [...COLUMNS, ...prefs.custom.map(customDef)];
+}
+
+function isVisible(prefs: ColumnPrefs, def: ColumnDef): boolean {
+  return prefs.visible[def.id] ?? def.defaultVisible;
+}
+
 /**
- * The columns shown, in order: the visible ones, the path always. Each keeps its width however
- * narrow the list is; the list scrolls sideways instead.
+ * The columns shown, in order. Each keeps its width however narrow the list is; the list scrolls
+ * sideways instead. At least one always shows.
  */
-export function shownColumns(prefs: ColumnPrefs): Column[] {
-  return COLUMNS.filter((c) => c.id === "path" || (prefs.visible[c.id] ?? c.defaultVisible)).map(
-    (c) => ({ ...c, current: columnWidth(prefs, c.id) }),
-  );
+export function shownColumns(prefs: ColumnPrefs, unavailable: ColumnId[] = []): Column[] {
+  const all = allColumns(prefs).filter((c) => !unavailable.includes(c.id));
+  const shown = all.filter((c) => isVisible(prefs, c));
+  const columns = shown.length > 0 ? shown : all.filter((c) => c.id === "path");
+  return columns.map((c) => ({ ...c, current: columnWidth(prefs, c.id) }));
+}
+
+/** Columns the platform has nothing for: App, where it cannot tell which app sent a flow */
+export function unavailableColumns(hasApps: boolean): ColumnId[] {
+  return hasApps ? [] : ["app"];
 }
 
 export function columnWidth(prefs: ColumnPrefs, id: ColumnId): number {
@@ -171,10 +168,40 @@ export function gridWidth(columns: Column[]): string {
   return `calc(${px}px + ${columns.length} * ${CELL_PADDING})`;
 }
 
-export function toggleColumn(prefs: ColumnPrefs, id: ColumnId): ColumnPrefs {
-  if (id === "path") return prefs;
-  const shown = prefs.visible[id] ?? columnDef(id).defaultVisible;
+/** Whether the picker may uncheck `id`: any column but the last one shown */
+export function canHide(prefs: ColumnPrefs, id: ColumnId, unavailable: ColumnId[] = []): boolean {
+  const shown = allColumns(prefs).filter((c) => !unavailable.includes(c.id) && isVisible(prefs, c));
+  return !shown.every((c) => c.id === id);
+}
+
+export function toggleColumn(
+  prefs: ColumnPrefs,
+  id: ColumnId,
+  unavailable: ColumnId[] = [],
+): ColumnPrefs {
+  const shown = isVisible(prefs, columnDef(id));
+  if (shown && !canHide(prefs, id, unavailable)) return prefs;
   return { ...prefs, visible: { ...prefs.visible, [id]: !shown } };
+}
+
+/** Shows `id` alone */
+export function hideOtherColumns(prefs: ColumnPrefs, id: ColumnId): ColumnPrefs {
+  const visible: ColumnPrefs["visible"] = {};
+  for (const c of allColumns(prefs)) visible[c.id] = c.id === id;
+  return { ...prefs, visible };
+}
+
+/** Adds a column for a header or query parameter's path, shown at the end; already there, shown */
+export function addCustomColumn(prefs: ColumnPrefs, path: string): ColumnPrefs {
+  const id = customColumnId(path);
+  const custom = prefs.custom.includes(id) ? prefs.custom : [...prefs.custom, id];
+  return { ...prefs, custom, visible: { ...prefs.visible, [id]: true } };
+}
+
+export function removeCustomColumn(prefs: ColumnPrefs, id: CustomColumnId): ColumnPrefs {
+  const { [id]: _v, ...visible } = prefs.visible;
+  const { [id]: _w, ...widths } = prefs.widths;
+  return { ...prefs, custom: prefs.custom.filter((c) => c !== id), visible, widths };
 }
 
 export function resizeColumn(prefs: ColumnPrefs, id: ColumnId, width: number): ColumnPrefs {
@@ -192,109 +219,285 @@ export function resetWidth(prefs: ColumnPrefs, id: ColumnId): ColumnPrefs {
   return { ...prefs, widths };
 }
 
+/** Shows Operation the first time a flow has one, unless the person ever set it themselves */
+export function showOperationFor(prefs: ColumnPrefs, flows: Flow[]): ColumnPrefs {
+  if (prefs.visible.operation !== undefined) return prefs;
+  if (!flows.some((f) => (operationOf(f) ?? "") !== "")) return prefs;
+  return { ...prefs, visible: { ...prefs.visible, operation: true } };
+}
+
 /**
  * Reads stored preferences, dropping what no longer applies: unknown ids, and values of the
  * wrong type, so a change to the columns never breaks the list.
  */
 export function parseColumnPrefs(value: unknown): ColumnPrefs {
-  const prefs: ColumnPrefs = { visible: {}, widths: {} };
+  const prefs: ColumnPrefs = { visible: {}, widths: {}, custom: [], sort: [] };
   if (value == null || typeof value !== "object") return prefs;
-  const { visible, widths } = value as Record<string, unknown>;
-  for (const def of COLUMNS) {
+  const { visible, widths, custom, sort } = value as Record<string, unknown>;
+  if (Array.isArray(custom)) {
+    for (const id of custom) {
+      if (typeof id !== "string" || !id.startsWith("field:")) continue;
+      const path = customPath(id.slice("field:".length));
+      if (path != null && !prefs.custom.includes(customColumnId(path))) {
+        prefs.custom.push(customColumnId(path));
+      }
+    }
+  }
+  for (const def of allColumns(prefs)) {
     const v = (visible as Record<string, unknown> | undefined)?.[def.id];
     if (typeof v === "boolean") prefs.visible[def.id] = v;
     const w = (widths as Record<string, unknown> | undefined)?.[def.id];
     if (typeof w === "number" && Number.isFinite(w) && w > 0) prefs.widths[def.id] = w;
   }
+  if (Array.isArray(sort)) {
+    for (const key of sort) {
+      if (key == null || typeof key !== "object") continue;
+      const { column, descending } = key as Record<string, unknown>;
+      if (typeof column !== "string" || typeof descending !== "boolean") continue;
+      const def = DEFS.get(column as ColumnId);
+      if (def == null || prefs.sort.some((k) => k.column === column)) continue;
+      prefs.sort.push({ column: def.id as SortColumn, descending });
+    }
+  }
   return prefs;
 }
 
-/** A sort by a column, or by start time when null */
-export interface FlowSort {
-  column: ColumnId;
-  descending: boolean;
-}
+// -- Sorting --
 
 /** Numbers sort largest first on the first click, names from A */
-export function firstDirection(column: ColumnId): boolean {
-  return column === "number" || column === "size" || column === "time" || column === "status";
-}
-
-/**
- * A click on a column's label: sort by it, reverse the sort it has, then, from the reversed sort,
- * go back to start time
- */
-export function nextSort(sort: FlowSort | null, column: ColumnId): FlowSort | null {
-  const first = firstDirection(column);
-  if (sort?.column !== column) return { column, descending: first };
-  if (sort.descending === first) return { column, descending: !first };
-  return null;
-}
-
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-
-type Key = string | number | null;
-
-function sortKey(flow: Flow, column: ColumnId): Key {
+export function firstDirection(column: SortColumn): boolean {
   switch (column) {
     case "number":
-      return flow.number;
-    case "app":
-      return appKeyOf(flow);
-    case "method":
-      return flow.method;
-    case "host":
-      return hostOf(flow.url);
-    case "path":
-      return pathOf(flow.url);
     case "status":
-      return flow.error != null ? -1 : flow.status;
-    case "type":
-      return flow.contentType;
     case "size":
-      return flow.error != null && flow.status == null ? null : flow.responseSize;
+    case "requestSize":
     case "time":
-      return flow.elapsedMs;
-    case "remote":
-      return flow.remoteAddr;
-    case "version":
-      return flow.upstreamHttpVersion ?? flow.clientHttpVersion;
+    case "latency":
+      return true;
+    default:
+      return false;
   }
 }
 
 /**
- * The flows in `sort`'s order, those without a value (none, empty or zero) lowest, so first
- * ascending and last descending, then by start so equal values keep arrival order. Sorts the
- * flows given, which are the ones loaded, not the whole database: the database only ever reads
- * by start time, so no `ORDER BY` follows the column sort.
+ * A click on a column's label: sort by it alone, reverse the sort it has alone, then, from the
+ * reversed sort, go back to the order flows arrive in
  */
-export function sortFlows(flows: Flow[], sort: FlowSort | null): Flow[] {
-  if (sort == null) return flows;
-  const dir = sort.descending ? -1 : 1;
-  const keyed = flows.map((flow, i) => ({ flow, i, key: sortKey(flow, sort.column) || null }));
-  keyed.sort((a, b) => {
-    let c: number;
-    if (a.key == null || b.key == null) c = Number(b.key == null) - Number(a.key == null);
-    else if (typeof a.key === "number" && typeof b.key === "number") c = a.key - b.key;
-    else c = collator.compare(String(a.key), String(b.key));
-    return c === 0 ? a.i - b.i : c * dir;
-  });
-  return keyed.map((k) => k.flow);
+export function nextSort(sort: FlowSortKey[], column: SortColumn): FlowSortKey[] {
+  const first = firstDirection(column);
+  const only = sort.length === 1 ? sort[0] : null;
+  if (only?.column !== column) return [{ column, descending: first }];
+  if (only.descending === first) return [{ column, descending: !first }];
+  return [];
+}
+
+/**
+ * An Option-click on a column's label: adds it as the last key, ascending; again reverses it, and
+ * a third time takes it out
+ */
+export function toggleSortKey(sort: FlowSortKey[], column: SortColumn): FlowSortKey[] {
+  const key = sort.find((k) => k.column === column);
+  if (key == null) return [...sort, { column, descending: false }];
+  if (!key.descending)
+    return sort.map((k) => (k.column === column ? { column, descending: true } : k));
+  return sort.filter((k) => k.column !== column);
+}
+
+/** Adds `column` as a key in `descending` order: the last key, or in its place if it is one */
+export function addSortKey(
+  sort: FlowSortKey[],
+  column: SortColumn,
+  descending: boolean,
+): FlowSortKey[] {
+  if (sort.some((k) => k.column === column)) {
+    return sort.map((k) => (k.column === column ? { column, descending } : k));
+  }
+  return [...sort, { column, descending }];
+}
+
+/** What an empty number sorts as, below every value; `EMPTY_NUMBER` in the lib's `flows.rs` */
+const EMPTY_NUMBER = -1e18;
+
+/** Text as SQLite's `NOCASE` compares it: ASCII letters lowercased, nothing else changed */
+function noCase(text: string | null | undefined): string {
+  return (text ?? "").replace(/[A-Z]/g, (c) => c.toLowerCase());
+}
+
+function emptyNumber(n: number | null | undefined): number {
+  return n == null || n === 0 ? EMPTY_NUMBER : n;
+}
+
+/**
+ * The value `column` sorts `flow` by, as `SortColumn::sql` in the lib's `flows.rs` makes it in
+ * the database, so a flow placed here lands where a page read from there would have it
+ */
+export function columnSortKey(flow: Flow, column: SortColumn): string | number {
+  switch (column) {
+    case "number":
+      return flow.number;
+    case "app":
+      return noCase(flow.clientName ?? flow.clientBundleId ?? flow.clientPath);
+    case "method":
+      return noCase(flow.method);
+    case "host":
+      return noCase(urlParts(flow.url).authority);
+    case "path":
+      return noCase(urlParts(flow.url).path);
+    case "query":
+      return noCase(urlParts(flow.url).query);
+    case "status":
+      return flow.error != null ? -1 : emptyNumber(flow.status);
+    case "type":
+      return noCase(flow.contentType);
+    case "size":
+      return flow.error != null && flow.status == null
+        ? EMPTY_NUMBER
+        : emptyNumber(flow.responseSize);
+    case "requestSize":
+      return emptyNumber(flow.requestSize);
+    case "time":
+      return emptyNumber(flow.elapsedMs);
+    case "latency":
+      return emptyNumber(flow.elapsedHeadersMs);
+    case "started":
+      return flow.startedAt;
+    case "remote":
+      return noCase(flow.remoteAddr);
+    case "version":
+      return noCase(flow.upstreamHttpVersion ?? flow.clientHttpVersion);
+    case "tls":
+      return noCase(flow.upstreamTlsVersion);
+    case "operation":
+      return noCase(
+        flow.grpcService != null && flow.grpcMethod != null
+          ? `${flow.grpcService}/${flow.grpcMethod}`
+          : flow.graphqlOperation,
+      );
+  }
+}
+
+function compareKeys(a: string | number, b: string | number): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
+/**
+ * Orders flows as `list_flows` orders them for `sort`: each key in turn, then by start and id,
+ * oldest first
+ */
+export function sortComparator(sort: FlowSortKey[]): (a: Flow, b: Flow) => number {
+  return (a, b) => {
+    for (const { column, descending } of sort) {
+      const c = compareKeys(columnSortKey(a, column), columnSortKey(b, column));
+      if (c !== 0) return descending ? -c : c;
+    }
+    return compareFlows(a, b);
+  };
+}
+
+/** The flows in `sort`'s order, as the database orders them */
+export function sortFlows(flows: Flow[], sort: FlowSortKey[]): Flow[] {
+  if (sort.length === 0) return flows;
+  return [...flows].sort(sortComparator(sort));
+}
+
+// -- Values --
+
+/**
+ * A URL's parts as the lib's `url_parts` reads them: no scheme, all host; otherwise the
+ * authority up to the first `/`, `?` or `#`, then the path and the query without its `?`
+ */
+export function urlParts(url: string): { authority: string; path: string; query: string | null } {
+  const start = url.indexOf("://");
+  if (start === -1) return { authority: url, path: "", query: null };
+  const rest = url.slice(start + 3);
+  const end = rest.search(/[/?#]/);
+  const authority = end === -1 ? rest : rest.slice(0, end);
+  const tail = (end === -1 ? "" : rest.slice(end)).split("#")[0] ?? "";
+  const q = tail.indexOf("?");
+  return q === -1
+    ? { authority, path: tail, query: null }
+    : { authority, path: tail.slice(0, q), query: tail.slice(q + 1) };
 }
 
 /** The URL's host, with its port */
 export function hostOf(url: string): string {
-  const start = url.indexOf("://");
-  if (start === -1) return "";
-  const rest = url.slice(start + 3);
-  const end = rest.search(/[/?#]/);
-  return end === -1 ? rest : rest.slice(0, end);
+  return url.includes("://") ? urlParts(url).authority : "";
 }
 
-function pathOf(url: string): string {
-  const start = url.indexOf("://");
-  if (start === -1) return url;
-  const rest = url.slice(start + 3);
-  const end = rest.search(/[/?#]/);
-  return end === -1 ? "/" : rest.slice(end);
+/** `Service/Method` for a gRPC call, the operation's name for GraphQL, or null */
+export function operationOf(flow: Flow): string | null {
+  if (flow.grpcService != null && flow.grpcMethod != null) {
+    return `${flow.grpcService}/${flow.grpcMethod}`;
+  }
+  return flow.graphqlOperation ?? null;
+}
+
+/** `1.3` from `TLSv1.3` */
+export function tlsVersionOf(flow: Flow): string {
+  return (flow.upstreamTlsVersion ?? "").replace(/^TLSv?/i, "");
+}
+
+/**
+ * The value of a custom column's path for `flow`: a header's first value, the response's before
+ * the request's for `header.`, or a query parameter's first value
+ */
+export function customValue(flow: Flow, path: string): string | null {
+  const header = (headers: Flow["requestHeaders"], name: string) =>
+    headers.find((h) => h.name.toLowerCase() === name)?.value ?? null;
+  if (path.startsWith("req.header.")) {
+    return header(flow.requestHeaders, path.slice("req.header.".length));
+  }
+  if (path.startsWith("res.header.")) {
+    return header(flow.responseHeaders, path.slice("res.header.".length));
+  }
+  if (path.startsWith("header.")) {
+    const name = path.slice("header.".length);
+    return header(flow.responseHeaders, name) ?? header(flow.requestHeaders, name);
+  }
+  if (path.startsWith("query.")) {
+    const query = urlParts(flow.url).query;
+    if (query == null) return null;
+    const name = path.slice("query.".length);
+    for (const [key, value] of new URLSearchParams(query)) {
+      if (key.toLowerCase() === name) return value;
+    }
+  }
+  return null;
+}
+
+/**
+ * The search term that finds flows with `flow`'s value in `column`, or excludes them, for the
+ * cell's menu; null for columns with no field to match their value exactly
+ */
+export function cellFilterTerm(flow: Flow, column: ColumnId, negated: boolean): string | null {
+  const term = (field: string, value: string | null | undefined) =>
+    value == null || value === "" ? null : fieldTerm(field, value, negated);
+  if (isCustomColumn(column)) {
+    const path = column.slice("field:".length);
+    return term(path, customValue(flow, path));
+  }
+  switch (column) {
+    case "app":
+      return term("app", flow.clientName ?? flow.clientBundleId ?? flow.clientPath);
+    case "method":
+      return term("method", flow.method);
+    case "host":
+      return term("host", sidebarPath(flow.url).split("/")[0]);
+    case "path":
+      return flow.tunnelled ? null : term("path", urlParts(flow.url).path);
+    case "status":
+      return flow.status == null ? null : term("status", String(flow.status));
+    case "type":
+      return term("type", flow.contentType?.split(";")[0]?.trim());
+    case "operation": {
+      if (flow.grpcService != null && flow.grpcMethod != null) {
+        const both = `${fieldTerm("grpc.service", flow.grpcService)} ${fieldTerm("grpc.method", flow.grpcMethod)}`;
+        return negated ? `-(${both})` : both;
+      }
+      return term("graphql.operation", flow.graphqlOperation);
+    }
+    default:
+      return null;
+  }
 }

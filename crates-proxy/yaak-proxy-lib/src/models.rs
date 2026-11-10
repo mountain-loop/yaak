@@ -103,6 +103,9 @@ pub struct Flow {
     pub grpc_status: Option<i32>,
     /// A gRPC call's `grpc-message`, decoded.
     pub grpc_message: Option<String>,
+    /// A GraphQL request's operation, from its body or URL: `GetUser`, `GetUser +2` for a
+    /// batch, empty for an anonymous one. None when the request is not GraphQL.
+    pub graphql_operation: Option<String>,
     /// An HTTPS connection passed through undecrypted, as the decrypt list leaves it out or its
     /// client rejected the proxy's certificate: method `CONNECT`, its URL the host, its sizes
     /// the bytes each way, and no headers or bodies. Open until `elapsedMs` or `error` is set.
@@ -273,6 +276,7 @@ impl UpsertModelInfo for Flow {
             (GrpcMethod, self.grpc_method.into()),
             (GrpcStatus, self.grpc_status.into()),
             (GrpcMessage, self.grpc_message.into()),
+            (GraphqlOperation, self.graphql_operation.into()),
             (Tunnelled, self.tunnelled.into()),
             (ElapsedConnectMs, self.elapsed_connect_ms.into()),
             (ElapsedTlsMs, self.elapsed_tls_ms.into()),
@@ -316,6 +320,7 @@ impl UpsertModelInfo for Flow {
             FlowIden::GrpcMethod,
             FlowIden::GrpcStatus,
             FlowIden::GrpcMessage,
+            FlowIden::GraphqlOperation,
             FlowIden::Tunnelled,
             FlowIden::ElapsedConnectMs,
             FlowIden::ElapsedTlsMs,
@@ -374,6 +379,7 @@ impl UpsertModelInfo for Flow {
             grpc_method: added_column(r, "grpc_method")?,
             grpc_status: added_column(r, "grpc_status")?,
             grpc_message: added_column(r, "grpc_message")?,
+            graphql_operation: added_column(r, "graphql_operation")?,
             tunnelled: added_column(r, "tunnelled")?.unwrap_or_default(),
             agent_read: added_column(r, "agent_read")?.unwrap_or_default(),
         })

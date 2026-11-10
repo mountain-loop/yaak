@@ -1,5 +1,5 @@
 import type { Flow, GetProxyStateResponse } from "@yaakapp-internal/proxy-lib";
-import { fixtures } from "./fixtures";
+import { appIconPng, fixtures } from "./fixtures";
 
 /**
  * Dev only: answers the engine's RPCs the harness pages need, from fixtures, so the card and
@@ -13,8 +13,9 @@ export function installFixtureBackend() {
     if (cmd.startsWith("plugin:event|")) return 0;
     throw new Error(`Not in the harness: ${cmd}`);
   };
-  (window as unknown as { __TAURI_OS_PLUGIN_INTERNALS__: Record<string, string> })
-    .__TAURI_OS_PLUGIN_INTERNALS__ = {
+  (
+    window as unknown as { __TAURI_OS_PLUGIN_INTERNALS__: Record<string, string> }
+  ).__TAURI_OS_PLUGIN_INTERNALS__ = {
     os_type: "macos",
     platform: "macos",
     family: "unix",
@@ -58,7 +59,7 @@ function answer(cmd: string, payload: unknown): unknown {
       }
     }
     case "app_icon":
-      return null;
+      return appIconPng;
     case "get_proxy_state":
       return HARNESS_STATE;
     case "get_storage_size":
@@ -127,11 +128,29 @@ function answer(cmd: string, payload: unknown): unknown {
               info: "A request or response header",
               example: "@header.accept:*json*",
             },
+            {
+              name: "res.header",
+              kind: { type: "text" },
+              map: true,
+              info: "A response header",
+              example: "@res.header.x-cache:hit",
+            },
+            {
+              name: "query",
+              kind: { type: "text" },
+              map: true,
+              info: "A query parameter",
+              example: "@query.page:2",
+            },
           ],
         },
       };
-    case "query_values":
-      return [];
+    // Header and query parameter names, for completing a map's keys
+    case "query_values": {
+      const path = (payload as { path?: string } | undefined)?.path ?? "";
+      if (path.endsWith("header")) return ["x-cache", "x-request-id", "content-type"];
+      return path === "query" ? ["expand", "limit"] : [];
+    }
     case "validate_query":
       return [];
     default:

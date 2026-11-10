@@ -178,7 +178,24 @@ after?: string,
  * Only flows older than the flow with this id, by start and then id, for paging back
  * through older traffic.
  */
-before?: string, };
+before?: string, 
+/**
+ * The order to list in, the list's column sort: each key in turn, then by start and id,
+ * oldest first. Empty lists newest first, as without it. With keys, `before` does not
+ * apply; `cursor` pages instead.
+ */
+sort?: Array<FlowSortKey>, 
+/**
+ * Only flows after these values in `sort`'s order, for paging through a sort: the `cursor`
+ * of the page before, the sort values of its last flow as it was read, so a change to that
+ * flow since does not move where the next page starts.
+ */
+cursor?: Array<SortValue>, };
+
+/**
+ * One key of a sort.
+ */
+export type FlowSortKey = { column: SortColumn, descending: boolean, };
 
 export type FlowsClearedPayload = Record<string, never>;
 
@@ -328,7 +345,12 @@ total: number,
 /**
  * Flows the filter covers, whatever the limit, when it narrows to fewer than all of them.
  */
-matching: number | null, };
+matching: number | null, 
+/**
+ * Sorted, the next page's `cursor`: the last flow's sort values, as read. None without a
+ * sort or a flow.
+ */
+cursor: Array<SortValue> | null, };
 
 export type ListGrpcSchemasRequest = Record<string, never>;
 
@@ -573,6 +595,16 @@ export type SetRecordingRequest = { enabled: boolean, };
 export type SetSystemProxyAtLaunchRequest = { enabled: boolean, };
 
 export type SetTrafficRequest = { traffic: TrafficRetention, };
+
+/**
+ * A column the list sorts by.
+ */
+export type SortColumn = "number" | "app" | "method" | "host" | "path" | "query" | "status" | "type" | "size" | "requestSize" | "time" | "latency" | "started" | "remote" | "version" | "tls" | "operation";
+
+/**
+ * One of a flow's sort values, as the database sorted it.
+ */
+export type SortValue = number | string;
 
 /**
  * How a change gets administrator rights.

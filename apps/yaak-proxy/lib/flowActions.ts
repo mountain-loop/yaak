@@ -3,11 +3,13 @@ import type { DropdownItem } from "@yaakapp-internal/ui";
 import { save } from "@tauri-apps/plugin-dialog";
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import { atom, useAtomValue, useSetAtom } from "jotai";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { base64ToBytes, bodyFileName } from "./body";
 import { curlBodyText, toCurl } from "./curl";
+import type { FlowQuery } from "./query";
 import { rpc } from "./rpc";
 import { activeQueryAtom, lockedAtom } from "./store";
+import { subscribe } from "./tauri";
 import { useShowToast } from "./toast";
 
 /** The flow the save dialog is open for */
@@ -61,12 +63,32 @@ export async function exportHar(
   return rpc("export_har", { ...req, path });
 }
 
+/** Exports every flow `query` covers, or all of them, as HAR, saying how many it wrote */
+function useExportHarOf(): (query: FlowQuery | null) => Promise<void> {
+  const showToast = useShowToast();
+  return useCallback(
+    async (query: FlowQuery | null) => {
+      try {
+        const written = await exportHar(query == null ? {} : { filter: query }, "flows.har");
+        if (written != null) {
+          showToast({
+            message: written === 1 ? "Exported 1 flow as HAR" : `Exported ${written} flows as HAR`,
+          });
+        }
+      } catch (err) {
+        showToast({ message: `Failed to export HAR: ${String(err)}`, color: "danger" });
+      }
+    },
+    [showToast],
+  );
+}
+
 /**
- * Exporting every flow the list covers as HAR, all of them or the search's, for the list's menus:
- * it acts on flows, so it lives where they are chosen.
+ * Exporting every flow the list covers as HAR, all of them or the search's, for the list's and
+ * the search box's menus: it acts on flows, so it lives where they are chosen.
  */
 export function useExportShownHar(): () => DropdownItem {
-  const showToast = useShowToast();
+  const exportOf = useExportHarOf();
   const query = useAtomValue(activeQueryAtom);
   // Nothing can be read to export while captured traffic is locked.
   const locked = useAtomValue(lockedAtom) != null;
@@ -75,23 +97,27 @@ export function useExportShownHar(): () => DropdownItem {
       label: query == null ? "Export All Flows as HAR" : "Export Matching Flows as HAR",
       icon: "download",
       disabled: locked,
-      onSelect: async () => {
-        try {
-          const written = await exportHar(query == null ? {} : { filter: query }, "flows.har");
-          if (written != null) {
-            showToast({
-              message:
-                written === 1 ? "Exported 1 flow as HAR" : `Exported ${written} flows as HAR`,
-            });
-          }
-        } catch (err) {
-          showToast({ message: `Failed to export HAR: ${String(err)}`, color: "danger" });
-        }
-      },
+      onSelect: () => exportOf(query),
     }),
-    [query, locked, showToast],
+    [query, locked, exportOf],
   );
 }
+
+/** File's Export All Flows as HAR, which the app menu sends as an event */
+export function useMenuExportHar() {
+  const exportOf = useExportHarOf();
+  const locked = useAtomValue(lockedAtom) != null;
+  useEffect(
+    () =>
+      subscribe<null>(MENU_EXPORT_HAR_EVENT, () => {
+        if (!locked) void exportOf(null);
+      }),
+    [exportOf, locked],
+  );
+}
+
+/** `EXPORT_HAR_EVENT` in the app's `window_menu.rs` */
+const MENU_EXPORT_HAR_EVENT = "menu_export_har";
 
 /** What a flow's context menu and the detail pane's menu offer */
 export function useFlowActions(): (flow: Flow) => DropdownItem[] {

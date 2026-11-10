@@ -50,6 +50,7 @@ const base: Flow = {
   grpcMethod: null,
   grpcStatus: null,
   grpcMessage: null,
+  graphqlOperation: null,
   tunnelled: false,
   agentRead: false,
   clientAddr: "127.0.0.1:54321",
@@ -68,6 +69,10 @@ const jsonResponse = JSON.stringify({
   currency: "usd",
   status: "succeeded",
   charges: { data: [{ id: "ch_1", paid: true }] },
+});
+const graphqlRequest = JSON.stringify({
+  query: "query GetViewer { viewer { login } }",
+  operationName: "GetViewer",
 });
 const formRequest = "grant_type=client_credentials&client_id=yaak-proxy&scope=read+write";
 const htmlResponse =
@@ -176,4 +181,43 @@ export const fixtures: FlowFixture[] = [
     requestBody: body(""),
     responseBody: body(""),
   },
+  {
+    label: "GraphQL POST",
+    flow: {
+      ...base,
+      id: "fl_graphql",
+      method: "POST",
+      url: "https://api.github.com/graphql",
+      contentType: "application/json",
+      requestHeaders: [{ name: "Content-Type", value: "application/json" }],
+      responseHeaders: [{ name: "X-Cache", value: "MISS" }],
+      requestSize: graphqlRequest.length,
+      responseSize: 64,
+      graphqlOperation: "GetViewer",
+    },
+    requestBody: body(graphqlRequest),
+    responseBody: body('{"data":{"viewer":{"login":"yaak"}}}'),
+  },
+  {
+    label: "gRPC call",
+    flow: {
+      ...base,
+      id: "fl_grpc",
+      method: "POST",
+      url: "https://grpc.example.com/pkg.Greeter/SayHello",
+      contentType: "application/grpc",
+      clientHttpVersion: "HTTP/2",
+      upstreamHttpVersion: "HTTP/2",
+      requestHeaders: [{ name: "Content-Type", value: "application/grpc" }],
+      responseHeaders: [{ name: "Content-Type", value: "application/grpc" }],
+      grpcService: "pkg.Greeter",
+      grpcMethod: "SayHello",
+      grpcStatus: 0,
+    },
+    requestBody: body(""),
+    responseBody: body(""),
+  },
 ];
+
+/** An app icon for every flow in the harness, as base64 PNG */
+export const appIconPng = btoa(String.fromCharCode(...png));

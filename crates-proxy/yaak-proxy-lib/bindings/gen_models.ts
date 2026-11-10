@@ -127,6 +127,11 @@ grpcStatus: number | null,
  */
 grpcMessage: string | null, 
 /**
+ * A GraphQL request's operation, from its body or URL: `GetUser`, `GetUser +2` for a
+ * batch, empty for an anonymous one. None when the request is not GraphQL.
+ */
+graphqlOperation: string | null, 
+/**
  * An HTTPS connection passed through undecrypted, as the decrypt list leaves it out or its
  * client rejected the proxy's certificate: method `CONNECT`, its URL the host, its sizes
  * the bytes each way, and no headers or bodies. Open until `elapsedMs` or `error` is set.

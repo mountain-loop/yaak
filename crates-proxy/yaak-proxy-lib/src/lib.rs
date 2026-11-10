@@ -1655,6 +1655,9 @@ pub struct ListFlowsResponse {
     /// Flows the filter covers, whatever the limit, when it narrows to fewer than all of them.
     #[ts(type = "number | null")]
     pub matching: Option<usize>,
+    /// Sorted, the next page's `cursor`: the last flow's sort values, as read. None without a
+    /// sort or a flow.
+    pub cursor: Option<Vec<flows::SortValue>>,
 }
 
 #[derive(Deserialize, TS)]
@@ -2689,8 +2692,9 @@ fn list_actions(
 }
 
 fn list_flows(ctx: &ProxyCtx, req: flows::FlowFilter) -> Result<ListFlowsResponse, RpcError> {
-    let (flows, total, matching) = flows::page(&ctx.db()?, &req).map_err(rpc_error)?;
-    Ok(ListFlowsResponse { flows, total, matching })
+    let flows::Page { flows, total, matching, cursor } =
+        flows::sorted_page(&ctx.db()?, &req).map_err(rpc_error)?;
+    Ok(ListFlowsResponse { flows, total, matching, cursor })
 }
 
 async fn clear_flows(ctx: ProxyCtx, _req: ClearFlowsRequest) -> Result<usize, RpcError> {
@@ -2827,9 +2831,52 @@ struct InFlight {
     /// Changed since it was last written, by a message or a status.
     dirty: bool,
     last_write: Option<std::time::Instant>,
+    /// The request body's first bytes, while it may be a GraphQL request whose operation is
+    /// read once it is whole. None once it can't be: not JSON, encoded, or too long.
+    graphql_scan: Option<Vec<u8>>,
 }
 
+/// Most request body bytes read for a GraphQL operation; a longer body is not looked at.
+const GRAPHQL_SCAN_LIMIT: usize = 64 * 1024;
+
 impl InFlight {
+    /// Keeps a request body chunk for reading a GraphQL operation from, when the body may be
+    /// one: JSON, not encoded, and short. `len` is the chunk's size on the wire, `data` what of
+    /// it was captured.
+    fn scan_graphql(&mut self, first: bool, len: usize, data: &[u8]) {
+        if first {
+            let headers = &self.flow.request_headers;
+            let json = find_header(headers, "content-type")
+                .and_then(|t| t.split(';').next())
+                .is_some_and(|t| t.trim().eq_ignore_ascii_case("application/json"));
+            let encoded = find_header(headers, "content-encoding")
+                .is_some_and(|e| !e.trim().eq_ignore_ascii_case("identity"));
+            let stream = self.flow.stream_kind.is_some();
+            self.graphql_scan = (json && !encoded && !stream).then(Vec::new);
+        }
+        let Some(buf) = &mut self.graphql_scan else {
+            return;
+        };
+        if data.len() < len || buf.len() + len > GRAPHQL_SCAN_LIMIT {
+            self.graphql_scan = None;
+            return;
+        }
+        buf.extend_from_slice(data);
+    }
+
+    /// Reads the GraphQL operation from the request body kept by [`Self::scan_graphql`].
+    fn finish_graphql_scan(&mut self) {
+        let Some(body) = self.graphql_scan.take() else {
+            return;
+        };
+        let content_type = find_header(&self.flow.request_headers, "content-type");
+        if let Some(op) =
+            yaak_http::graphql::detect(&self.flow.method, &self.flow.url, content_type, Some(&body))
+        {
+            self.flow.graphql_operation = Some(op.label());
+        }
+    }
+
     /// Stops writing the bodies its stream's messages carry, which are read back from them.
     /// A request's bytes are kept while it uploads, as a call can end before its upload does,
     /// with a message still partway in: they are dropped once the upload ends, or kept as its
@@ -3079,6 +3126,12 @@ impl FlowSink {
                 let flow_id = Flow::generate_id();
                 let request_body = Flow::body_id(&flow_id, FlowBody::Request);
                 let response_body = Flow::body_id(&flow_id, FlowBody::Response);
+                // GraphQL over GET is all in its URL; a body's operation is read once it is whole.
+                let graphql_operation = method
+                    .eq_ignore_ascii_case("GET")
+                    .then(|| yaak_http::graphql::detect(&method, &url, None, None))
+                    .flatten()
+                    .map(|op| op.label());
                 let flow = Flow {
                     id: flow_id,
                     started_at: DateTime::<Utc>::from(started_at).naive_utc(),
@@ -3086,6 +3139,7 @@ impl FlowSink {
                     url,
                     client_http_version: http_version,
                     client_addr: Some(client_addr.to_string()),
+                    graphql_operation,
                     ..Default::default()
                 };
                 in_flight.insert(
@@ -3100,6 +3154,7 @@ impl FlowSink {
                         next_seq: 0,
                         dirty: false,
                         last_write: None,
+                        graphql_scan: None,
                     },
                 );
             }
@@ -3128,6 +3183,7 @@ impl FlowSink {
                     next_seq: 0,
                     dirty: false,
                     last_write: None,
+                    graphql_scan: None,
                 };
                 // Shown while it is open, as tunnels often stay open for minutes.
                 self.write_stream_flow(&mut f);
@@ -3179,6 +3235,7 @@ impl FlowSink {
             // upload does.
             ProxyEvent::RequestBodyChunk { id, len, data } => {
                 if let Some(f) = in_flight.get_mut(&id) {
+                    f.scan_graphql(f.flow.request_size == 0, len, &data);
                     f.flow.request_size += len as i64;
                     if f.keeps_bytes(FlowBody::Request) {
                         f.flow.request_truncated |= data.len() < len;
@@ -3191,6 +3248,7 @@ impl FlowSink {
                 if let Some(f) = in_flight.get_mut(&id) {
                     f.flow.request_size = size as i64;
                     f.flow.elapsed_request_ms = Some(clamp_ms(elapsed_ms));
+                    f.finish_graphql_scan();
                     if f.keeps_bytes(FlowBody::Request) {
                         f.flow.request_truncated = truncated;
                         finish_body(f.request_body.take());
@@ -4487,6 +4545,96 @@ mod tests {
         .unwrap();
     }
 
+    /// A GraphQL request's operation is stored with the flow: from a JSON body sent in chunks,
+    /// and from a GET's URL. A JSON body that is not GraphQL, and one over the scan limit, store
+    /// none.
+    #[test]
+    fn graphql_operations_are_stored_at_capture() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        let send = |event| tx.send(event).unwrap();
+        let post = |id: u64, url: &str, chunks: &[&[u8]]| {
+            send(ProxyEvent::RequestStart {
+                id,
+                started_at: SystemTime::now(),
+                method: "POST".into(),
+                url: url.into(),
+                http_version: "HTTP/1.1".into(),
+                connection: 1,
+                client_addr: "127.0.0.1:1".parse().unwrap(),
+            });
+            send(ProxyEvent::RequestHeader {
+                id,
+                name: "Content-Type".into(),
+                value: "application/json; charset=utf-8".into(),
+            });
+            let mut size = 0;
+            for chunk in chunks {
+                size += chunk.len();
+                send(ProxyEvent::RequestBodyChunk {
+                    id,
+                    len: chunk.len(),
+                    data: bytes::Bytes::copy_from_slice(chunk),
+                });
+            }
+            send(ProxyEvent::RequestBodyComplete {
+                id,
+                size: size as u64,
+                truncated: false,
+                elapsed_ms: 1,
+            });
+            send(ProxyEvent::ResponseStart {
+                id,
+                status: 200,
+                http_version: "HTTP/1.1".into(),
+                remote_addr: None,
+                elapsed_ms: 2,
+            });
+            send(ProxyEvent::ResponseBodyComplete {
+                id,
+                size: 0,
+                truncated: false,
+                elapsed_ms: 3,
+                error: None,
+                cancelled: false,
+            });
+        };
+        post(
+            1,
+            "https://api.example.com/graphql",
+            &[
+                br#"{"query":"query GetUser($id: ID!) "#,
+                br#"{ user(id: $id) { id } }"}"#,
+            ],
+        );
+        post(2, "https://api.example.com/users", &[br#"{"query":"red shoes"}"#]);
+        let long = format!(
+            r#"{{"query":"query Big {{ a }}","variables":{{"pad":"{}"}}}}"#,
+            "x".repeat(GRAPHQL_SCAN_LIMIT)
+        );
+        post(3, "https://api.example.com/big/graphql", &[long.as_bytes()]);
+        send_flow(&tx, 4, "https://api.example.com/graphql?query=query%20Feed%20%7B%20a%20%7D");
+        drop(tx);
+        event_loop.join().unwrap();
+
+        let flows = flows::list(&ctx.db().unwrap(), &Default::default()).unwrap();
+        assert_eq!(flows.len(), 4);
+        let operation = |url: &str| {
+            let flow = flows.iter().find(|f| f.url == url).unwrap();
+            flow.graphql_operation.clone()
+        };
+        assert_eq!(operation("https://api.example.com/graphql").as_deref(), Some("GetUser"));
+        assert_eq!(operation("https://api.example.com/users"), None);
+        assert_eq!(operation("https://api.example.com/big/graphql"), None);
+        assert_eq!(
+            operation("https://api.example.com/graphql?query=query%20Feed%20%7B%20a%20%7D")
+                .as_deref(),
+            Some("Feed")
+        );
+    }
+
     /// Flows that end together are written together, and every one the engine sent is written
     /// when it stops, mid-batch or not, each with its body.
     #[test]
@@ -4545,6 +4693,7 @@ mod tests {
             next_seq: 0,
             dirty: false,
             last_write: None,
+            graphql_scan: None,
         };
         sink.finish_flow(f);
         assert!(!sink.finished_due(), "the clock stands still");
