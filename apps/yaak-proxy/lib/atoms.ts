@@ -1,5 +1,5 @@
 import type { Flow } from "@yaakapp-internal/proxy-lib";
-import type { SplitLayoutLayout } from "@yaakapp-internal/ui";
+import type { ResponseViewMode, SplitLayoutLayout } from "@yaakapp-internal/ui";
 import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { currentPlace, EMPTY_PLACE, type PlaceStack, stackOf, updatePlace } from "./places";
@@ -63,3 +63,11 @@ export const helperDialogOpenAtom = atom(false);
 
 /** Stacked by default; the header's toggle switches to side by side */
 export const flowLayoutAtom = atomWithStorage<SplitLayoutLayout>("flow_layout", "vertical");
+
+/** Bodies show formatted or raw, one choice for both halves of every flow */
+export const bodyViewModeAtom = atomWithStorage<ResponseViewMode>(
+  "body_view_mode",
+  "pretty",
+  undefined,
+  { getOnInit: true },
+);

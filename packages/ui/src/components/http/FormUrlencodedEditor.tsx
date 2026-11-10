@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { type ReactNode, useCallback, useMemo } from "react";
 import type { Pair, PairEditorProps } from "../pairs/PairEditor";
 import { PairOrBulkEditor } from "../pairs/PairOrBulkEditor";
 import type { HttpFormFieldView, HttpRequestBodyView } from "./types";
@@ -11,6 +11,8 @@ type Props = {
   onChange?: (body: HttpRequestBodyView) => void;
   /** Show the fields without a way to change them */
   readOnly?: boolean;
+  /** Drawn in one bar with the bulk-edit toggle, like a view-mode switch */
+  actions?: ReactNode;
 };
 
 export function FormUrlencodedEditor({
@@ -19,6 +21,7 @@ export function FormUrlencodedEditor({
   forceUpdateKey,
   onChange,
   readOnly,
+  actions,
 }: Props) {
   const pairs = useMemo<Pair[]>(
     () =>
@@ -52,6 +55,7 @@ export function FormUrlencodedEditor({
       pairs={pairs}
       onChange={handleChange}
       readOnly={readOnly}
+      actions={actions}
       forceUpdateKey={forceUpdateKey}
       stateKey={`urlencoded.${requestId}`}
     />

@@ -4,21 +4,27 @@ import customSortFixture from "../../../crates-proxy/yaak-proxy-lib/tests/fixtur
 import {
   addCustomColumn,
   addSortKey,
+  allColumns,
   cellFilterTerm,
+  columnShifts,
   type ColumnPrefs,
   customPath,
   customPathProblem,
   customValue,
   defaultColumnPrefs,
+  dropBoundary,
   fieldReference,
   fieldReferenceChanges,
   gridTemplate,
   gridWidth,
   hideOtherColumns,
+  moveColumn,
+  moveColumnBy,
   nextSort,
   operationOf,
   parseColumnPrefs,
   removeCustomColumn,
+  resetOrder,
   resetWidth,
   resetWidths,
   resizeColumn,
@@ -121,6 +127,7 @@ describe("column preferences", () => {
       visible: { number: false, "field:header.x-cache": true },
       widths: { host: 60 },
       custom: ["field:header.x-cache"],
+      order: [],
       sort: [{ column: "status", descending: true }],
     });
     expect(
@@ -138,6 +145,7 @@ describe("column preferences", () => {
       visible: {},
       widths: { size: 90 },
       custom: ["field:query.page"],
+      order: [],
       sort: [{ column: "time", descending: false }],
     });
     expect(parseColumnPrefs(null)).toEqual(defaultColumnPrefs);
@@ -178,6 +186,196 @@ describe("column preferences", () => {
     expect(showOperationFor(defaultColumnPrefs, [grpc]).visible.operation).toBe(true);
     const hidden = { ...defaultColumnPrefs, visible: { operation: false } };
     expect(showOperationFor(hidden, [grpc])).toBe(hidden);
+  });
+});
+
+describe("column order", () => {
+  const defaults = ids(defaultColumnPrefs);
+
+  test("a column moves to the boundary it was dropped at", () => {
+    expect(ids(moveColumn(defaultColumnPrefs, "status", 2))).toEqual([
+      "number",
+      "app",
+      "status",
+      "method",
+      "host",
+      "path",
+      "query",
+      "type",
+      "size",
+      "time",
+    ]);
+    // Rightwards, before the column at the boundary
+    expect(ids(moveColumn(defaultColumnPrefs, "method", 5)).slice(2, 6)).toEqual([
+      "host",
+      "path",
+      "method",
+      "query",
+    ]);
+    // To either end
+    expect(ids(moveColumn(defaultColumnPrefs, "time", 0))[0]).toBe("time");
+    expect(ids(moveColumn(defaultColumnPrefs, "number", defaults.length)).at(-1)).toBe("number");
+    // The picker lists them in the same order
+    const moved = moveColumn(defaultColumnPrefs, "time", 0);
+    expect(allColumns(moved)[0]?.id).toBe("time");
+  });
+
+  test("a drop where the column already is changes nothing", () => {
+    expect(moveColumn(defaultColumnPrefs, "host", 3)).toBe(defaultColumnPrefs);
+    expect(moveColumn(defaultColumnPrefs, "host", 4)).toBe(defaultColumnPrefs);
+    expect(moveColumn(defaultColumnPrefs, "host", -1)).toBe(defaultColumnPrefs);
+    expect(moveColumn(defaultColumnPrefs, "host", defaults.length + 1)).toBe(defaultColumnPrefs);
+    // A hidden column has no place among those shown
+    expect(moveColumn(defaultColumnPrefs, "latency", 0)).toBe(defaultColumnPrefs);
+  });
+
+  test("Move Left and Move Right go one place, and not past the ends", () => {
+    expect(ids(moveColumnBy(defaultColumnPrefs, "host", -1)).slice(2, 5)).toEqual([
+      "host",
+      "method",
+      "path",
+    ]);
+    expect(ids(moveColumnBy(defaultColumnPrefs, "host", 1)).slice(3, 6)).toEqual([
+      "path",
+      "host",
+      "query",
+    ]);
+    expect(moveColumnBy(defaultColumnPrefs, "number", -1)).toBe(defaultColumnPrefs);
+    expect(moveColumnBy(defaultColumnPrefs, "time", 1)).toBe(defaultColumnPrefs);
+    // Where App has nothing to show, Number is next to Method
+    expect(
+      shownColumns(moveColumnBy(defaultColumnPrefs, "method", -1, ["app"]), ["app"]).map(
+        (c) => c.id,
+      )[0],
+    ).toBe("method");
+  });
+
+  test("a hidden column keeps its place and comes back to it", () => {
+    let prefs = moveColumn(defaultColumnPrefs, "time", 0);
+    prefs = toggleColumn(prefs, "status");
+    prefs = moveColumn(prefs, "host", 0);
+    expect(ids(prefs)).not.toContain("status");
+    prefs = toggleColumn(prefs, "status");
+    expect(ids(prefs)).toEqual([
+      "host",
+      "time",
+      "number",
+      "app",
+      "method",
+      "path",
+      "query",
+      "status",
+      "type",
+      "size",
+    ]);
+  });
+
+  test("never reordered, a built-in column turned on takes its default place", () => {
+    // Request Size's default place is before Size
+    const prefs = toggleColumn(defaultColumnPrefs, "requestSize");
+    expect(prefs.order).toEqual([]);
+    expect(ids(prefs).slice(-4)).toEqual(["type", "requestSize", "size", "time"]);
+    // Among the built-in ones, so a custom column stays at the end
+    const custom = addCustomColumn(defaultColumnPrefs, "header.x-cache");
+    expect(ids(custom).at(-1)).toBe("field:header.x-cache");
+    const both = toggleColumn(custom, "requestSize");
+    expect(both.order).toEqual([]);
+    expect(ids(both).slice(-4)).toEqual(["requestSize", "size", "time", "field:header.x-cache"]);
+  });
+
+  test("once reordered, a column turned on goes at the end, unless it had a place", () => {
+    let prefs = moveColumn(defaultColumnPrefs, "time", 0);
+    prefs = toggleColumn(prefs, "requestSize");
+    expect(ids(prefs).at(-1)).toBe("requestSize");
+    // Moved, hidden and shown again, it goes back where it was moved to
+    const before = ids(prefs).indexOf("size");
+    prefs = moveColumn(prefs, "requestSize", before);
+    prefs = toggleColumn(toggleColumn(prefs, "requestSize"), "requestSize");
+    expect(ids(prefs).slice(-3)).toEqual(["type", "requestSize", "size"]);
+    // A custom column added goes at the end too
+    expect(ids(addCustomColumn(prefs, "query.page")).at(-1)).toBe("field:query.page");
+  });
+
+  test("a custom column is added at the end and leaves the order when removed", () => {
+    const moved = moveColumn(defaultColumnPrefs, "size", 0);
+    let prefs = addCustomColumn(moved, "header.x-cache");
+    expect(ids(prefs).at(-1)).toBe("field:header.x-cache");
+    prefs = moveColumn(prefs, "field:header.x-cache", 1);
+    expect(ids(prefs).slice(0, 2)).toEqual(["size", "field:header.x-cache"]);
+    // Hidden and added again, it keeps its place
+    prefs = addCustomColumn(toggleColumn(prefs, "field:header.x-cache"), "header.x-cache");
+    expect(ids(prefs)[1]).toBe("field:header.x-cache");
+    prefs = removeCustomColumn(prefs, "field:header.x-cache");
+    expect(prefs.order).not.toContain("field:header.x-cache");
+    expect(ids(prefs)).toEqual(ids(moved));
+    // Added again, it starts over at the end
+    expect(ids(addCustomColumn(prefs, "header.x-cache")).at(-1)).toBe("field:header.x-cache");
+  });
+
+  test("the order persists, and columns it doesn't list follow it in their default order", () => {
+    let prefs = addCustomColumn(defaultColumnPrefs, "query.page");
+    prefs = moveColumn(prefs, "field:query.page", 0);
+    expect(parseColumnPrefs(JSON.parse(JSON.stringify(prefs))).order).toEqual(prefs.order);
+    const parsed = parseColumnPrefs({
+      custom: ["field:query.page"],
+      order: ["time", "gone", 3, "time", "field:header.x-gone", "field:query.page", "host"],
+    });
+    expect(parsed.order).toEqual(["time", "field:query.page", "host"]);
+    expect(ids(parsed)).toEqual([
+      "time",
+      "field:query.page",
+      "host",
+      "number",
+      "app",
+      "method",
+      "path",
+      "query",
+      "status",
+      "type",
+      "size",
+    ]);
+    expect(parseColumnPrefs({ order: "time" }).order).toEqual([]);
+  });
+
+  test("a drag's target is the boundary nearest the pointer, null in its own slot", () => {
+    // Four columns 100px wide from x 24, after the mark column; the third is dragged
+    const cells = [24, 124, 224, 324].map((left) => ({ left, right: left + 100 }));
+    const at = (x: number) => dropBoundary(x, cells, 2);
+    // Over the mark column or the first's left half: the first boundary
+    expect(at(5)).toBe(0);
+    expect(at(60)).toBe(0);
+    expect(at(80)).toBe(1);
+    // The left neighbour's near half, its own column, the right neighbour's near half: staying
+    expect(at(190)).toBeNull();
+    expect(at(250)).toBeNull();
+    expect(at(290)).toBeNull();
+    expect(at(350)).toBeNull();
+    // Past the right neighbour's middle, and past the end
+    expect(at(380)).toBe(4);
+    expect(at(900)).toBe(4);
+    // The last column dragged to the end stays
+    expect(dropBoundary(900, cells, 3)).toBeNull();
+  });
+
+  test("the columns a drag passes slide by its width to make room", () => {
+    // Five columns; the second, 80px wide, is dragged
+    expect(columnShifts(5, 1, 80, null)).toEqual([0, 0, 0, 0, 0]);
+    // Right, to before the fifth: the third and fourth slide left
+    expect(columnShifts(5, 1, 80, 4)).toEqual([0, 0, -80, -80, 0]);
+    // Right, to the end: all after it slide left
+    expect(columnShifts(5, 1, 80, 5)).toEqual([0, 0, -80, -80, -80]);
+    // Left, to the start: the first slides right
+    expect(columnShifts(5, 1, 80, 0)).toEqual([80, 0, 0, 0, 0]);
+    // The fourth, dragged left to before the second: the second and third slide right
+    expect(columnShifts(5, 3, 60, 1)).toEqual([0, 60, 60, 0, 0]);
+  });
+
+  test("Reset Column Order puts every column back", () => {
+    let prefs = moveColumn(defaultColumnPrefs, "time", 0);
+    prefs = toggleColumn(prefs, "latency");
+    prefs = resetOrder(prefs);
+    expect(prefs.order).toEqual([]);
+    expect(ids(prefs)).toEqual([...defaults.slice(0, -1), "time", "latency"]);
   });
 });
 

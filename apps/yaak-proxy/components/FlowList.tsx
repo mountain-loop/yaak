@@ -14,7 +14,14 @@ import {
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
-import type { CSSProperties, KeyboardEvent, MouseEvent, ReactElement, WheelEvent } from "react";
+import type {
+  CSSProperties,
+  KeyboardEvent,
+  MouseEvent,
+  ReactElement,
+  RefObject,
+  WheelEvent,
+} from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   appliedFilterAtom,
@@ -28,6 +35,7 @@ import {
   type Column,
   type ColumnId,
   cellFilterTerm,
+  columnShifts,
   customValue,
   gridTemplate,
   gridWidth,
@@ -65,7 +73,7 @@ import {
 import { useShowToast } from "../lib/toast";
 import { AppIcon } from "./AppIcon";
 import { FlowListEmpty, PausedRow } from "./FlowListEmpty";
-import { FlowListHeader } from "./FlowListHeader";
+import { type ColumnDragEvent, FlowListHeader } from "./FlowListHeader";
 
 const BOTTOM_PADDING = 6;
 /** Rows from the top at which older flows start loading, or from the bottom, sorted, more */
@@ -305,6 +313,11 @@ export function FlowList({ style, className }: Props) {
     el.scrollLeft += e.deltaX;
   }, []);
 
+  // A dragged column: its ghost, and the others sliding aside to make room for it
+  const rootRef = useRef<HTMLDivElement>(null);
+  const getScrollElement = useCallback(() => scrollRef.current, []);
+  const onColumnDrag = useColumnDragView(rootRef, headerScrollRef, scrollRef);
+
   // A list too short to scroll still loads older flows on scrolling up.
   const handleWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {
@@ -439,10 +452,11 @@ export function FlowList({ style, className }: Props) {
 
   return (
     <div
+      ref={rootRef}
       style={style}
       className={classNames(
         className,
-        "grid grid-rows-[auto_minmax(0,1fr)] grid-cols-[minmax(0,1fr)] min-h-0 text-sm",
+        "relative grid grid-rows-[auto_minmax(0,1fr)] grid-cols-[minmax(0,1fr)] min-h-0 text-sm",
       )}
     >
       {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- scrolls the list sideways */}
@@ -462,11 +476,14 @@ export function FlowList({ style, className }: Props) {
           onSort={handleSort}
           onSetSort={handleSetSort}
           onResetSort={follow}
+          scrollElement={getScrollElement}
+          onColumnDrag={onColumnDrag}
         />
       </div>
       <div className="relative min-h-0">
         <div
           ref={scrollRef}
+          data-flow-rows
           role="listbox"
           aria-label="Flows"
           tabIndex={0}
@@ -574,6 +591,233 @@ function useArrivals(flows: Flow[], following: boolean): Map<string, number> {
     s.arrivals = next;
     return next;
   }, [flows, following]);
+}
+
+/** How long the columns take to slide aside for a dragged column, or back */
+const SLIDE_MS = 150;
+
+/**
+ * Shows a column's drag without rendering a row. Its ghost is its header and the cells of the
+ * rows in view, copied once when the drag starts and following the pointer sideways. The column
+ * hides where it is, and the columns between it and where it would drop slide aside by its width
+ * to leave a gap there, all by one style element: a rule a column, header and cells together,
+ * which rows arriving meanwhile follow too. Dropped, the rules go as the order changes, in the
+ * same task, so nothing animates or jumps; put back, the columns slide home first.
+ */
+function useColumnDragView(
+  rootRef: RefObject<HTMLDivElement | null>,
+  headerRef: RefObject<HTMLDivElement | null>,
+  listRef: RefObject<HTMLDivElement | null>,
+): (event: ColumnDragEvent) => void {
+  const drag = useRef<ColumnDragView | null>(null);
+  // Columns sliding home after a drag was put back, until they are there
+  const settling = useRef<{ style: HTMLStyleElement; timer: number } | null>(null);
+
+  const settle = useCallback(() => {
+    const s = settling.current;
+    settling.current = null;
+    if (s == null) return;
+    clearTimeout(s.timer);
+    s.style.remove();
+  }, []);
+
+  const onColumnDrag = useCallback(
+    (event: ColumnDragEvent) => {
+      const d = drag.current;
+      switch (event.type) {
+        case "move":
+          d?.ghost?.move(event.x);
+          return;
+        case "target":
+          if (d == null) return;
+          d.to = event.to;
+          d.style.textContent = columnDragCss(d);
+          return;
+        case "end": {
+          drag.current = null;
+          if (d == null) return;
+          d.ghost?.remove();
+          if (event.dropped || d.to == null) {
+            d.style.remove();
+            return;
+          }
+          d.to = null;
+          d.style.textContent = columnDragCss(d);
+          settling.current = { style: d.style, timer: window.setTimeout(settle, SLIDE_MS) };
+          return;
+        }
+        case "start": {
+          settle();
+          d?.ghost?.remove();
+          d?.style.remove();
+          drag.current = null;
+          const root = rootRef.current;
+          const header = headerRef.current;
+          const list = listRef.current;
+          if (root == null || header == null || list == null) return;
+          const cells = Array.from(
+            header.querySelectorAll<HTMLElement>("[data-flow-header] > [data-column]"),
+          );
+          const ids = cells.map((c) => c.dataset.column as ColumnId);
+          const from = ids.indexOf(event.id);
+          if (from === -1) return;
+          // Copied before it hides
+          const ghost = snapshotColumn(event.id, event.x, root, header, list);
+          const style = document.createElement("style");
+          document.head.append(style);
+          const widths = cells.map((c) => c.getBoundingClientRect().width);
+          drag.current = { ghost, ids, widths, from, to: null, style };
+          style.textContent = columnDragCss(drag.current);
+        }
+      }
+    },
+    [rootRef, headerRef, listRef, settle],
+  );
+
+  useEffect(
+    () => () => {
+      settle();
+      drag.current?.ghost?.remove();
+      drag.current?.style.remove();
+      drag.current = null;
+    },
+    [settle],
+  );
+  return onColumnDrag;
+}
+
+interface ColumnDragView {
+  ghost: ColumnGhost | null;
+  /** The columns shown and their widths, the dragged one's place among them, and its target */
+  ids: ColumnId[];
+  widths: number[];
+  from: number;
+  to: number | null;
+  style: HTMLStyleElement;
+}
+
+/** The rules for a drag: the column hidden, and those it passes slid aside */
+function columnDragCss({ ids, widths, from, to }: ColumnDragView): string {
+  // A row's cell is the box in its grid: the column's child, or inside the `contents` span a
+  // tooltip wraps it in, as a box that is only its contents can't move
+  const cells = (is: string) =>
+    `[data-flow-rows] ${is} > :not(.contents), [data-flow-rows] ${is} > .contents > *`;
+  const column = (id: ColumnId) => {
+    const is = `[data-column="${CSS.escape(id)}"]`;
+    return `[data-flow-header] > ${is}, ${cells(is)}`;
+  };
+  const rules = [
+    `[data-flow-header] > [data-column], ${cells("[data-column]")} { transition: transform ${SLIDE_MS}ms ease; }`,
+  ];
+  const dragged = ids[from];
+  if (dragged != null) rules.push(`${column(dragged)} { visibility: hidden; }`);
+  const shifts = columnShifts(ids.length, from, widths[from] ?? 0, to);
+  shifts.forEach((dx, i) => {
+    const id = ids[i];
+    if (dx !== 0 && id != null) rules.push(`${column(id)} { transform: translateX(${dx}px); }`);
+  });
+  // A failed flow's reason spans Type and Size together; while they part, it keeps to Type's
+  // width, so it doesn't slide over the column past Size.
+  const type = ids.indexOf("type");
+  if (type !== -1 && ids[type + 1] === "size") {
+    const size = type + 1;
+    if (from === size || shifts[type] !== shifts[size]) {
+      const is = '[data-flow-rows] [data-column="type"]';
+      rules.push(
+        `${is} > .col-span-2, ${is} > .contents > .col-span-2 { width: ${widths[type] ?? 0}px; }`,
+      );
+    }
+  }
+  return rules.join("\n");
+}
+
+interface ColumnGhost {
+  /** Follows the pointer, across the window */
+  move: (x: number) => void;
+  remove: () => void;
+}
+
+function snapshotColumn(
+  id: ColumnId,
+  startX: number,
+  root: HTMLElement,
+  header: HTMLElement,
+  list: HTMLElement,
+): ColumnGhost | null {
+  const cell = header.querySelector<HTMLElement>(`[data-column="${id}"]`);
+  if (cell == null) return null;
+  const rootBox = root.getBoundingClientRect();
+  const cellBox = cell.getBoundingClientRect();
+  const listBox = list.getBoundingClientRect();
+  const listHeight = list.clientHeight;
+
+  const el = document.createElement("div");
+  el.setAttribute("aria-hidden", "true");
+  el.className = classNames(
+    "pointer-events-none absolute top-0 z-20 overflow-hidden rounded-sm",
+    // Lifted: a shadow, and just enough opacity to read as held, not enough to show text through
+    "bg-surface border border-border-subtle shadow-lg opacity-95",
+  );
+  Object.assign(el.style, {
+    left: `${cellBox.left - rootBox.left}px`,
+    width: `${cellBox.width}px`,
+    height: `${rootBox.height}px`,
+    willChange: "transform",
+  });
+
+  // The header's label, without its resize handle
+  const head = place(cellBox.top - rootBox.top, cellBox.height, "text-xs text-text-subtlest");
+  const label = cell.cloneNode(true) as HTMLElement;
+  for (const handle of label.querySelectorAll(".cursor-col-resize")) handle.remove();
+  label.style.width = "100%";
+  head.append(label);
+  el.append(head);
+
+  // The rows in view, clipped to the list as it shows them
+  const rows = document.createElement("div");
+  rows.className = "absolute left-0 right-0 overflow-hidden";
+  Object.assign(rows.style, { top: `${listBox.top - rootBox.top}px`, height: `${listHeight}px` });
+  for (const row of list.querySelectorAll<HTMLElement>('[role="option"]')) {
+    const rowBox = row.getBoundingClientRect();
+    if (rowBox.bottom <= listBox.top || rowBox.top >= listBox.top + listHeight) continue;
+    const source = row.querySelector(`[data-column="${id}"]`);
+    if (source == null) continue;
+    const copy = place(
+      rowBox.top - listBox.top,
+      rowBox.height,
+      classNames(
+        "whitespace-nowrap tabular-nums",
+        row.getAttribute("aria-selected") === "true" && "text-text bg-surface-highlight",
+        row.classList.contains("text-text-subtlest") && "text-text-subtlest",
+      ),
+    );
+    for (const child of source.children) {
+      const clone = child.cloneNode(true) as HTMLElement;
+      clone.style.width = "100%";
+      copy.append(clone);
+    }
+    rows.append(copy);
+  }
+  el.append(rows);
+  root.append(el);
+
+  // Kept within the list's visible width
+  const min = listBox.left;
+  const max = Math.max(min, listBox.left + list.clientWidth - cellBox.width);
+  const move = (x: number) => {
+    const left = Math.min(max, Math.max(min, cellBox.left + x - startX));
+    el.style.transform = `translateX(${left - cellBox.left}px)`;
+  };
+  move(startX);
+  return { move, remove: () => el.remove() };
+}
+
+/** A line of the ghost, `top` pixels down its box */
+function place(top: number, height: number, className: string): HTMLElement {
+  const el = document.createElement("div");
+  el.className = classNames("absolute left-0 right-0 flex items-center", className);
+  Object.assign(el.style, { top: `${top}px`, height: `${height}px` });
+  return el;
 }
 
 interface RowProps {

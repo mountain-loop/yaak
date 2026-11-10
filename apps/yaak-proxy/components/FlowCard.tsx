@@ -6,6 +6,7 @@ import {
   Dropdown,
   EmptyStateText,
   type ExtraPaneTab,
+  FormUrlencodedEditor,
   type HttpBodyResult,
   HttpRequestPaneView,
   HttpResponsePaneView,
@@ -13,14 +14,13 @@ import {
   IconButton,
   parseCookieHeaders,
   ResponseCookies,
-  type ResponseViewMode,
   SplitLayout,
   Tooltip,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue, useSetAtom, useStore } from "jotai";
-import { useCallback, useMemo, useState } from "react";
-import { BODY_TYPE_BINARY } from "@yaakapp-internal/ui/httpTypes";
+import { useCallback, useMemo } from "react";
+import { BODY_TYPE_FORM_URLENCODED } from "@yaakapp-internal/ui/httpTypes";
 import { placeTabsAtom } from "../lib/atoms";
 import { findHeader } from "../lib/body";
 import {
@@ -143,7 +143,6 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
         tab: {
           value: REQUEST_TAB_COOKIES,
           label: "Cookies",
-          empty: sentCount === 0,
           rightSlot: <CountBadge count={sentCount} />,
         },
         content: <ResponseCookies response={cookies} side="sent" />,
@@ -160,13 +159,16 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
   ];
   const { activeTab, defaultTab, onTabChange } = useShapeTab("request", flow, available);
 
+  const forceUpdateKey = `${flow.updatedAt}.${body.data == null ? "" : "loaded"}`;
+
   return (
     <HttpRequestPaneView
-      className="px-3"
+      // Padded below as the response half's tabs are, so their content, and the actions bar
+      // over it, sit the same distance from the card's edges
+      className="px-3 pb-3"
       request={request}
       fullHeight
-      dimEmptyTabs
-      forceUpdateKey={`${flow.updatedAt}.${body.data == null ? "" : "loaded"}`}
+      forceUpdateKey={forceUpdateKey}
       tabsStorageKey="proxy_request_tabs"
       bodyLoader={loader}
       extraTabs={extraTabs}
@@ -174,15 +176,30 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
       activeTab={activeTab}
       onTabChange={onTabChange}
       urlLine={<UrlLine flow={flow} />}
-      renderBody={(editor) => (
+      renderBody={() => (
         <FlowRequestBody
           body={body}
-          editor={editor}
-          // The proxy's own viewer, with its hexdump and save, rather than a size alone
-          binaryViewer={
-            request.bodyType === BODY_TYPE_BINARY ? (
-              <FlowBodyViewer flow={flow} which="request" pretty />
-            ) : null
+          // The response's viewer choice, with the form's fields as a URL-encoded body's
+          // formatted view, the switch in one bar with their bulk-view toggle
+          viewer={
+            <FlowBodyViewer
+              flow={flow}
+              which="request"
+              form={
+                request.bodyType === BODY_TYPE_FORM_URLENCODED
+                  ? (actions) => (
+                      <FormUrlencodedEditor
+                        readOnly
+                        requestId={request.id}
+                        form={request.body.form}
+                        forceUpdateKey={forceUpdateKey}
+                        actions={actions}
+                      />
+                    )
+                  : undefined
+              }
+              hideCutNote
+            />
           }
           requestSize={flow.requestSize}
         />
@@ -210,7 +227,6 @@ function UrlLine({ flow }: { flow: Flow }) {
 }
 
 function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }) {
-  const [viewMode, setViewMode] = useState<ResponseViewMode>("pretty");
   // A stream's body is its messages, read by the Messages tab; reading it whole again on every
   // message would only hold copies of it
   const loadBody = flow.streamKind == null;
@@ -242,7 +258,6 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
               tab: {
                 value: RESPONSE_TAB_MESSAGES,
                 label: messagesLabel,
-                empty: flow.messageCount === 0,
                 rightSlot: (
                   <CountBadge
                     count={flow.messageCount}
@@ -273,23 +288,18 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
     <HttpResponsePaneView
       bare
       requestShownApart
-      dimEmptyTabs
       className={classNames(className, "border-border-subtle")}
       response={response}
       body={loader}
       requestBody={null}
       emptyState={<EmptyStateText>Waiting for a response</EmptyStateText>}
-      viewMode={viewMode}
-      onViewModeChange={setViewMode}
       tabsStorageKey="proxy_response_tabs"
       activeTabKey={flow.id}
       defaultTab={defaultTab}
       activeTab={activeTab}
       onTabChange={onTabChange}
       extraTabs={extraTabs}
-      renderBodyViewer={() => (
-        <FlowBodyViewer flow={flow} which="response" pretty={viewMode === "pretty"} />
-      )}
+      renderBodyViewer={() => <FlowBodyViewer flow={flow} which="response" />}
       statusLineCenter={
         flow.responseTruncated ? (
           <span

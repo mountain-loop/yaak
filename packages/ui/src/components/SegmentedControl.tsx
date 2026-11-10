@@ -1,19 +1,33 @@
-import type { IconProps } from "@yaakapp-internal/ui";
-import { HStack, useStateWithDeps, IconTooltip, Label } from "@yaakapp-internal/ui";
+import { generateId } from "@yaakapp-internal/lib/generateId";
 import classNames from "classnames";
 import { type ReactNode, useRef } from "react";
-import { Button } from "./Button";
+import { useStateWithDeps } from "../hooks/useStateWithDeps";
+import { Button, CONTROL_TOOLTIP_DELAY } from "./Button";
+import type { IconProps } from "./Icon";
 import { IconButton, type IconButtonProps } from "./IconButton";
-import { generateId } from "@yaakapp-internal/lib/generateId";
+import { IconTooltip } from "./IconTooltip";
+import { Label } from "./Label";
+import { HStack } from "./Stacks";
+import { Tooltip } from "./Tooltip";
 
-interface Props<T extends string> {
-  options: { value: T; label: string; icon?: IconProps["icon"] }[];
+export interface SegmentedControlOption<T extends string> {
+  value: T;
+  label: string;
+  icon?: IconProps["icon"];
+  /** Shown on hover over a text option, leaving its label as its name */
+  tooltip?: string;
+}
+
+export interface SegmentedControlProps<T extends string> {
+  options: SegmentedControlOption<T>[];
   onChange: (value: T) => void;
   value: T;
   name: string;
   size?: IconButtonProps["size"];
   label: string;
   className?: string;
+  /** Replaces the full width the control takes by default */
+  containerClassName?: string;
   hideLabel?: boolean;
   labelClassName?: string;
   help?: ReactNode;
@@ -29,7 +43,8 @@ export function SegmentedControl<T extends string>({
   labelClassName,
   help,
   className,
-}: Props<T>) {
+  containerClassName = "w-full",
+}: SegmentedControlProps<T>) {
   const [selectedValue, setSelectedValue] = useStateWithDeps<T>(value, [value]);
   const containerRef = useRef<HTMLDivElement>(null);
   const id = useRef(`input-${generateId()}`);
@@ -38,8 +53,13 @@ export function SegmentedControl<T extends string>({
   const inlineHelp =
     hideLabel && help ? <IconTooltip tabIndex={-1} content={help} iconSize="xs" /> : null;
 
+  const focusOption = (index: number) => {
+    const option = containerRef.current?.querySelectorAll<HTMLElement>('[role="radio"]')[index];
+    option?.focus();
+  };
+
   return (
-    <div className="w-full grid">
+    <div className={classNames(containerClassName, "grid")}>
       <Label
         htmlFor={id.current}
         help={hideLabel ? undefined : help}
@@ -67,16 +87,14 @@ export function SegmentedControl<T extends string>({
             if (options[newIndex]) {
               setSelectedValue(options[newIndex].value);
             }
-            const child = containerRef.current?.children[newIndex] as HTMLButtonElement;
-            child.focus();
+            focusOption(newIndex);
           } else if (e.key === "ArrowLeft") {
             e.preventDefault();
             const newIndex = Math.abs((selectedIndex - 1) % options.length);
             if (options[newIndex]) {
               setSelectedValue(options[newIndex].value);
             }
-            const child = containerRef.current?.children[newIndex] as HTMLButtonElement;
-            child.focus();
+            focusOption(newIndex);
           }
         }}
       >
@@ -85,7 +103,7 @@ export function SegmentedControl<T extends string>({
           const isActive = value === o.value;
           const rightSlot = i === options.length - 1 ? inlineHelp : null;
           if (o.icon == null) {
-            return (
+            const button = (
               <Button
                 key={o.label}
                 aria-checked={isActive}
@@ -103,6 +121,13 @@ export function SegmentedControl<T extends string>({
               >
                 {o.label}
               </Button>
+            );
+            return o.tooltip == null ? (
+              button
+            ) : (
+              <Tooltip key={o.label} wrap content={o.tooltip} delay={CONTROL_TOOLTIP_DELAY}>
+                {button}
+              </Tooltip>
             );
           } else {
             return (

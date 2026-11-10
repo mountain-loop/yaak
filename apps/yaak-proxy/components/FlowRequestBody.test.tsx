@@ -21,17 +21,9 @@ const data = (truncated = false): FlowBodyData => ({
   storedSize: 7,
 });
 
-function render(
-  body: Parameters<typeof FlowRequestBody>[0]["body"],
-  binaryViewer: string | null = null,
-) {
+function render(body: Parameters<typeof FlowRequestBody>[0]["body"]) {
   return renderToStaticMarkup(
-    <FlowRequestBody
-      body={body}
-      editor={<div>EDITOR</div>}
-      binaryViewer={binaryViewer == null ? null : <div>{binaryViewer}</div>}
-      requestSize={2048}
-    />,
+    <FlowRequestBody body={body} viewer={<div>EDITOR</div>} requestSize={2048} />,
   );
 }
 
@@ -49,9 +41,8 @@ describe("FlowRequestBody", () => {
     expect(html).toContain("LOADING");
   });
 
-  test("the editor once loaded, the proxy's viewer for a binary body", () => {
+  test("the viewer once loaded", () => {
     expect(render({ data: data(), isLoading: false, error: null })).toContain("EDITOR");
-    expect(render({ data: data(), isLoading: false, error: null }, "HEXDUMP")).toContain("HEXDUMP");
   });
 
   test("a cut body says how much was kept", () => {

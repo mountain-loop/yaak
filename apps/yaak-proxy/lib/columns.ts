@@ -145,26 +145,45 @@ export const CELL_PADDING = "0.75rem";
 
 /**
  * What the person chose: which columns show, the widths they dragged, by id, the header and
- * query parameter columns they added, in order, and the list's sort
+ * query parameter columns they added, in order, the order they dragged the columns into, and the
+ * list's sort
  */
 export interface ColumnPrefs {
   visible: Partial<Record<ColumnId, boolean>>;
   widths: Partial<Record<ColumnId, number>>;
   custom: CustomColumnId[];
+  /**
+   * The columns' order, by id. Columns not listed follow the listed ones, in their default order;
+   * empty for the default order.
+   */
+  order: ColumnId[];
   /** The keys in order; empty for the order flows arrive in */
   sort: FlowSortKey[];
 }
 
-export const defaultColumnPrefs: ColumnPrefs = { visible: {}, widths: {}, custom: [], sort: [] };
+export const defaultColumnPrefs: ColumnPrefs = {
+  visible: {},
+  widths: {},
+  custom: [],
+  order: [],
+  sort: [],
+};
 
 export interface Column extends ColumnDef {
   /** Its width now, in pixels of content */
   current: number;
 }
 
-/** Every column the picker lists: the built-in ones, then those the person added */
+/**
+ * Every column, in the order the person left them: those they placed, then the rest in their
+ * default order, the built-in ones before those added. The picker lists them so.
+ */
 export function allColumns(prefs: ColumnPrefs): ColumnDef[] {
-  return [...COLUMNS, ...prefs.custom.map(customDef)];
+  const defaults = [...COLUMNS, ...prefs.custom.map(customDef)];
+  if (prefs.order.length === 0) return defaults;
+  const byId = new Map(defaults.map((c) => [c.id, c]));
+  const placed = prefs.order.flatMap((id) => byId.get(id) ?? []);
+  return [...placed, ...defaults.filter((c) => !prefs.order.includes(c.id))];
 }
 
 function isVisible(prefs: ColumnPrefs, def: ColumnDef): boolean {
@@ -217,7 +236,104 @@ export function toggleColumn(
 ): ColumnPrefs {
   const shown = isVisible(prefs, columnDef(id));
   if (shown && !canHide(prefs, id, unavailable)) return prefs;
-  return { ...prefs, visible: { ...prefs.visible, [id]: !shown } };
+  const next = { ...prefs, visible: { ...prefs.visible, [id]: !shown } };
+  return shown ? next : placeAtEnd(next, id);
+}
+
+/**
+ * Puts a column just shown after the others shown, unless the person placed it before, so it
+ * goes back to that place. The columns shown before it are placed too, where they are, so the
+ * ones not listed don't jump ahead of it. Until the person has ordered the columns, each keeps
+ * its default place: a built-in one among the others, an added one at the end.
+ */
+function placeAtEnd(prefs: ColumnPrefs, id: ColumnId): ColumnPrefs {
+  if (prefs.order.length === 0 || prefs.order.includes(id)) return prefs;
+  const all = allColumns(prefs);
+  if (all.filter((c) => isVisible(prefs, c)).at(-1)?.id === id) return prefs;
+  const placed = all.filter(
+    (c) => c.id !== id && (prefs.order.includes(c.id) || isVisible(prefs, c)),
+  );
+  return { ...prefs, order: [...placed.map((c) => c.id), id] };
+}
+
+/**
+ * Moves a shown column to the boundary `to` between the columns shown: 0 before the first, their
+ * count after the last. Hidden columns keep their places among the others.
+ */
+export function moveColumn(
+  prefs: ColumnPrefs,
+  id: ColumnId,
+  to: number,
+  unavailable: ColumnId[] = [],
+): ColumnPrefs {
+  const shown = shownColumns(prefs, unavailable).map((c) => c.id);
+  const from = shown.indexOf(id);
+  if (from === -1 || to < 0 || to > shown.length || to === from || to === from + 1) return prefs;
+  // Every column shown, and those hidden that were placed, so they keep their places
+  const order = allColumns(prefs)
+    .filter((c) => c.id !== id && (prefs.order.includes(c.id) || shown.includes(c.id)))
+    .map((c) => c.id);
+  // Before the column at the boundary, or after the last one shown
+  const before = shown[to];
+  const last = shown.at(-1);
+  const at = before != null ? order.indexOf(before) : last == null ? -1 : order.indexOf(last) + 1;
+  if (at === -1) return prefs;
+  order.splice(at, 0, id);
+  return { ...prefs, order };
+}
+
+/** One place left, or with `1`, right, among the columns shown */
+export function moveColumnBy(
+  prefs: ColumnPrefs,
+  id: ColumnId,
+  by: -1 | 1,
+  unavailable: ColumnId[] = [],
+): ColumnPrefs {
+  const from = shownColumns(prefs, unavailable).findIndex((c) => c.id === id);
+  if (from === -1) return prefs;
+  return moveColumn(prefs, id, by === -1 ? from - 1 : from + 2, unavailable);
+}
+
+/** Every column back to its default place */
+export function resetOrder(prefs: ColumnPrefs): ColumnPrefs {
+  return { ...prefs, order: [] };
+}
+
+/**
+ * Where a dragged column would drop, from the pointer and the shown columns' edges, left to
+ * right, as they are laid out before the drag: the boundary before the first column whose middle
+ * is right of the pointer. Over its own column or the near half of a neighbour, that is an edge
+ * of its own slot, where it would stay, so null. Left of the first column, over the fixed mark
+ * column, it is the first boundary.
+ */
+export function dropBoundary(
+  x: number,
+  cells: { left: number; right: number }[],
+  from: number,
+): number | null {
+  let at = cells.findIndex((r) => x < (r.left + r.right) / 2);
+  if (at === -1) at = cells.length;
+  const stays = from === -1 || at === from || at === from + 1;
+  return stays ? null : at;
+}
+
+/**
+ * How far, in pixels, each of `count` shown columns slides while the one at `from`, `width`
+ * wide, is dragged to the boundary `to`: those it would pass make room for it, leftwards when it
+ * goes right and rightwards when it goes left. The dragged column itself, and the rest, stay.
+ */
+export function columnShifts(
+  count: number,
+  from: number,
+  width: number,
+  to: number | null,
+): number[] {
+  return Array.from({ length: count }, (_, i) => {
+    if (to == null || i === from) return 0;
+    if (to > from && i > from && i < to) return -width;
+    if (to < from && i >= to && i < from) return width;
+    return 0;
+  });
 }
 
 /** Shows `id` alone */
@@ -227,20 +343,24 @@ export function hideOtherColumns(prefs: ColumnPrefs, id: ColumnId): ColumnPrefs 
   return { ...prefs, visible };
 }
 
-/** Adds a column for a header or query parameter's path, shown at the end; already there, shown */
+/**
+ * Adds a column for a header or query parameter's path, shown at the end; already there, shown,
+ * in its place
+ */
 export function addCustomColumn(prefs: ColumnPrefs, path: string): ColumnPrefs {
   const id = customColumnId(path);
   const custom = prefs.custom.includes(id) ? prefs.custom : [...prefs.custom, id];
-  return { ...prefs, custom, visible: { ...prefs.visible, [id]: true } };
+  return placeAtEnd({ ...prefs, custom, visible: { ...prefs.visible, [id]: true } }, id);
 }
 
-/** Takes the column out, and out of the sort */
+/** Takes the column out, and out of the order and the sort */
 export function removeCustomColumn(prefs: ColumnPrefs, id: CustomColumnId): ColumnPrefs {
   const { [id]: _v, ...visible } = prefs.visible;
   const { [id]: _w, ...widths } = prefs.widths;
   const custom = prefs.custom.filter((c) => c !== id);
+  const order = prefs.order.filter((c) => c !== id);
   const sort = prefs.sort.filter((k) => k.column !== id);
-  return { ...prefs, custom, visible, widths, sort };
+  return { ...prefs, custom, visible, widths, order, sort };
 }
 
 export function resizeColumn(prefs: ColumnPrefs, id: ColumnId, width: number): ColumnPrefs {
@@ -270,9 +390,9 @@ export function showOperationFor(prefs: ColumnPrefs, flows: Flow[]): ColumnPrefs
  * wrong type, so a change to the columns never breaks the list.
  */
 export function parseColumnPrefs(value: unknown): ColumnPrefs {
-  const prefs: ColumnPrefs = { visible: {}, widths: {}, custom: [], sort: [] };
+  const prefs: ColumnPrefs = { visible: {}, widths: {}, custom: [], order: [], sort: [] };
   if (value == null || typeof value !== "object") return prefs;
-  const { visible, widths, custom, sort } = value as Record<string, unknown>;
+  const { visible, widths, custom, order, sort } = value as Record<string, unknown>;
   if (Array.isArray(custom)) {
     for (const id of custom) {
       if (typeof id !== "string" || !id.startsWith("field:")) continue;
@@ -287,6 +407,15 @@ export function parseColumnPrefs(value: unknown): ColumnPrefs {
     if (typeof v === "boolean") prefs.visible[def.id] = v;
     const w = (widths as Record<string, unknown> | undefined)?.[def.id];
     if (typeof w === "number" && Number.isFinite(w) && w > 0) prefs.widths[def.id] = w;
+  }
+  // Columns no longer there are dropped; those not listed follow the rest in their default order
+  if (Array.isArray(order)) {
+    for (const column of order) {
+      if (typeof column !== "string") continue;
+      const id = column as ColumnId;
+      const known = isCustomColumn(id) ? prefs.custom.includes(id) : DEFS.has(id);
+      if (known && !prefs.order.includes(id)) prefs.order.push(id);
+    }
   }
   if (Array.isArray(sort)) {
     for (const key of sort) {
