@@ -3,23 +3,27 @@ import {
   CONTROL_TOOLTIP_DELAY,
   type DropdownItem,
   Icon,
-  IconButton,
   Tooltip,
   Tree,
   type TreeProps,
 } from "@yaakapp-internal/ui";
-import classNames from "classnames";
-import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
+import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { atomWithStorage } from "jotai/utils";
-import { useCallback, useEffect } from "react";
+import { type PointerEvent, type SyntheticEvent, useCallback, useEffect } from "react";
 import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
 import { useRpcMutation } from "../hooks/useRpcMutation";
-import { SIDEBAR_TREE_ID } from "../lib/atoms";
+import { appliedFilterAtom, SIDEBAR_TREE_ID } from "../lib/atoms";
 import { blockerOf, decryptMenuAction, isDecrypted, listEdit, setDecrypted } from "../lib/decrypt";
 import { revealLabel, revealPath } from "../lib/opener";
 import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
-import { type SidebarItem, SYSTEM_ID } from "../lib/sidebarTree";
-import { noteSidebarInput } from "../lib/navigation";
+import {
+  copyRowsText,
+  filterWithRows,
+  type SidebarItem,
+  SYSTEM_ID,
+  valueRows,
+} from "../lib/sidebarTree";
+import { applyFilter, noteSidebarInput, noteSidebarMenu } from "../lib/navigation";
 import { hideSystemAtom, sidebarTreeAtom } from "../lib/store";
 import { getOsType } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
@@ -48,7 +52,7 @@ const collapsedAtom = atom(
 );
 
 function Count({ item }: { item: SidebarItem }) {
-  const text = item.countLabel ?? (item.count > 0 ? item.count.toLocaleString() : null);
+  const text = item.count > 0 ? item.count.toLocaleString() : null;
   if (text == null && item.kind !== "all") return null;
   return (
     <span className="ml-auto pl-2 text-text-subtlest text-2xs tabular-nums shrink-0">
@@ -90,6 +94,23 @@ function ItemInner({ item }: { item: SidebarItem }) {
   );
 }
 
+/** Input in the sidebar itself, not in a row's menu, whose events reach it through its portal */
+function inSidebar(e: SyntheticEvent<HTMLElement>): boolean {
+  return e.target instanceof Node && e.currentTarget.contains(e.target);
+}
+
+/** A press that opens a context menu: the secondary button, or Control and a click on macOS */
+function opensMenu(e: PointerEvent<HTMLElement>): boolean {
+  return e.button !== 0 || (e.ctrlKey && getOsType() === "macos");
+}
+
+/** The menu's sections that have items, a separator between each */
+function withSeparators(sections: DropdownItem[][]): DropdownItem[] {
+  return sections
+    .filter((s) => s.some((i) => !i.hidden))
+    .flatMap((s, n) => (n === 0 ? s : [{ type: "separator" } as const, ...s]));
+}
+
 /** A row with nothing in its menu: the menu closes as it opens, so the row is not left marked */
 function CloseAtOnce({ onClose }: { onClose: () => void }) {
   useEffect(() => onClose(), [onClose]);
@@ -107,40 +128,15 @@ function DecryptedMark({ item }: { item: SidebarItem }) {
   );
 }
 
-/** Beside the row's button rather than in it, since it is a button of its own */
-function ItemRightSlot({ item }: { item: SidebarItem }) {
-  return item.id === SYSTEM_ID ? <HideSystemToggle /> : <span aria-hidden />;
-}
-
-/** The eye on System's row, which leaves its daemons out of All traffic */
-function HideSystemToggle() {
-  const [hidden, setHidden] = useAtom(hideSystemAtom);
-  return (
-    <IconButton
-      size="2xs"
-      icon={hidden ? "eye_closed" : "eye"}
-      iconColor="secondary"
-      title={hidden ? "Show System in All traffic" : "Hide System from All traffic"}
-      tooltip
-      className={classNames(
-        "!h-4 !w-4 mr-1",
-        !hidden && "opacity-0 [.tree-item:hover_&]:opacity-100 focus-visible:opacity-100",
-      )}
-      onClick={(e) => {
-        e.stopPropagation();
-        setHidden(!hidden);
-      }}
-    />
-  );
-}
-
 export function Sidebar() {
+  const store = useStore();
   const tree = useAtomValue(sidebarTreeAtom);
   const getItemKey = useCallback(
     // The label too, as a saved search's changes when it is renamed
-    (item: SidebarItem) => `${item.id}:${item.count}:${item.countLabel ?? ""}:${item.label}`,
+    (item: SidebarItem) => `${item.id}:${item.count}:${item.label}`,
     [],
   );
+  const [hideSystem, setHideSystem] = useAtom(hideSystemAtom);
   const decryptList = useDecryptList();
   const setDecryptList = useEditDecryptList();
   const { mutate: saveDecryptList } = setDecryptList;
@@ -178,10 +174,51 @@ export function Sidebar() {
     [fail],
   );
 
-  // Decrypt or Stop Decrypting the selected hosts, sites and apps, from new connections on.
-  // A saved search is renamed or deleted.
+  // The selected apps, folders, sites, hosts and paths added to the filter, either way, at once,
+  // or their values copied, as a cell's menu in the list does.
+  const filterItems = useCallback(
+    (items: SidebarItem[]): DropdownItem[] => {
+      if (valueRows(items).length === 0) return [];
+      const add = (negated: boolean) =>
+        applyFilter(store, filterWithRows(store.get(appliedFilterAtom), items, negated));
+      return [
+        { label: "Filter by This Value", icon: "filter", onSelect: () => add(false) },
+        { label: "Exclude This Value", icon: "minus_circle", onSelect: () => add(true) },
+        {
+          label: "Copy Value",
+          icon: "copy",
+          onSelect: async () => {
+            try {
+              await navigator.clipboard.writeText(copyRowsText(items));
+              showToast({ message: "Copied value" });
+            } catch (err) {
+              showToast({ message: `Failed to copy value: ${String(err)}`, color: "danger" });
+            }
+          },
+        },
+      ];
+    },
+    [store, showToast],
+  );
+
+  // Filter by the selected rows, Decrypt or Stop Decrypting the selected hosts, sites and apps,
+  // from new connections on, then a program's folder. A saved search is renamed or deleted, and
+  // System is shown in All traffic or left out of it.
   const getContextMenu = useCallback(
     (items: SidebarItem[]): DropdownItem[] => {
+      if (items.length === 1 && items[0]?.id === SYSTEM_ID) {
+        return [
+          {
+            label: "Show in All Traffic",
+            leftSlot: hideSystem ? (
+              <span aria-hidden className="inline-block w-4 h-4" />
+            ) : (
+              <Icon icon="check" size="sm" />
+            ),
+            onSelect: () => setHideSystem(!hideSystem),
+          },
+        ];
+      }
       const paths = items.length === 1 ? pathItems(items[0]) : [];
       const saved = items.flatMap((i) => (i.savedId == null ? [] : [{ ...i, id: i.savedId }]));
       if (saved.length > 0) {
@@ -208,32 +245,43 @@ export function Sidebar() {
       }
       const subjects = items.flatMap((i) => (i.decrypt == null ? [] : [i.decrypt]));
       const action = decryptMenuAction(decryptList, subjects);
-      if (action == null) return paths;
-      return [
-        ...paths,
-        ...(paths.length > 0 ? [{ type: "separator" } as const] : []),
-        {
-          label: action.label,
-          icon: action.on ? "lock_open" : "lock",
-          onSelect: () => {
-            const blocked = action.on ? blockerOf(decryptList, subjects) : null;
-            if (blocked != null) {
-              showToast({
-                id: "decrypt-blocked",
-                color: "notice",
-                message: `Excluded by ${blocked}`,
-              });
-              return;
-            }
-            // Only what this changes, applied to the list as it is then, so a second change
-            // made before this one lands keeps it.
-            const next = setDecrypted(decryptList, subjects, action.on);
-            saveDecryptList(listEdit(decryptList, next));
-          },
-        },
-      ];
+      const decrypt: DropdownItem[] =
+        action == null
+          ? []
+          : [
+              {
+                label: action.label,
+                icon: action.on ? "lock_open" : "lock",
+                onSelect: () => {
+                  const blocked = action.on ? blockerOf(decryptList, subjects) : null;
+                  if (blocked != null) {
+                    showToast({
+                      id: "decrypt-blocked",
+                      color: "notice",
+                      message: `Excluded by ${blocked}`,
+                    });
+                    return;
+                  }
+                  // Only what this changes, applied to the list as it is then, so a second change
+                  // made before this one lands keeps it.
+                  const next = setDecrypted(decryptList, subjects, action.on);
+                  saveDecryptList(listEdit(decryptList, next));
+                },
+              },
+            ];
+      return withSeparators([filterItems(items), decrypt, paths]);
     },
-    [decryptList, saveDecryptList, showToast, setSavedDialog, deleteSaved, pathItems],
+    [
+      decryptList,
+      saveDecryptList,
+      showToast,
+      setSavedDialog,
+      deleteSaved,
+      pathItems,
+      filterItems,
+      hideSystem,
+      setHideSystem,
+    ],
   );
   const renderContextMenu = useCallback<NonNullable<TreeProps<SidebarItem>["renderContextMenu"]>>(
     ({ items, position, onClose }) =>
@@ -249,11 +297,18 @@ export function Sidebar() {
     // The tree scrolls itself, in a row of bounded height, so its virtualizer mounts only the rows
     // in view rather than every site, host and path.
     // A click or key here marks the selection change it makes as the person's, so it writes the
-    // search; the tree's own upkeep does not.
+    // search; the tree's own upkeep does not. Opening a row's menu selects it too, but leaves the
+    // search as it is, for the menu's Filter by This Value to add to, and the rows as it says.
     // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- only notes input the tree handles
     <aside
-      onPointerDownCapture={noteSidebarInput}
-      onKeyDownCapture={noteSidebarInput}
+      onPointerDownCapture={(e) => {
+        if (!inSidebar(e)) return;
+        if (opensMenu(e)) noteSidebarMenu();
+        else noteSidebarInput();
+      }}
+      onKeyDownCapture={(e) => {
+        if (inSidebar(e)) noteSidebarInput();
+      }}
       className="x-theme-sidebar bg-surface h-full w-full min-w-0 grid grid-rows-[minmax(0,1fr)] border-r border-border-subtle"
     >
       <Tree
@@ -263,7 +318,6 @@ export function Sidebar() {
         root={tree}
         getItemKey={getItemKey}
         ItemInner={ItemInner}
-        ItemRightSlot={ItemRightSlot}
         getContextMenu={getContextMenu}
         renderContextMenu={renderContextMenu}
       />

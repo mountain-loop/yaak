@@ -6,11 +6,14 @@ import {
   ALL_ID,
   buildSidebarTree,
   exclusiveAll,
+  copyRowsText,
+  filterWithRows,
   itemsById,
   queryInText,
   rowsForFilter,
   type SidebarItem,
   selectionText,
+  valueRows,
 } from "./sidebarTree";
 
 function flow(url: string, extra: Partial<Flow> = {}): Flow {
@@ -37,8 +40,8 @@ const flows = [
 ];
 
 function shape(n: TreeNode<SidebarItem>, depth = 0): string[] {
-  const { label, sublabel, count, countLabel } = n.item;
-  const line = `${"  ".repeat(depth)}${label}${sublabel ? ` (${sublabel})` : ""} ${countLabel ?? count}`;
+  const { label, sublabel, count } = n.item;
+  const line = `${"  ".repeat(depth)}${label}${sublabel ? ` (${sublabel})` : ""} ${count}`;
   return [line, ...(n.children ?? []).flatMap((c) => shape(c, depth + 1))];
 }
 
@@ -60,7 +63,7 @@ describe("buildSidebarTree", () => {
       "    slack.com 1",
       "      edgeapi.slack.com 1",
       "        /cache 1",
-      "Domains 4 hosts",
+      "Domains 4",
       "  apple.com 1",
       "    ocsp.apple.com 1",
       "      /ocsp 1",
@@ -343,5 +346,117 @@ describe("saved searches", () => {
     const group = (root.children ?? []).find((c) => c.item.id === "saved");
     expect(group?.children?.every((c) => c.children == null)).toBe(true);
     expect(itemsById(buildSidebarTree(flows, 4)).has("saved")).toBe(false);
+  });
+});
+
+describe("filtering from a row's menu", () => {
+  const chrome = {
+    clientName: "Google Chrome",
+    clientBundleId: "com.google.Chrome",
+    clientPath: "/Applications/Google Chrome.app",
+  };
+  const claude = {
+    clientName: "claude",
+    clientPath: "/usr/local/bin/claude",
+    clientCwd: "/src/yaak",
+  };
+  const root = buildSidebarTree(
+    [
+      ...flows,
+      flow("https://api.stripe.com/v1/charges", chrome),
+      flow("https://api.anthropic.com/v1/messages", claude),
+    ],
+    6,
+    [{ id: "sq_1", name: "Errors", query: "@status:>=400", count: 1 }],
+  );
+  const items = itemsById(root);
+  const rows = (...ids: string[]) =>
+    ids.map((id) => {
+      const item = items.get(id);
+      if (item == null) throw new Error(`no row ${id}`);
+      return item;
+    });
+
+  test("offers the filter items on apps, folders, sites, hosts and paths only", () => {
+    const offered = [...items.values()].filter((i) => valueRows([i]).length > 0);
+    expect(new Set(offered.map((i) => i.kind))).toEqual(
+      new Set(["app", "folder", "site", "host", "path"]),
+    );
+    for (const id of ["all", "apps", "domains", "system", "saved", "saved:sq_1"]) {
+      expect(valueRows(rows(id)), id).toEqual([]);
+    }
+  });
+
+  test("Filter by This Value adds the row's query to the filter", () => {
+    const add = (text: string, ...ids: string[]) => filterWithRows(text, rows(...ids), false);
+    expect(add("", "app:Google Chrome")).toBe('@app:"Google Chrome"');
+    expect(add("@method:POST", "app:Google Chrome")).toBe('@method:POST @app:"Google Chrome"');
+    expect(add("", "host:api.stripe.com")).toBe("@host:api.stripe.com");
+    expect(add("", "site:stripe.com")).toBe("@host:*.stripe.com");
+    expect(add("", "path:api.stripe.com/v1/charges")).toBe(
+      "@host:api.stripe.com @path:/v1/charges/*",
+    );
+    expect(add("", "app:claude|cwd:yaak")).toBe("@app:claude @cwd:yaak");
+    // A daemon's still shows while System is hidden from All traffic.
+    expect(add("", "app:trustd")).toBe("@is:system @app:trustd");
+    // A filter with OR at its top is grouped first, so the row narrows all of it.
+    expect(add("@status:4xx OR @status:5xx", "host:api.stripe.com")).toBe(
+      "(@status:4xx OR @status:5xx) @host:api.stripe.com",
+    );
+  });
+
+  test("Filter by This Value adds several rows as one OR group", () => {
+    const picked = rows("host:api.stripe.com", "app:Google Chrome");
+    expect(filterWithRows("", picked, false)).toBe('@host:api.stripe.com OR @app:"Google Chrome"');
+    expect(filterWithRows("@method:GET", picked, false)).toBe(
+      '@method:GET (@host:api.stripe.com OR @app:"Google Chrome")',
+    );
+    expect(filterWithRows("a OR b", picked, false)).toBe(
+      '(a OR b) (@host:api.stripe.com OR @app:"Google Chrome")',
+    );
+    // Rows with no value, such as a heading, add nothing.
+    expect(filterWithRows("@method:GET", rows("domains"), false)).toBe("@method:GET");
+    expect(parseQuery(filterWithRows("x", picked, false))?.type).toBe("And");
+  });
+
+  test("Exclude This Value adds the row's own value, negated", () => {
+    const exclude = (text: string, ...ids: string[]) => filterWithRows(text, rows(...ids), true);
+    expect(exclude("", "app:Google Chrome")).toBe('-@app:"Google Chrome"');
+    expect(exclude("", "app:trustd")).toBe("-@app:trustd");
+    expect(exclude("", "host:api.stripe.com")).toBe("-@host:api.stripe.com");
+    expect(exclude("", "site:stripe.com")).toBe("-@host:*.stripe.com");
+    expect(exclude("", "app:claude|cwd:yaak")).toBe("-@cwd:yaak");
+    // A path's host and path, negated as a group
+    expect(exclude("", "path:api.stripe.com/v1/charges")).toBe(
+      "-(@host:api.stripe.com @path:/v1/charges/*)",
+    );
+    // Under an app, the row's own value, not the app's
+    expect(exclude("", "app:Google Chrome|host:api.stripe.com")).toBe("-@host:api.stripe.com");
+    expect(exclude("@status:4xx OR @status:5xx", "host:api.stripe.com")).toBe(
+      "(@status:4xx OR @status:5xx) -@host:api.stripe.com",
+    );
+  });
+
+  test("Exclude This Value negates each of several rows", () => {
+    expect(
+      filterWithRows("@method:GET", rows("host:api.stripe.com", "app:Google Chrome"), true),
+    ).toBe('@method:GET -@host:api.stripe.com -@app:"Google Chrome"');
+    for (const text of [
+      filterWithRows("", rows("path:api.stripe.com/v1", "site:github.com"), true),
+      filterWithRows("", rows("app:Google Chrome", "app:claude|cwd:yaak"), false),
+    ]) {
+      expect(parseQuery(text), text).toBeTruthy();
+    }
+  });
+
+  test("Copy Value copies each row's name, one a line", () => {
+    expect(copyRowsText(rows("app:Google Chrome"))).toBe("Google Chrome");
+    expect(copyRowsText(rows("app:claude|cwd:yaak"))).toBe("/src/yaak");
+    expect(copyRowsText(rows("site:stripe.com"))).toBe("stripe.com");
+    expect(copyRowsText(rows("host:api.stripe.com"))).toBe("api.stripe.com");
+    expect(copyRowsText(rows("path:api.stripe.com/v1/charges"))).toBe("api.stripe.com/v1/charges");
+    expect(copyRowsText(rows("host:api.stripe.com", "app:Google Chrome"))).toBe(
+      "api.stripe.com\nGoogle Chrome",
+    );
   });
 });

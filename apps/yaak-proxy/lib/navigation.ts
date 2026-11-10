@@ -284,6 +284,14 @@ export function noteSidebarInput() {
 }
 
 /**
+ * Notes a press that opens a row's menu, which selects the row without applying its filter, so
+ * the menu's items add to the filter as it is
+ */
+export function noteSidebarMenu() {
+  lastSidebarInput = 0;
+}
+
+/**
  * Keeps the sidebar's selection and the filter in step. Selecting rows applies their query at
  * once, as a new place; a filter applied keeps a row selected while its query is still one of
  * the filter's terms, and All traffic selected while there is none.
@@ -311,17 +319,19 @@ export function syncSidebarSelection(store: Store) {
 
   // The tree writes its selection again as it renders, the same rows in a new array, or its last
   // row when the selection was emptied; only a change of rows right after a click or a key in
-  // the sidebar is the person selecting.
+  // the sidebar is the person selecting. A click on a row the tree selected again by itself, as
+  // after its menu was opened, applies it then.
   let lastRows = store.get(selectedAtom);
   store.sub(selectedAtom, () => {
     const before = lastRows;
     const ids = store.get(selectedAtom);
-    if (ids.join("\n") === before.join("\n")) return;
+    const theirs = Date.now() - lastSidebarInput <= SIDEBAR_INPUT_MS;
+    if (ids.join("\n") === before.join("\n") && !theirs) return;
     lastRows = ids;
     if (syncing) return;
     // Not the person's, such as the tree selecting its first row as it mounts over a filter
-    // restored at launch: the rows go back to what the filter says.
-    if (Date.now() - lastSidebarInput > SIDEBAR_INPUT_MS) {
+    // restored at launch, or a row as its menu opens: the rows go back to what the filter says.
+    if (!theirs) {
       keepRows(false);
       return;
     }

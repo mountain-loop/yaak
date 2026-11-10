@@ -76,7 +76,7 @@ export const systemProxyEverOnAtom = atomWithStorage("system_proxy_ever_on", fal
 /** Some flow held names the app that sent it, which only some platforms can tell */
 export const hasAppsAtom = atom((get) => get(flowsAtom).some((f) => f.clientName != null));
 
-/** System's flows are left out of All traffic, by the eye on System's row */
+/** System's flows are left out of All traffic, by Show in All Traffic in System's menu */
 export const hideSystemAtom = atomWithStorage("sidebar_hide_system", false, undefined, {
   getOnInit: true,
 });
