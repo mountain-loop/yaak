@@ -2,12 +2,12 @@ import { Suspense } from "react";
 import type { ButtonProps } from "../Button";
 import { useEditorHost } from "../EditorHost";
 import { ExternalLink } from "../ExternalLink";
-import { Heading } from "../Heading";
 import { Icon, type IconProps } from "../Icon";
 import { IconButton } from "../IconButton";
 import type { SelectProps } from "../Select";
 import { HStack, VStack } from "../Stacks";
 import { SettingRowSelect, SettingsList, SettingsSection } from "./SettingRow";
+import { SettingsPage } from "./SettingsPage";
 import type { SettingsCallbacks, SettingsView } from "./types";
 
 const buttonColors: ButtonProps["color"][] = [
@@ -67,10 +67,10 @@ export function SettingsTheme({ view, callbacks }: SettingsThemeProps) {
     }));
 
   return (
-    <VStack space={1.5} className="mb-4">
-      <div className="mb-3">
-        <Heading>Theme</Heading>
-        <p className="text-text-subtle">
+    <SettingsPage
+      title="Theme"
+      description={
+        <>
           {/* One text node, so the name kerns with the words around it */}
           {`Make ${app.name} your own by selecting a theme, or`}{" "}
           <ExternalLink
@@ -79,8 +79,9 @@ export function SettingsTheme({ view, callbacks }: SettingsThemeProps) {
           >
             Create Your Own
           </ExternalLink>
-        </p>
-      </div>
+        </>
+      }
+    >
       <SettingsList className="space-y-8">
         <SettingsSection title="Theme">
           <SettingRowSelect
@@ -168,6 +169,6 @@ export function SettingsTheme({ view, callbacks }: SettingsThemeProps) {
           </VStack>
         </SettingsSection>
       </SettingsList>
-    </VStack>
+    </SettingsPage>
   );
 }

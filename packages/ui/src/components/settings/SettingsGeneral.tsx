@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
-import { Heading } from "../Heading";
 import { IconButton } from "../IconButton";
-import { VStack } from "../Stacks";
 import {
   SettingRow,
   SettingRowBoolean,
@@ -11,6 +9,7 @@ import {
   SettingsSection,
   SettingValue,
 } from "./SettingRow";
+import { SettingsPage } from "./SettingsPage";
 import type { SettingsCallbacks, SettingsView } from "./types";
 
 export interface SettingsGeneralProps {
@@ -25,12 +24,11 @@ export interface SettingsGeneralProps {
 export function SettingsGeneral({ view, callbacks, banner, extraSections }: SettingsGeneralProps) {
   const { app, values } = view;
   return (
-    <VStack space={1.5} className="mb-4">
-      <div>
-        <Heading>General</Heading>
-        <p className="text-text-subtle">Configure general settings for update behavior and more.</p>
-      </div>
-      {banner != null && <div className="mt-3 mb-5">{banner}</div>}
+    <SettingsPage
+      title="General"
+      description="Configure general settings for update behavior and more."
+      banner={banner}
+    >
       <SettingsList className="space-y-8">
         {view.updates != null && <SettingsUpdatesSection view={view} callbacks={callbacks} />}
 
@@ -85,7 +83,7 @@ export function SettingsGeneral({ view, callbacks, banner, extraSections }: Sett
           </SettingRow>
         </SettingsSection>
       </SettingsList>
-    </VStack>
+    </SettingsPage>
   );
 }
 

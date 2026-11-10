@@ -5,7 +5,6 @@ import {
   Button,
   Dialog,
   DialogFooter,
-  Heading,
   Icon,
   RadioDropdown,
   SettingRow,
@@ -15,8 +14,8 @@ import {
   SettingSelectControl,
   SettingSnippet,
   SettingsList,
+  SettingsPage,
   SettingsSection,
-  VStack,
 } from "@yaakapp-internal/ui";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useState } from "react";
@@ -59,11 +58,7 @@ export function SettingsProxy() {
   const elsewhere = proxyState?.otherOwner != null;
 
   return (
-    <VStack space={1.5} className="mb-4">
-      <div className="mb-3">
-        <Heading>Proxy</Heading>
-        <p className="text-text-subtle">Listening, decryption, traffic and terminals</p>
-      </div>
+    <SettingsPage title="Proxy" description="Listening, decryption, traffic and terminals">
       <SettingsList className="space-y-8">
         <SettingsSection title="Proxy">
           <PortRow disabled={elsewhere} />
@@ -108,7 +103,7 @@ export function SettingsProxy() {
           <TerminalRow />
         </SettingsSection>
       </SettingsList>
-    </VStack>
+    </SettingsPage>
   );
 }
 

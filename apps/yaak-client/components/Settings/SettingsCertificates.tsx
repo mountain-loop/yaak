@@ -1,6 +1,6 @@
 import type { ClientCertificate } from "@yaakapp-internal/models";
 import { patchModel, settingsAtom } from "@yaakapp-internal/models";
-import { Heading, HStack, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { HStack, InlineCode, SettingsPage, VStack } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { useRef } from "react";
 import { showConfirmDelete } from "../../lib/confirm";
@@ -218,24 +218,19 @@ export function SettingsCertificates() {
   };
 
   return (
-    <VStack space={3}>
-      <div className="mb-3">
-        <HStack justifyContent="between" alignItems="start">
-          <div>
-            <Heading>Client Certificates</Heading>
-            <p className="text-text-subtle">
-              Add and manage TLS certificates on a per domain basis
-            </p>
-          </div>
-          <Button variant="border" size="sm" color="secondary" onClick={handleAdd}>
-            Add Certificate
-          </Button>
-        </HStack>
-      </div>
-
-      <CommercialUseBanner source="client-certificates" title="Using certificates for work?" />
-
-      {certificates.length > 0 && (
+    <SettingsPage
+      title="Client Certificates"
+      description="Add and manage TLS certificates on a per domain basis"
+      actions={
+        <Button variant="border" size="sm" color="secondary" onClick={handleAdd}>
+          Add Certificate
+        </Button>
+      }
+      banner={
+        <CommercialUseBanner source="client-certificates" title="Using certificates for work?" />
+      }
+    >
+      {certificates.length > 0 ? (
         <VStack space={3}>
           {certificates.map((cert, index) => (
             <CertificateEditor
@@ -248,7 +243,7 @@ export function SettingsCertificates() {
             />
           ))}
         </VStack>
-      )}
-    </VStack>
+      ) : null}
+    </SettingsPage>
   );
 }

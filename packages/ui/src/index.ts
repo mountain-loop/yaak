@@ -195,6 +195,8 @@ export type { SettingsInterfaceProps } from "./components/settings/SettingsInter
 export { SettingsInterface } from "./components/settings/SettingsInterface";
 export type { SettingsLicenseProps } from "./components/settings/SettingsLicense";
 export { SettingsLicense } from "./components/settings/SettingsLicense";
+export type { SettingsPageProps } from "./components/settings/SettingsPage";
+export { SettingsPage } from "./components/settings/SettingsPage";
 export type { SettingsThemeProps } from "./components/settings/SettingsTheme";
 export { SettingsTheme } from "./components/settings/SettingsTheme";
 export * from "./components/settings/types";
