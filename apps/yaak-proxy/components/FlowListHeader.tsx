@@ -21,6 +21,7 @@ import { useAtomValue, useSetAtom } from "jotai";
 import {
   memo,
   type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -102,7 +103,7 @@ export const FlowListHeader = memo(function FlowListHeader({
   const [menu, setMenu] = useState<{ x: number; y: number; column: ColumnDef | null } | null>(null);
   // Widths when a drag began, so each move sets the width from where it started.
   const startWidth = useRef(0);
-  const { dragging, sensors, dndHandlers, gridRef } = useColumnDrag({
+  const { dragging, sensors, dndHandlers, gridRef, onPointerDownCapture } = useColumnDrag({
     columns,
     scrollElement,
     onDropLine,
@@ -222,6 +223,7 @@ export const FlowListHeader = memo(function FlowListHeader({
       {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- a right-click opens the column's menu */}
       <div
         ref={gridRef}
+        onPointerDownCapture={onPointerDownCapture}
         onContextMenu={openMenu}
         style={{ gridTemplateColumns: template }}
         className={classNames(
@@ -417,68 +419,95 @@ function useColumnDrag({
     latest.current = { columns, scrollElement, onDropLine, onDrop };
   });
 
-  // The pointer, read as it moves rather than when dnd-kit next renders, so a release right
-  // after a move drops where the pointer is
-  const track = useCallback((e: PointerEvent) => {
-    if (state.current != null) state.current.x = e.clientX;
-  }, []);
-
   const stop = useCallback(() => {
     const s = state.current;
     state.current = null;
-    window.removeEventListener("pointermove", track, true);
     if (s != null) cancelAnimationFrame(s.frame);
     setDragging(null);
     latest.current.onDropLine(null);
     return s;
   }, []);
 
-  // A drag never outlives the header
-  useEffect(
-    () => () => {
-      stop();
-    },
-    [stop],
-  );
+  const onDragStart = useCallback((e: DragStartEvent) => {
+    const column = latest.current.columns.find((c) => c.id === e.active.id);
+    if (column == null) return;
+    state.current = { id: column.id, x: pointer.current, to: null, line: null, frame: 0 };
+    setDragging(column);
 
-  const onDragStart = useCallback(
-    (e: DragStartEvent) => {
-      const column = latest.current.columns.find((c) => c.id === e.active.id);
-      if (column == null) return;
-      state.current = { id: column.id, x: pointerX(e), to: null, line: null, frame: 0 };
-      window.addEventListener("pointermove", track, true);
-      setDragging(column);
-
-      const tick = () => {
-        const s = state.current;
-        if (s == null) return;
-        // Near an edge, the list scrolls that way, faster the nearer; the header follows it.
-        const list = latest.current.scrollElement();
-        if (list != null) {
-          const { left, right } = list.getBoundingClientRect();
-          const near =
-            s.x < left + EDGE ? s.x - left - EDGE : s.x > right - EDGE ? s.x - right + EDGE : 0;
-          if (near !== 0) {
-            const speed = Math.min(1, Math.abs(near) / EDGE) * EDGE_SPEED;
-            list.scrollLeft += Math.sign(near) * Math.max(1, speed);
-          }
+    const tick = () => {
+      const s = state.current;
+      if (s == null) return;
+      // Near an edge, the list scrolls that way, faster the nearer; the header follows it.
+      const list = latest.current.scrollElement();
+      if (list != null) {
+        const { left, right } = list.getBoundingClientRect();
+        const near =
+          s.x < left + EDGE ? s.x - left - EDGE : s.x > right - EDGE ? s.x - right + EDGE : 0;
+        if (near !== 0) {
+          const speed = Math.min(1, Math.abs(near) / EDGE) * EDGE_SPEED;
+          list.scrollLeft += Math.sign(near) * Math.max(1, speed);
         }
-        target(s);
-        s.frame = requestAnimationFrame(tick);
-      };
-      state.current.frame = requestAnimationFrame(tick);
-      // oxlint-disable-next-line react-hooks/exhaustive-deps -- `target` reads only refs
-    },
-    [track],
-  );
+      }
+      target(s);
+      s.frame = requestAnimationFrame(tick);
+    };
+    state.current.frame = requestAnimationFrame(tick);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `target` reads only refs
+  }, []);
 
-  const onDragEnd = useCallback(() => {
+  /** Drops the column where the pointer is, once; a second call finds no drag */
+  const drop = useCallback(() => {
     // Where the pointer is now, as a release can come before the next frame reads it
     if (state.current != null) target(state.current);
     const s = stop();
     if (s?.to != null) latest.current.onDrop(s.id, s.to);
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- `target` reads only refs
   }, [stop]);
+
+  // The pointer from a press on the header until its release, read before dnd-kit sees it.
+  // dnd-kit starts a drag on the move that crosses `DRAG_DISTANCE` and reports moves and the
+  // release only once it has rendered the drag, so a release right after a move would drop
+  // where the pointer was a frame before, or not at all. The release drops it here instead.
+  const pointer = useRef(0);
+  const track = useCallback((e: PointerEvent) => {
+    pointer.current = e.clientX;
+    if (state.current != null) state.current.x = e.clientX;
+  }, []);
+  const unlisten = useRef<(() => void) | null>(null);
+  const onPointerDownCapture = useCallback(
+    (e: ReactPointerEvent) => {
+      unlisten.current?.();
+      pointer.current = e.clientX;
+      const up = (e: PointerEvent) => {
+        unlisten.current?.();
+        track(e);
+        drop();
+      };
+      const cancel = () => {
+        unlisten.current?.();
+        stop();
+      };
+      window.addEventListener("pointermove", track, true);
+      window.addEventListener("pointerup", up, true);
+      window.addEventListener("pointercancel", cancel, true);
+      unlisten.current = () => {
+        unlisten.current = null;
+        window.removeEventListener("pointermove", track, true);
+        window.removeEventListener("pointerup", up, true);
+        window.removeEventListener("pointercancel", cancel, true);
+      };
+    },
+    [track, drop, stop],
+  );
+
+  // A drag never outlives the header
+  useEffect(
+    () => () => {
+      unlisten.current?.();
+      stop();
+    },
+    [stop],
+  );
 
   /** Sets where the drag would drop, from the pointer and the labels where they are now */
   function target(s: NonNullable<typeof state.current>) {
@@ -503,12 +532,7 @@ function useColumnDrag({
     dragging,
     sensors,
     gridRef,
-    dndHandlers: { onDragStart, onDragEnd, onDragCancel: stop },
+    onPointerDownCapture,
+    dndHandlers: { onDragStart, onDragEnd: drop, onDragCancel: stop },
   };
-}
-
-/** Where the press that began a drag was, across the window */
-function pointerX(e: DragStartEvent): number {
-  const event = e.activatorEvent;
-  return event instanceof globalThis.MouseEvent ? event.clientX : 0;
 }
