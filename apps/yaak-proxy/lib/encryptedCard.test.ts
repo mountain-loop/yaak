@@ -91,7 +91,7 @@ describe("the card of an encrypted connection", () => {
 
   test("something else listed: not on the list, with the same choices", () => {
     const c = card({ list: [...user("host:api.stripe.com"), ...BUILT_INS] });
-    expect(c.why).toBe("Not on the decrypt list");
+    expect(c.why).toBe("Decryption not configured for www.google.com");
     expect(c.actions.map((a) => a.label)).toEqual([
       "Decrypt www.google.com",
       "Decrypt Dia",
@@ -104,6 +104,16 @@ describe("the card of an encrypted connection", () => {
       flow: { ...tunnel, clientName: null, clientBundleId: null, clientPath: null },
     });
     expect(c.actions.map((a) => a.label)).toEqual(["Decrypt www.google.com", "Decrypt Everything"]);
+  });
+
+  test("names the host nothing on the list covers, its port only when not 443", () => {
+    const list = [...user("host:api.stripe.com"), ...BUILT_INS];
+    expect(card({ list, flow: { ...tunnel, url: "t.yaak.app:443" } }).why).toBe(
+      "Decryption not configured for t.yaak.app",
+    );
+    expect(card({ list, flow: { ...tunnel, url: "home.ts.net:8317" } }).why).toBe(
+      "Decryption not configured for home.ts.net:8317",
+    );
   });
 
   test("a port off 443 is part of the host it writes", () => {

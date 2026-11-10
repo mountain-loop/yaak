@@ -141,10 +141,11 @@ export function encryptedCard(input: EncryptedCardInput): EncryptedCardModel {
 function tunnelCard({ flow, list, trusted, canTrust }: EncryptedCardInput): EncryptedCardModel {
   const c = connectionOf(flow);
   const q = queryOf(c);
-  const { why, whySub, whyEntry } = whyLine(flow, list);
+  const decryptsNow = decrypts(list, q);
+  const { why, whySub, whyEntry } = whyLine(flow, list, c, decryptsNow);
   const foot = ["New connections only"];
 
-  if (decrypts(list, q)) {
+  if (decryptsNow) {
     // Decrypted from the next connection on: the entries that do it, each to take back.
     const decrypting = list.filter(
       (e) => !e.builtIn && !e.entry.startsWith("!") && entryMatches(e.entry, q),
@@ -236,10 +237,15 @@ function tunnelCard({ flow, list, trusted, canTrust }: EncryptedCardInput): Encr
   };
 }
 
-/** The why line, from the reason the engine recorded as the tunnel opened */
+/**
+ * The why line, from the reason the engine recorded as the tunnel opened. One that nothing on
+ * the list covers names its host; once the list covers it, it opened before that.
+ */
 function whyLine(
   flow: EncryptedCardInput["flow"],
   list: DecryptListEntry[],
+  c: Connection,
+  decryptsNow: boolean,
 ): { why: string; whySub: string | null; whyEntry: string | null } {
   if (flow.tunnelReason === "excluded" && flow.tunnelExcludedBy != null) {
     if (flow.tunnelExcludedBuiltIn) {
@@ -251,7 +257,11 @@ function whyLine(
     return { why: "Excluded by", whySub: null, whyEntry: flow.tunnelExcludedBy };
   }
   return {
-    why: decryptsAnything(list) ? "Not on the decrypt list" : "Nothing is decrypted yet",
+    why: !decryptsAnything(list)
+      ? "Nothing is decrypted yet"
+      : decryptsNow
+        ? "Not on the decrypt list"
+        : `Decryption not configured for ${c.label}`,
     whySub: null,
     whyEntry: null,
   };
