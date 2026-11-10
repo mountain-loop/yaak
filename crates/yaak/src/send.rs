@@ -27,6 +27,7 @@ use yaak_models::models::{
     HttpResponseEvent, HttpResponseEventData, HttpResponseHeader, HttpResponseState, ProxySetting,
     ProxySettingAuth, ResolvedHttpRequestSettings,
 };
+use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::render::render_http_request;
 use yaak_models::util::{UpdateSource, generate_prefixed_id};
@@ -312,6 +313,9 @@ pub struct SendHttpRequestWithPluginsParams<'a> {
     pub query_manager: &'a QueryManager,
     pub blob_manager: &'a BlobManager,
     pub request: HttpRequest,
+    /// Whether `request` is the stored row as loaded, which decides what its version is
+    /// taken from; see [`SendRequestSource`].
+    pub request_source: SendRequestSource,
     pub environment_id: Option<&'a str>,
     pub update_source: UpdateSource,
     pub cookie_jar_id: Option<String>,
@@ -404,10 +408,25 @@ impl HttpSendRuntimeConfig {
     }
 }
 
+/// Where the request a send was handed came from, which decides what its version is
+/// taken from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SendRequestSource {
+    /// The stored row, exactly as this send loaded it. The version is taken from this
+    /// copy, with no second read, so the response names what was actually sent even if
+    /// the row is edited before the send resolves.
+    Stored,
+    /// Something that may differ from the stored row, such as a request a plugin
+    /// rendered before sending. The version is read from the stored row by id instead,
+    /// so rendered values (secrets included) never reach history.
+    Supplied,
+}
+
 /// Resolve every database-backed input a send needs, in one pass.
 pub fn resolve_send_inputs(
     query_manager: &QueryManager,
     request: &HttpRequest,
+    request_source: SendRequestSource,
     environment_id: Option<&str>,
     cookies: Option<Vec<Cookie>>,
 ) -> Result<HttpSendInputs> {
@@ -438,23 +457,31 @@ pub fn resolve_send_inputs(
         cookie_store: cookies.map(CookieStore::from_cookies),
         // Every host reaches sending through this function — the desktop, the CLI,
         // plugin-triggered sends — so every response gets a version without each of them
-        // remembering to ask for one. The version is of the stored row, not of `request`:
-        // what a send holds may already be resolved or rendered (a plugin can send a
-        // request it rendered itself), and neither is what a restore should put back.
-        version_id: snapshot_request_for_send(query_manager, &request.id),
+        // remembering to ask for one. It is always of stored content, never of a resolved
+        // or rendered copy, which is not what a restore should put back.
+        version_id: snapshot_request_for_send(query_manager, request, request_source),
     })
 }
 
-/// Capture the stored request in its own transaction. Like the snapshot itself, a
-/// failure to get the write connection is not worth failing the send over.
-fn snapshot_request_for_send(query_manager: &QueryManager, request_id: &str) -> Option<String> {
+/// Capture the request in its own transaction. Like the snapshot itself, a failure to
+/// get the write connection is not worth failing the send over.
+fn snapshot_request_for_send(
+    query_manager: &QueryManager,
+    request: &HttpRequest,
+    source: SendRequestSource,
+) -> Option<String> {
     // An unsaved request has nothing to version; don't take the writer for it
-    if request_id.is_empty() {
+    if request.id.is_empty() {
         return None;
     }
     query_manager
         .with_tx(|tx| {
-            Ok::<_, yaak_models::error::Error>(tx.snapshot_stored_request_for_send(request_id))
+            Ok::<_, yaak_models::error::Error>(match source {
+                SendRequestSource::Stored => {
+                    tx.snapshot_request_for_send(&AnyRequest::HttpRequest(request.clone()))
+                }
+                SendRequestSource::Supplied => tx.snapshot_stored_request_for_send(&request.id),
+            })
         })
         .unwrap_or_else(|err| {
             warn!("Failed to snapshot request before send: {err}");
@@ -494,6 +521,7 @@ pub async fn send_http_request_by_id_with_plugins(
         query_manager: params.query_manager,
         blob_manager: params.blob_manager,
         request,
+        request_source: SendRequestSource::Stored,
         environment_id: params.environment_id,
         update_source: params.update_source,
         cookie_jar_id: params.cookie_jar_id,
@@ -517,6 +545,7 @@ pub async fn send_http_request_with_plugins(
     let inputs = resolve_send_inputs(
         params.query_manager,
         &params.request,
+        params.request_source,
         params.environment_id,
         cookie_jar.as_ref().map(|jar| jar.cookies.clone()),
     )?;
@@ -575,6 +604,7 @@ pub async fn send_http_request_by_id<T: TemplateCallback>(
     let inputs = resolve_send_inputs(
         params.query_manager,
         &request,
+        SendRequestSource::Stored,
         params.environment_id,
         cookie_jar.as_ref().map(|jar| jar.cookies.clone()),
     )?;
@@ -1505,8 +1535,17 @@ mod tests {
             })
             .expect("Failed to seed request");
 
-        let first = stored_send(&query_manager, &blob_manager, temp_dir.path(), &request).await;
-        let second = stored_send(&query_manager, &blob_manager, temp_dir.path(), &request).await;
+        let send = || {
+            stored_send(
+                &query_manager,
+                &blob_manager,
+                temp_dir.path(),
+                &request,
+                SendRequestSource::Stored,
+            )
+        };
+        let first = send().await;
+        let second = send().await;
 
         let version_id = first.version_id.clone().expect("a stored send must record a version");
         assert_eq!(
@@ -1563,7 +1602,14 @@ mod tests {
             headers: vec![header("Bearer s3cret")],
             ..stored.clone()
         };
-        let response = stored_send(&query_manager, &blob_manager, temp_dir.path(), &rendered).await;
+        let response = stored_send(
+            &query_manager,
+            &blob_manager,
+            temp_dir.path(),
+            &rendered,
+            SendRequestSource::Supplied,
+        )
+        .await;
 
         let version_id = response.version_id.expect("a stored request must record a version");
         let version =
@@ -1578,6 +1624,54 @@ mod tests {
         );
     }
 
+    /// An edit can land between a send loading its request and resolving it (the
+    /// desktop awaits plugin startup in between). The response must still name the
+    /// content that was sent, not the edit.
+    #[tokio::test]
+    async fn an_edit_between_loading_and_sending_is_not_what_gets_versioned() {
+        let (query_manager, blob_manager, temp_dir) = seed_send_storage();
+        let stored = query_manager
+            .with_tx(|tx| {
+                tx.upsert_http_request(
+                    &HttpRequest {
+                        workspace_id: "wk_test".to_string(),
+                        url: "http://localhost/sent".to_string(),
+                        ..Default::default()
+                    },
+                    &UpdateSource::Sync,
+                )
+            })
+            .expect("Failed to seed request");
+
+        // The send has loaded `stored`; now the row changes underneath it
+        let loaded = query_manager.connect().get_http_request(&stored.id).unwrap();
+        query_manager
+            .with_tx(|tx| {
+                tx.upsert_http_request(
+                    &HttpRequest { url: "http://localhost/edited".to_string(), ..loaded.clone() },
+                    &UpdateSource::Sync,
+                )
+            })
+            .expect("Failed to edit request");
+
+        let response = stored_send(
+            &query_manager,
+            &blob_manager,
+            temp_dir.path(),
+            &loaded,
+            SendRequestSource::Stored,
+        )
+        .await;
+
+        assert_eq!(response.url, "http://localhost/sent");
+        let version_id = response.version_id.expect("a stored send must record a version");
+        let version =
+            query_manager.connect().get_model_version(&version_id).expect("Failed to load version");
+        assert_eq!(version.document.get("url").unwrap(), "http://localhost/sent");
+        // And the live request, which now holds the edit, shows as changed
+        assert!(!query_manager.connect().request_matches_version(&version).unwrap());
+    }
+
     /// A request with an id but no stored row has nothing to version, and
     /// resolving its send must not fail for it.
     #[test]
@@ -1590,8 +1684,14 @@ mod tests {
             ..Default::default()
         };
 
-        let inputs = resolve_send_inputs(&query_manager, &transient, None, None)
-            .expect("Failed to resolve send inputs");
+        let inputs = resolve_send_inputs(
+            &query_manager,
+            &transient,
+            SendRequestSource::Supplied,
+            None,
+            None,
+        )
+        .expect("Failed to resolve send inputs");
 
         assert_eq!(inputs.version_id, None);
         assert!(query_manager.connect().list_model_versions("rq_not_stored").unwrap().is_empty());
@@ -1602,9 +1702,10 @@ mod tests {
         blob_manager: &BlobManager,
         response_dir: &std::path::Path,
         request: &HttpRequest,
+        source: SendRequestSource,
     ) -> HttpResponse {
         let executor = StubExecutor { body: b"hello world" };
-        let inputs = resolve_send_inputs(query_manager, request, None, None)
+        let inputs = resolve_send_inputs(query_manager, request, source, None, None)
             .expect("Failed to resolve send inputs");
         send_http_request(SendHttpRequestParams {
             inputs,

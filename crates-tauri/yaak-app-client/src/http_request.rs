@@ -8,7 +8,10 @@ use std::sync::Arc;
 use std::time::Instant;
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::sync::watch::Receiver;
-use yaak::send::{ResponseBody, SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
+use yaak::send::{
+    ResponseBody, SendHttpRequestWithPluginsParams, SendRequestSource,
+    send_http_request_with_plugins,
+};
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::manager::HttpConnectionManager;
 use yaak_models::models::{CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseState};
@@ -70,6 +73,7 @@ pub struct SentHttpRequest {
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
     unrendered_request: &HttpRequest,
+    request_source: SendRequestSource,
     og_response: &HttpResponse,
     environment: Option<Environment>,
     cookie_jar: Option<CookieJar>,
@@ -78,6 +82,7 @@ pub async fn send_http_request<R: Runtime>(
     send_http_request_with_context(
         window,
         unrendered_request,
+        request_source,
         og_response,
         environment,
         cookie_jar,
@@ -90,6 +95,7 @@ pub async fn send_http_request<R: Runtime>(
 pub async fn send_http_request_with_context<R: Runtime>(
     window: &WebviewWindow<R>,
     unrendered_request: &HttpRequest,
+    request_source: SendRequestSource,
     og_response: &HttpResponse,
     environment: Option<Environment>,
     cookie_jar: Option<CookieJar>,
@@ -106,6 +112,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
     let result = send_http_request_inner(
         window,
         unrendered_request,
+        request_source,
         environment,
         cookie_jar,
         cancelled_rx,
@@ -141,6 +148,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
 async fn send_http_request_inner<R: Runtime>(
     window: &WebviewWindow<R>,
     unrendered_request: &HttpRequest,
+    request_source: SendRequestSource,
     environment: Option<Environment>,
     cookie_jar: Option<CookieJar>,
     cancelled_rx: &Receiver<bool>,
@@ -159,6 +167,7 @@ async fn send_http_request_inner<R: Runtime>(
         query_manager: app_handle.db_manager().inner(),
         blob_manager: app_handle.blob_manager().inner(),
         request: unrendered_request.clone(),
+        request_source,
         environment_id: environment_id.as_deref(),
         update_source: response_ctx.update_source.clone(),
         cookie_jar_id,
