@@ -98,6 +98,8 @@ export interface DropdownProps {
   fullWidth?: boolean;
   hotKeyAction?: HotkeyAction;
   onOpen?: () => void;
+  /** The menu closed, however it was closed */
+  onClose?: () => void;
 }
 
 export interface DropdownRef {
@@ -117,7 +119,7 @@ const openAtom = atom<string | null>(null);
 const openStore = createStore();
 
 export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown(
-  { children, items, hotKeyAction, fullWidth, onOpen }: DropdownProps,
+  { children, items, hotKeyAction, fullWidth, onOpen, onClose }: DropdownProps,
   ref,
 ) {
   const id = useRef(generateId());
@@ -129,9 +131,10 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
       const newIsOpen = globalOpenId === id.current;
       if (newIsOpen !== isOpen) {
         setIsOpen(newIsOpen);
+        if (!newIsOpen) onClose?.();
       }
     });
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   // const [isOpen, _setIsOpen] = useState<boolean>(false);
   const [defaultSelectedIndex, setDefaultSelectedIndex] = useState<number | null>(null);

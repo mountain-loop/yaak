@@ -55,8 +55,17 @@ describe("terms", () => {
 describe("activeQuery", () => {
   test("is null for all traffic, and carries hiding System", () => {
     expect(activeQuery("  ", false)).toBeNull();
-    expect(activeQuery("", true)).toEqual({ query: "", hideSystem: true });
-    expect(activeQuery(" stripe ", false)).toEqual({ query: "stripe", hideSystem: false });
+    expect(activeQuery("", true)).toEqual({ query: "", hideSystem: true, hideEncrypted: false });
+    expect(activeQuery(" stripe ", false)).toEqual({
+      query: "stripe",
+      hideSystem: false,
+      hideEncrypted: false,
+    });
+    expect(activeQuery("", false, true)).toEqual({
+      query: "",
+      hideSystem: false,
+      hideEncrypted: true,
+    });
   });
 });
 

@@ -2,9 +2,10 @@ import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import type { CSSProperties } from "react";
 import { selectedFlowAtom } from "../lib/atoms";
+import { isRejection } from "../lib/encryptedCard";
+import { EncryptedCard } from "./EncryptedCard";
 import { EmptyState } from "./FlowBodyViewer";
 import { FlowCard } from "./FlowCard";
-import { NotDecrypted } from "./NotDecrypted";
 
 /**
  * The detail pane: the selected flow's card, or what the pane holds before one is selected. The
@@ -35,8 +36,8 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
               <Keys keys={["⌘", "⇧", "K"]} />
             </div>
           </EmptyState>
-        ) : flow.tunnelled ? (
-          <NotDecrypted flow={flow} />
+        ) : flow.tunnelled || isRejection(flow) ? (
+          <EncryptedCard key={flow.id} flow={flow} />
         ) : (
           <FlowCard flow={flow} listBeside={sideBySide} />
         )}

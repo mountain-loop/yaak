@@ -2,6 +2,7 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import { describe, expect, test, vi } from "vite-plus/test";
 import {
+  bodyTypeBadge,
   bodyAsText,
   bodyFileName,
   bodyImageType,
@@ -241,5 +242,29 @@ describe("a body that isn't there", () => {
     expect(body.note).toBeNull();
     expect(emptyBodyText("response", body.note)).toBe("Empty");
     expect(emptyBodyText("request", body.note)).toBe("No request body");
+  });
+});
+
+describe("bodyTypeBadge", () => {
+  test("names a body by its type, as short as the Type column", () => {
+    expect(bodyTypeBadge("application/json; charset=utf-8", 10)).toBe("JSON");
+    expect(bodyTypeBadge("application/problem+json", 10)).toBe("JSON");
+    expect(bodyTypeBadge("text/xml", 10)).toBe("XML");
+    expect(bodyTypeBadge("text/html", 10)).toBe("HTML");
+    expect(bodyTypeBadge("text/csv", 10)).toBe("CSV");
+    expect(bodyTypeBadge("application/x-www-form-urlencoded", 10)).toBe("Form");
+    expect(bodyTypeBadge("multipart/form-data; boundary=x", 10)).toBe("Multipart");
+    expect(bodyTypeBadge("image/png", 10)).toBe("Image");
+    expect(bodyTypeBadge("image/svg+xml", 10)).toBe("SVG");
+    expect(bodyTypeBadge("text/plain", 10)).toBe("Text");
+    expect(bodyTypeBadge("application/grpc", 10)).toBe("Protobuf");
+    expect(bodyTypeBadge("application/octet-stream", 10)).toBe("Binary");
+    expect(bodyTypeBadge(null, 10)).toBe("Binary");
+  });
+
+  test("GraphQL when the request is an operation, and nothing without a body", () => {
+    expect(bodyTypeBadge("application/json", 10, true)).toBe("GraphQL");
+    expect(bodyTypeBadge("application/json", 0)).toBeNull();
+    expect(bodyTypeBadge(null, 0, true)).toBeNull();
   });
 });

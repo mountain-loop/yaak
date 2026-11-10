@@ -6,7 +6,13 @@ import { appliedFilterAtom } from "../lib/atoms";
 import { applyFilter } from "../lib/navigation";
 import { rpc } from "../lib/rpc";
 import { activeQuery, widerQueries } from "../lib/query";
-import { hideSystemAtom, pausedAtAtom, proxyStateAtom, searchWindowAtom } from "../lib/store";
+import {
+  hideEncryptedAtom,
+  hideSystemAtom,
+  pausedAtAtom,
+  proxyStateAtom,
+  searchWindowAtom,
+} from "../lib/store";
 
 /** Nothing to list: no flows yet, recording paused, or a query nothing matches */
 export function FlowListEmpty() {
@@ -64,6 +70,7 @@ export function PausedRow({ style }: { style?: React.CSSProperties }) {
  */
 function NoResults({ text }: { text: string }) {
   const hideSystem = useAtomValue(hideSystemAtom);
+  const hideEncrypted = useAtomValue(hideEncryptedAtom);
   const store = useStore();
   const setText = (wider: string) => applyFilter(store, wider);
   const [wider, setWider] = useState<{ text: string; count: number }[]>([]);
@@ -73,7 +80,7 @@ function NoResults({ text }: { text: string }) {
     const candidates = widerQueries(text);
     void Promise.all(
       candidates.map(async (candidate) => {
-        const query = activeQuery(candidate, hideSystem);
+        const query = activeQuery(candidate, hideSystem, hideEncrypted);
         const res = await rpc("list_flows", { ...query, limit: 0 });
         return { text: candidate, count: query == null ? res.total : (res.matching ?? res.total) };
       }),
@@ -87,7 +94,7 @@ function NoResults({ text }: { text: string }) {
     return () => {
       current = false;
     };
-  }, [text, hideSystem]);
+  }, [text, hideSystem, hideEncrypted]);
 
   return (
     <EmptyStateText

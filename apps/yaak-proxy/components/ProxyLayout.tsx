@@ -31,6 +31,7 @@ import { SavedSearchDialog } from "./SavedSearchDialog";
 import { SearchBar } from "./SearchBar";
 import { SettingsDialogFallback, useOpenSettings } from "./Settings";
 import { Sidebar } from "./Sidebar";
+import { HttpsStrip } from "./HttpsStrip";
 import { TakeOverBanner } from "./TakeOverBanner";
 
 export function ProxyLayout() {
@@ -166,6 +167,7 @@ export function ProxyLayout() {
       >
         <div className="h-full flex flex-col min-h-0">
           <TakeOverBanner />
+          <HttpsStrip />
           <div className="flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)]">
             <FlowsOrFirstRun flowLayout={flowLayout} />
           </div>

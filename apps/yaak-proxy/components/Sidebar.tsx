@@ -10,21 +10,30 @@ import {
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { type PointerEvent, type SyntheticEvent, useCallback, useEffect } from "react";
-import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
+import { useDecrypt } from "../hooks/useDecrypt";
+import { useDecryptList } from "../hooks/useDecryptList";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { appliedFilterAtom, SIDEBAR_TREE_ID } from "../lib/atoms";
-import { blockerOf, decryptMenuAction, isDecrypted, listEdit, setDecrypted } from "../lib/decrypt";
+import {
+  blockerOf,
+  decryptMenuAction,
+  decryptsEverything,
+  everythingEdit,
+  listEdit,
+  setDecrypted,
+} from "../lib/decrypt";
 import { revealLabel, revealPath } from "../lib/opener";
 import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
 import {
   copyRowsText,
+  ENCRYPTED_ID,
   filterWithRows,
   type SidebarItem,
   SYSTEM_ID,
   valueRows,
 } from "../lib/sidebarTree";
 import { applyFilter, noteSidebarInput, noteSidebarMenu } from "../lib/navigation";
-import { hideSystemAtom, sidebarTreeAtom } from "../lib/store";
+import { hideEncryptedAtom, hideSystemAtom, sidebarTreeAtom } from "../lib/store";
 import { getOsType } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
 import { AppIcon } from "./AppIcon";
@@ -73,7 +82,7 @@ function ItemInner({ item }: { item: SidebarItem }) {
   return (
     <div className="flex items-center gap-2 w-full min-w-0">
       {item.kind === "all" && <Icon icon="layers" size="sm" className="text-text-subtle" />}
-      {item.kind === "tunnelled" && <Icon icon="lock" size="sm" className="text-text-subtle" />}
+      {item.kind === "encrypted" && <Icon icon="lock" size="sm" className="text-text-subtle" />}
       {item.kind === "saved" && <Icon icon="bookmark" size="sm" className="text-text-subtle" />}
       {item.kind === "folder" && <Icon icon="folder" size="sm" className="text-text-subtle" />}
       {item.appPath != null && <AppIcon path={item.appPath} className="size-[1.125rem]" />}
@@ -88,7 +97,11 @@ function ItemInner({ item }: { item: SidebarItem }) {
       {item.sublabel != null && (
         <span className="truncate text-xs text-text-subtlest">{item.sublabel}</span>
       )}
-      {item.decrypt != null && <DecryptedMark item={item} />}
+      {item.encryptedOnly && (
+        <Tooltip wrap content="Encrypted" delay={CONTROL_TOOLTIP_DELAY}>
+          <Icon icon="lock" size="xs" className="shrink-0 text-text-subtlest" />
+        </Tooltip>
+      )}
       <Count item={item} />
     </div>
   );
@@ -117,14 +130,12 @@ function CloseAtOnce({ onClose }: { onClose: () => void }) {
   return null;
 }
 
-/** A small open lock on a host, site or app the decrypt list decrypts */
-function DecryptedMark({ item }: { item: SidebarItem }) {
-  const list = useDecryptList();
-  if (item.decrypt == null || !isDecrypted(list, item.decrypt)) return null;
-  return (
-    <Tooltip wrap content="Decrypted" delay={CONTROL_TOOLTIP_DELAY}>
-      <Icon icon="lock_open" size="xs" className="shrink-0 text-text-subtlest" />
-    </Tooltip>
+/** A checkable menu item's mark: a check when on, the same room when off */
+function checkMark(on: boolean) {
+  return on ? (
+    <Icon icon="check" size="sm" />
+  ) : (
+    <span aria-hidden className="inline-block w-4 h-4" />
   );
 }
 
@@ -137,9 +148,9 @@ export function Sidebar() {
     [],
   );
   const [hideSystem, setHideSystem] = useAtom(hideSystemAtom);
+  const [hideEncrypted, setHideEncrypted] = useAtom(hideEncryptedAtom);
   const decryptList = useDecryptList();
-  const setDecryptList = useEditDecryptList();
-  const { mutate: saveDecryptList } = setDecryptList;
+  const { apply: applyDecrypt } = useDecrypt();
   const showToast = useShowToast();
   const setSavedDialog = useSetAtom(savedSearchDialogAtom);
   const { mutate: deleteSaved } = useRpcMutation("delete_saved_query", {
@@ -210,14 +221,34 @@ export function Sidebar() {
         return [
           {
             label: "Show in All Traffic",
-            leftSlot: hideSystem ? (
-              <span aria-hidden className="inline-block w-4 h-4" />
-            ) : (
-              <Icon icon="check" size="sm" />
-            ),
+            leftSlot: checkMark(!hideSystem),
             onSelect: () => setHideSystem(!hideSystem),
           },
         ];
+      }
+      if (items.length === 1 && items[0]?.id === ENCRYPTED_ID) {
+        return withSeparators([
+          [
+            {
+              label: "Decrypt Everything",
+              leftSlot: <Icon icon="lock_open" />,
+              hidden: decryptsEverything(decryptList),
+              onSelect: () =>
+                void applyDecrypt({
+                  edit: everythingEdit(true),
+                  message: "Decrypting everything",
+                  sub: "Except Apple services and apps that pin",
+                }),
+            },
+          ],
+          [
+            {
+              label: "Show in All Traffic",
+              leftSlot: checkMark(!hideEncrypted),
+              onSelect: () => setHideEncrypted(!hideEncrypted),
+            },
+          ],
+        ]);
       }
       const paths = items.length === 1 ? pathItems(items[0]) : [];
       const saved = items.flatMap((i) => (i.savedId == null ? [] : [{ ...i, id: i.savedId }]));
@@ -265,7 +296,10 @@ export function Sidebar() {
                   // Only what this changes, applied to the list as it is then, so a second change
                   // made before this one lands keeps it.
                   const next = setDecrypted(decryptList, subjects, action.on);
-                  saveDecryptList(listEdit(decryptList, next));
+                  void applyDecrypt({
+                    edit: listEdit(decryptList, next),
+                    message: `${action.on ? "Decrypting" : "Stopped decrypting"} ${action.subject}`,
+                  });
                 },
               },
             ];
@@ -273,7 +307,7 @@ export function Sidebar() {
     },
     [
       decryptList,
-      saveDecryptList,
+      applyDecrypt,
       showToast,
       setSavedDialog,
       deleteSaved,
@@ -281,6 +315,8 @@ export function Sidebar() {
       filterItems,
       hideSystem,
       setHideSystem,
+      hideEncrypted,
+      setHideEncrypted,
     ],
   );
   const renderContextMenu = useCallback<NonNullable<TreeProps<SidebarItem>["renderContextMenu"]>>(

@@ -66,6 +66,8 @@ export interface HttpResponsePaneViewProps {
   cookieCounts?: { sent: number; received: number };
   /** Tabs only the app has, after the shared ones */
   extraTabs?: ExtraPaneTab[];
+  /** The body tab as the app names it, where it has no menu of its own */
+  bodyTab?: TabItem;
   textViewer?: ResponseTextViewerExtras;
   /** Viewers only this app has for a response body, like the client's event stream viewer */
   renderBodyViewer?: EditorHost["renderBodyViewer"];
@@ -111,6 +113,7 @@ export function HttpResponsePaneView({
   onCancel,
   cookieCounts: cookieCountsOverride,
   extraTabs,
+  bodyTab,
   textViewer,
   renderBodyViewer,
   infoRows,
@@ -166,7 +169,7 @@ export function HttpResponsePaneView({
     const headerCount = response?.headers.length ?? 0;
     return [
       onViewModeChange == null && itemsAfter.length === 0
-        ? { value: RESPONSE_TAB_BODY, label: "Response" }
+        ? (bodyTab ?? { value: RESPONSE_TAB_BODY, label: "Response" })
         : {
             value: RESPONSE_TAB_BODY,
             options: {
@@ -212,6 +215,7 @@ export function HttpResponsePaneView({
       ...(extraTabs?.map((t) => t.tab) ?? []),
     ];
   }, [
+    bodyTab,
     cookieCounts,
     extraTabs,
     mimeType,

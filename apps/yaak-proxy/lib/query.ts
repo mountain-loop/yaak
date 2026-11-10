@@ -3,17 +3,23 @@ import { formatField, parseQuery } from "@yaakapp-internal/query";
 
 /**
  * A search over every flow in the database, as `list_flows` takes it: the search box's text,
- * which the backend parses and runs, and whether System's flows are hidden.
+ * which the backend parses and runs, and whether System's flows and encrypted connections are
+ * hidden.
  */
 export interface FlowQuery {
   query: string;
   hideSystem: boolean;
+  hideEncrypted: boolean;
 }
 
 /** The search the list shows, or null for all traffic */
-export function activeQuery(text: string, hideSystem: boolean): FlowQuery | null {
-  if (text.trim() === "" && !hideSystem) return null;
-  return { query: text.trim(), hideSystem };
+export function activeQuery(
+  text: string,
+  hideSystem: boolean,
+  hideEncrypted = false,
+): FlowQuery | null {
+  if (text.trim() === "" && !hideSystem && !hideEncrypted) return null;
+  return { query: text.trim(), hideSystem, hideEncrypted };
 }
 
 /** `@field:value`, or `-@field:value`, the value quoted when it needs to be */

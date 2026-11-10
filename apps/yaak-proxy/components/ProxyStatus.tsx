@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import type { CaStatus, SystemProxyStatus } from "@yaakapp-internal/proxy-lib";
+import type { SystemProxyStatus } from "@yaakapp-internal/proxy-lib";
 import {
   Button,
   Checkbox,
@@ -13,10 +13,13 @@ import classNames from "classnames";
 import { useAtom, useAtomValue } from "jotai";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useDecrypt, useTrustCertificate } from "../hooks/useDecrypt";
+import { useDecryptList } from "../hooks/useDecryptList";
 import { useRpcEvent } from "../hooks/useRpcEvent";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
 import { helperRegisteredAtAtom } from "../lib/atoms";
+import { decryptsAnything, decryptsEverything, everythingEdit, listSummary } from "../lib/decrypt";
 import { encryptingPercent } from "../lib/encrypting";
 import { environmentExports } from "../lib/env";
 import { proxyStatusOf } from "../lib/proxyStatus";
@@ -27,9 +30,10 @@ import { useShowToast } from "../lib/toast";
 
 /**
  * The header's state pill and its menu: the listening address, which copies itself, the state,
- * Pause or Resume Recording, Override system proxy, and the certificate. The engine runs for as
- * long as the app does, so the pill shows whether flows are being stored. A certificate that is not trusted steps out of the
- * menu beside the pill until it is. Everything set once and left alone lives in Settings.
+ * Pause or Resume Recording, Override system proxy, and Decrypt everything. The engine runs for
+ * as long as the app does, so the pill shows whether flows are being stored. A certificate that
+ * is not trusted while something is listed to decrypt steps out of the menu beside the pill
+ * until it is. Everything set once and left alone lives in Settings.
  */
 export function ProxyStatus() {
   const dropdownRef = useRef<DropdownRef>(null);
@@ -38,14 +42,16 @@ export function ProxyStatus() {
   const setup = useProxySetup();
   const execute = useRpcMutation("execute_action");
   const retry = useRpcMutation("take_over");
-  const { caStatus, trust, systemProxy, setSystemProxy } = setup;
+  const { caStatus, systemProxy, setSystemProxy } = setup;
   const systemSwitch = useSystemProxySwitch(setup);
 
   const running = proxyState?.state === "running";
   const recording = proxyState?.recording !== false;
   const other = proxyState?.otherOwner ?? null;
   const port = proxyState?.port ?? other?.proxyPort ?? null;
-  const untrusted = caStatus.data != null && !caStatus.data.trusted;
+  const decryptList = useDecryptList();
+  // Something is listed to decrypt but the certificate isn't trusted, so it can't be.
+  const broken = caStatus.data != null && !caStatus.data.trusted && decryptsAnything(decryptList);
   // The same status the header's tint takes its colour from
   const status = proxyStatusOf(proxyState);
   const encrypting = status === "encrypting" ? encryptingPercent(proxyState) : null;
@@ -166,44 +172,7 @@ export function ProxyStatus() {
         />
       ),
     },
-    {
-      type: "content",
-      label: caStatus.data?.trusted ? (
-        <MenuRow
-          icon={<Icon icon="shield_check" color="success" size="sm" />}
-          title="Certificate trusted"
-          description="Yaak Proxy CA, in your login keychain."
-        />
-      ) : (
-        <MenuRow
-          icon={<Icon icon="shield_off" color="warning" size="sm" />}
-          title="Certificate not trusted"
-          description={
-            trust.error != null ? (
-              <span className="text-danger">{trust.error.message}</span>
-            ) : trust.isPending ? (
-              "Waiting for your password in the macOS prompt."
-            ) : (
-              "So HTTPS reads as plain text. macOS asks for your login password once."
-            )
-          }
-          action={
-            <Button
-              size="2xs"
-              variant="border"
-              color="primary"
-              isLoading={trust.isPending}
-              onClick={(e) => {
-                e.stopPropagation();
-                trust.mutate({});
-              }}
-            >
-              {trust.error != null ? "Try again" : "Trust certificate"}
-            </Button>
-          }
-        />
-      ),
-    },
+    { type: "content", label: <DecryptEverythingRow broken={broken} /> },
   ];
 
   return (
@@ -235,13 +204,80 @@ export function ProxyStatus() {
           <Icon icon="chevron_down" size="xs" className="text-text-subtlest" />
         </Pill>
       </Dropdown>
-      {untrusted && (
+      {broken && (
         <Pill color="warning" onClick={() => dropdownRef.current?.open()}>
           <Icon icon="shield_off" size="xs" />
           Certificate not trusted
         </Pill>
       )}
     </>
+  );
+}
+
+/**
+ * Decrypt everything, `*` on the list, as a switch: what else is listed when off, and Trust
+ * while something is listed and the certificate isn't trusted.
+ */
+function DecryptEverythingRow({ broken }: { broken: boolean }) {
+  const list = useDecryptList();
+  const { apply, trusting } = useDecrypt();
+  const trust = useTrustCertificate();
+  const on = decryptsEverything(list);
+  if (broken) {
+    return (
+      <MenuRow
+        icon={<Icon icon="shield_off" size="sm" color="warning" />}
+        title="Decrypt everything"
+        description={<span className="text-warning">Certificate not trusted</span>}
+        action={
+          <Button
+            size="2xs"
+            color="primary"
+            isLoading={trusting}
+            onClick={(e) => {
+              e.stopPropagation();
+              trust.mutate({});
+            }}
+          >
+            {trusting ? "Waiting for macOS" : "Trust"}
+          </Button>
+        }
+      />
+    );
+  }
+  return (
+    <MenuRow
+      icon={<Icon icon="lock_open" size="sm" color="secondary" />}
+      title="Decrypt everything"
+      description={
+        trusting
+          ? "Waiting for macOS"
+          : on
+            ? "Except Apple services and apps that pin"
+            : (listSummary(list) ?? "Nothing listed")
+      }
+      action={
+        <KeepMenuOpen>
+          <Checkbox
+            title="Decrypt everything"
+            hideLabel
+            checked={on}
+            disabled={trusting}
+            onChange={(checked) =>
+              void apply(
+                checked
+                  ? {
+                      edit: everythingEdit(true),
+                      message: "Decrypting everything",
+                      sub: "Except Apple services and apps that pin",
+                    }
+                  : { edit: everythingEdit(false), message: "Stopped decrypting everything" },
+              )
+            }
+          />
+        </KeepMenuOpen>
+      }
+    />
   );
 }
 
@@ -265,10 +301,6 @@ export function useProxySetup() {
   // The user comes back from System Settings, maybe having just allowed the helper.
   const { refetch: refetchSystemProxy } = systemProxy;
   useEffect(() => onWindowFocus(() => void refetchSystemProxy()), [refetchSystemProxy]);
-  const trust = useRpcMutation("ca_trust", {
-    mutationKey: ["ca_trust"],
-    onSuccess: (status) => queryClient.setQueryData<CaStatus>(["ca_status", {}], status),
-  });
   const setSystemProxy = useRpcMutation("system_proxy_set", {
     mutationKey: ["system_proxy_set"],
     onSuccess: (status) => {
@@ -284,7 +316,7 @@ export function useProxySetup() {
   useEffect(() => {
     if (on && !everOn) setEverOn(true);
   }, [on, everOn, setEverOn]);
-  return { caStatus, trust, systemProxy, setSystemProxy };
+  return { caStatus, systemProxy, setSystemProxy };
 }
 
 /** The system proxy switch's state, from where it points and the change in flight */

@@ -106,6 +106,8 @@ export interface HttpRequestPaneViewProps {
 
   /** Tabs only the app has, after the shared ones */
   extraTabs?: ExtraPaneTab[];
+  /** Tabs only the app has, before the shared ones, like the proxy's Info */
+  leadingTabs?: ExtraPaneTab[];
 
   /** Replaces the URL bar, as the proxy's card shows a captured request's method and URL */
   urlLine?: ReactNode;
@@ -165,6 +167,7 @@ export function HttpRequestPaneView({
   authTabs,
   authContent,
   extraTabs,
+  leadingTabs,
   urlLine,
   defaultTab,
   activeTab,
@@ -187,6 +190,7 @@ export function HttpRequestPaneView({
   const headerCount = request.headers.filter((h) => h.name && h.enabled !== false).length;
   const tabs = useMemo<TabItem[]>(
     () => [
+      ...(leadingTabs?.map((t) => t.tab) ?? []),
       bodyTab ?? {
         value: REQUEST_TAB_BODY,
         label: bodyTypeLabel(request.bodyType, request.contentType),
@@ -219,6 +223,7 @@ export function HttpRequestPaneView({
       authTabs,
       bodyTab,
       extraTabs,
+      leadingTabs,
       headerCount,
       headersTabs,
       numParams,
@@ -319,7 +324,7 @@ export function HttpRequestPaneView({
         <TabContent value={REQUEST_TAB_BODY} ErrorBoundary={ErrorBoundary}>
           {renderBody ? renderBody(sharedBody) : sharedBody}
         </TabContent>
-        {extraTabs?.map(({ tab, content }) => (
+        {[...(leadingTabs ?? []), ...(extraTabs ?? [])].map(({ tab, content }) => (
           <TabContent key={tab.value} value={tab.value} ErrorBoundary={ErrorBoundary}>
             {content}
           </TabContent>

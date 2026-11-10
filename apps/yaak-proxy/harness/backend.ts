@@ -1,4 +1,5 @@
 import type {
+  DecryptListEntry,
   Flow,
   FlowSortKey,
   GetProxyStateResponse,
@@ -6,16 +7,59 @@ import type {
 } from "@yaakapp-internal/proxy-lib";
 import { sortFlows } from "../lib/columns";
 import { appIconPng, fixtures } from "./fixtures";
+import { BUILT_IN_EXCLUSIONS, httpsFlows } from "./httpsFixtures";
+
+const params = new URLSearchParams(location.search);
+
+/**
+ * The decrypt list and the certificate as the harness holds them, from `?list=` (`none`,
+ * `host`, `everything`, `apps`) and `?ca=untrusted`. `?trust=cancel` cancels the password
+ * prompt; `?still=n` is how many open connections each change leaves encrypted.
+ */
+const https = {
+  list: initialList(params.get("list")),
+  trusted: params.get("ca") !== "untrusted",
+  passthrough: params.get("scene") === "mixed" ? ["sync.acme.dev:443"] : ([] as string[]),
+};
+
+function initialList(which: string | null): DecryptListEntry[] {
+  const own = (...entries: string[]) => entries.map((entry) => ({ entry, builtIn: false }));
+  switch (which) {
+    case "none":
+      return BUILT_IN_EXCLUSIONS;
+    case "host":
+      return [...own("host:www.google.com"), ...BUILT_IN_EXCLUSIONS];
+    case "everything":
+      return [...own("*"), ...BUILT_IN_EXCLUSIONS];
+    case "apps":
+      return [...own("app:Dia", "app:Google Chrome", "app:Acme Sync"), ...BUILT_IN_EXCLUSIONS];
+    case "excluded":
+      return [...own("*", "!host:*.slack.com"), ...BUILT_IN_EXCLUSIONS];
+    default:
+      return [
+        { entry: "host:api.stripe.com", builtIn: false },
+        { entry: "app:Google Chrome", builtIn: false },
+        { entry: "!host:*.apple.com", builtIn: true },
+      ];
+  }
+}
 
 /**
  * Dev only: answers the engine's RPCs the harness pages need, from fixtures, so the card and
  * settings render outside the app as they do inside it.
  */
 export function installFixtureBackend() {
+  // `?firstrun`: setup not done yet, so the first-run card shows
+  if (params.has("firstrun")) localStorage.setItem("system_proxy_ever_on", "false");
+  else if (params.has("window")) localStorage.setItem("system_proxy_ever_on", "true");
   const internals = (window as unknown as { __TAURI_INTERNALS__: Record<string, unknown> })
     .__TAURI_INTERNALS__;
   // For checking the window as traffic arrives: `__harnessEmit("model_write", payload)`
   (window as unknown as { __harnessEmit: typeof emit }).__harnessEmit = emit;
+  // Unlistening, which the app does as its components unmount
+  (
+    window as unknown as { __TAURI_EVENT_PLUGIN_INTERNALS__: unknown }
+  ).__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: () => {} };
   internals.transformCallback = (callback: (event: unknown) => void) => {
     const id = callbacks.size + 1;
     callbacks.set(id, callback);
@@ -138,11 +182,16 @@ function matches(flow: Flow, query: string): boolean {
       if (field === "host") return host.toLowerCase().includes(value.replaceAll("*", ""));
       if (field === "method") return flow.method.toLowerCase() === value;
       if (field === "status") return String(flow.status ?? "").startsWith(value.replace(/x+$/, ""));
+      if (field === "is" && value === "encrypted") return flow.tunnelled;
+      if (field === "is" && value === "rejected") return flow.tlsRejected != null;
       return field == null ? text.includes(term) : true;
     });
 }
 
 function allFlows(): Flow[] {
+  if (params.has("firstrun")) return [];
+  const scene = httpsFlows(params.get("scene"));
+  if (scene != null) return scene.map((f, i) => ({ ...f, number: i + 1 }));
   const many = Number(new URLSearchParams(location.search).get("many") ?? 0);
   return (many > 0 ? manyFlows(many) : fixtures.map((f) => f.flow)).map((f, i) => ({
     ...f,
@@ -150,7 +199,15 @@ function allFlows(): Flow[] {
   }));
 }
 
-function answer(cmd: string, payload: unknown): unknown {
+function caStatus() {
+  return {
+    trusted: https.trusted,
+    installed: https.trusted,
+    certPath: "/Users/you/Library/Application Support/app.yaak.proxy/ca.pem",
+  };
+}
+
+async function answer(cmd: string, payload: unknown): Promise<unknown> {
   const req = (payload ?? {}) as Record<string, unknown>;
   switch (cmd) {
     case "get_flows": {
@@ -231,14 +288,45 @@ function answer(cmd: string, payload: unknown): unknown {
     case "get_storage_size":
       return { bytes: 412 * 1024 * 1024 };
     case "ca_status":
+      return caStatus();
+    case "ca_trust": {
+      // A moment for the prompt, so the controls that asked show it
+      await new Promise((r) => setTimeout(r, Number(params.get("prompt") ?? 900)));
+      if (params.get("trust") === "cancel") return { ...caStatus(), cancelled: true };
+      https.trusted = true;
+      return { ...caStatus(), cancelled: false };
+    }
+    case "edit_decrypt_list": {
+      const { add = [], remove = [] } = req as { add?: string[]; remove?: string[] };
+      const own = https.list.filter((e) => !e.builtIn && !remove.includes(e.entry));
+      for (const entry of add) {
+        if (!own.some((e) => e.entry === entry)) own.push({ entry, builtIn: false });
+      }
+      const builtIns = BUILT_IN_EXCLUSIONS.filter(
+        (e) => https.list.some((l) => l.entry === e.entry) && !remove.includes(e.entry),
+      );
+      https.list = [...own, ...builtIns];
+      emit("decrypt_list_changed", { list: { entries: https.list } });
+      const decrypts = add.some((e) => !e.startsWith("!")) || remove.some((e) => e.startsWith("!"));
       return {
-        trusted: true,
-        installed: true,
-        certPath: "/Users/you/Library/Application Support/app.yaak.proxy/ca.pem",
+        entries: https.list,
+        stillEncrypted: decrypts ? Number(params.get("still") ?? 3) : 0,
       };
+    }
+    case "list_passthrough":
+      return { addresses: https.passthrough };
+    case "forget_passthrough": {
+      const address = String(req.address);
+      const forgotten = https.passthrough.includes(address);
+      https.passthrough = https.passthrough.filter((a) => a !== address);
+      emit("passthrough_changed", { addresses: https.passthrough });
+      return { forgotten, addresses: https.passthrough };
+    }
+    case "reconnect_tunnels":
+      return { closed: 1 };
     case "system_proxy_status":
       return {
-        enabled: true,
+        enabled: !params.has("firstrun"),
         port: 9090,
         services: [],
         backend: "helper",
@@ -246,13 +334,7 @@ function answer(cmd: string, payload: unknown): unknown {
         supported: true,
       };
     case "get_decrypt_list":
-      return {
-        entries: [
-          { entry: "host:api.stripe.com", builtIn: false },
-          { entry: "app:Google Chrome", builtIn: false },
-          { entry: "!host:*.apple.com", builtIn: true },
-        ],
-      };
+      return { entries: https.list };
     case "list_actions":
       // As the engine lists them on macOS
       return {
@@ -270,7 +352,8 @@ function answer(cmd: string, payload: unknown): unknown {
     case "list_flows": {
       const all = allFlows();
       const query = typeof req.query === "string" ? req.query : "";
-      const matching = all.filter((f) => matches(f, query));
+      const hideEncrypted = req.hideEncrypted === true && !query.includes("@is:encrypted");
+      const matching = all.filter((f) => matches(f, query) && !(hideEncrypted && f.tunnelled));
       // In a sort's order, as the database lists it, all in one page
       const sort = (req.sort ?? []) as FlowSortKey[];
       const flows = sort.length > 0 ? sortFlows(matching, sort) : matching.reverse();
@@ -278,7 +361,7 @@ function answer(cmd: string, payload: unknown): unknown {
       return {
         flows: page,
         total: all.length,
-        matching: query === "" ? null : matching.length,
+        matching: query === "" && !hideEncrypted ? null : matching.length,
         cursor: null,
       };
     }

@@ -163,6 +163,12 @@ function matches(e: ParsedEntry, q: DecryptQuery): boolean {
   }
 }
 
+/** Whether one entry, as stored, names `q`, whichever way it points */
+export function entryMatches(entry: string, q: DecryptQuery): boolean {
+  const parsed = parseEntry(entry);
+  return parsed != null && matches(parsed, q);
+}
+
 function specificity(e: ParsedEntry): number {
   if (e.kind === "everything") return 0;
   if (e.kind === "app") return Number.POSITIVE_INFINITY;
@@ -191,6 +197,52 @@ export function decrypts(list: DecryptListEntry[], q: DecryptQuery): boolean {
 /** Some entry decrypts something: the list is not only exclusions */
 export function decryptsAnything(list: DecryptListEntry[]): boolean {
   return list.some((e) => !e.entry.trim().startsWith("!"));
+}
+
+/** What a list entry is called in a button: its host or pattern, its app, or Everything */
+export function entrySubject(entry: string): string {
+  const parsed = parseEntry(entry);
+  if (parsed == null) return entry;
+  if (parsed.kind === "everything") return "Everything";
+  if (parsed.kind === "app") return parsed.pattern;
+  return formatEntry({ ...parsed, negated: false }).slice("host:".length);
+}
+
+/**
+ * The person's own positive entries, counted for the pill: `2 apps, 1 host`, sites counted as
+ * hosts, `*` left out as the switch beside it shows it. Null when there are none.
+ */
+export function listSummary(list: DecryptListEntry[]): string | null {
+  let apps = 0;
+  let hosts = 0;
+  for (const e of list) {
+    if (e.builtIn) continue;
+    const parsed = parseEntry(e.entry);
+    if (parsed == null || parsed.negated) continue;
+    if (parsed.kind === "app") apps++;
+    if (parsed.kind === "host") hosts++;
+  }
+  const parts = [
+    apps > 0 ? `${apps} ${apps === 1 ? "app" : "apps"}` : null,
+    hosts > 0 ? `${hosts} ${hosts === 1 ? "host" : "hosts"}` : null,
+  ].filter((p) => p != null);
+  return parts.length === 0 ? null : parts.join(", ");
+}
+
+/** Whether an edit can make something decrypt: it adds a positive entry or drops an exclusion */
+export function editDecrypts(edit: { add: string[]; remove: string[] }): boolean {
+  return (
+    edit.add.some((e) => !e.trim().startsWith("!")) ||
+    edit.remove.some((e) => e.trim().startsWith("!"))
+  );
+}
+
+/** The edit that puts back what `edit` changed, for Undo */
+export function inverseEdit(edit: { add: string[]; remove: string[] }): {
+  add: string[];
+  remove: string[];
+} {
+  return { add: edit.remove, remove: edit.add };
 }
 
 /** What a sidebar row or the detail's buttons decrypt: a host, a site, or an app */
@@ -335,10 +387,44 @@ export function setDecrypted(
 export function decryptMenuAction(
   list: DecryptListEntry[],
   subjects: DecryptSubject[],
-): { label: "Decrypt" | "Stop Decrypting"; on: boolean } | null {
+): { label: string; on: boolean; subject: string } | null {
   if (subjects.length === 0) return null;
   const on = !subjects.every((s) => isDecrypted(list, s));
-  return { label: on ? "Decrypt" : "Stop Decrypting", on };
+  const subject = subjectsName(subjects);
+  return {
+    label: `${on ? "Decrypt" : "Stop Decrypting"} ${subject.title}`,
+    on,
+    subject: subject.text,
+  };
+}
+
+/** What a subject is called: its host, `*.site`, or its app */
+export function subjectName(subject: DecryptSubject): string {
+  switch (subject.kind) {
+    case "host":
+      return subject.host;
+    case "site":
+      return `*.${subject.site}`;
+    case "app":
+      return subject.name;
+  }
+}
+
+/**
+ * Several subjects named together: one by its name, several of a kind counted, `3 Sites` in a
+ * menu and `3 sites` in a toast, and mixed kinds as `3 Selected`
+ */
+function subjectsName(subjects: DecryptSubject[]): { title: string; text: string } {
+  const [first] = subjects;
+  if (subjects.length === 1 && first != null) {
+    const name = subjectName(first);
+    return { title: name, text: name };
+  }
+  const kinds = new Set(subjects.map((s) => s.kind));
+  const n = subjects.length;
+  if (kinds.size > 1) return { title: `${n} Selected`, text: `${n} selected` };
+  const noun = first?.kind === "app" ? "Apps" : first?.kind === "site" ? "Sites" : "Hosts";
+  return { title: `${n} ${noun}`, text: `${n} ${noun.toLowerCase()}` };
 }
 
 function builtIns(list: DecryptListEntry[]): DecryptListEntry[] {

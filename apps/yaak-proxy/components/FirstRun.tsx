@@ -1,18 +1,8 @@
-import {
-  Button,
-  CONTROL_TOOLTIP_DELAY,
-  Icon,
-  InlineCode,
-  LoadingIcon,
-  Tooltip,
-} from "@yaakapp-internal/ui";
+import { Button, Icon, InlineCode, LoadingIcon } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import type { ReactNode } from "react";
-import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
 import { useRpcMutation } from "../hooks/useRpcMutation";
-import { everythingEdit } from "../lib/decrypt";
-import { decryptStep } from "../lib/firstRun";
 import { encryptingPercent } from "../lib/encrypting";
 import { proxyStateAtom } from "../lib/store";
 import { useCopyEnvironment, useProxySetup, useSystemProxySwitch } from "./ProxyStatus";
@@ -20,36 +10,27 @@ import { useCopyEnvironment, useProxySetup, useSystemProxySwitch } from "./Proxy
 type StepState = "todo" | "next" | "wait" | "done" | "fail";
 
 /**
- * The list's empty state until traffic arrives: trust the certificate, turn on the system proxy,
- * choose what to decrypt, then see traffic. Not dismissable and nothing remembered; the first flow replaces it. Copy
- * environment beside it serves someone who wants one terminal proxied and nothing system-wide.
+ * The list's empty state until traffic arrives: turn on the system proxy, then see traffic. The
+ * certificate is trusted at the first Decrypt, not here, as nothing needs it before. Not
+ * dismissable and nothing remembered; the first flow replaces it. Copy environment beside it
+ * serves someone who wants one terminal proxied and nothing system-wide.
  */
 export function FirstRun() {
   const proxyState = useAtomValue(proxyStateAtom);
   const setup = useProxySetup();
-  const { caStatus, trust, systemProxy, setSystemProxy } = setup;
+  const { systemProxy, setSystemProxy } = setup;
   const systemSwitch = useSystemProxySwitch(setup);
   const execute = useRpcMutation("execute_action");
   const retry = useRpcMutation("take_over");
   const copyEnvironment = useCopyEnvironment();
-  const decryptList = useDecryptList();
-  const saveDecryptList = useEditDecryptList();
 
   const running = proxyState?.state === "running";
   // Changed only by the process that owns the engine, so not from here while the CLI does.
   const otherOwner = proxyState?.otherOwner != null;
   const recording = proxyState?.recording !== false;
-  const trusted = caStatus.data?.trusted === true;
   const systemSupported = systemProxy.data?.supported !== false;
   const systemOn = systemProxy.data?.enabled === true;
 
-  const trustState: StepState = trusted
-    ? "done"
-    : trust.isPending
-      ? "wait"
-      : trust.error != null
-        ? "fail"
-        : "next";
   const systemState: StepState = setSystemProxy.isPending
     ? "wait"
     : systemOn
@@ -57,10 +38,6 @@ export function FirstRun() {
       : systemSwitch.failed
         ? "fail"
         : "next";
-  const decrypt = decryptStep(decryptList, trusted);
-  const everything = decrypt.choice === "everything";
-  const setEverything = (on: boolean) => saveDecryptList.mutate(everythingEdit(on));
-  // The certificate is optional here: nothing needs it until something is decrypted.
   const ready = systemOn || !systemSupported;
   const encrypting = !running && !otherOwner ? encryptingPercent(proxyState) : null;
   const trafficState: StepState =
@@ -71,39 +48,14 @@ export function FirstRun() {
       <div className="w-full max-w-[40rem]">
         <div className="text-xl font-semibold mb-1.5">Set up Yaak Proxy</div>
         <div className="text-text-subtle text-sm leading-relaxed mb-4">
-          {systemSupported ? "Four" : "Three"} steps, once. Then every app on this Mac sends its
-          traffic here.
+          {systemSupported
+            ? "Two steps, once. Then every app on this Mac sends its traffic here."
+            : "Traffic appears here as apps send it."}
         </div>
         <div className="rounded-lg border border-border-subtle bg-surface divide-y divide-border-subtle">
-          <Step
-            n={1}
-            state={trustState}
-            title={trusted ? "Certificate trusted" : "Trust the certificate"}
-            description={
-              trusted
-                ? "Yaak Proxy CA, in your login keychain."
-                : trustState === "wait"
-                  ? "Waiting for your password in the macOS prompt."
-                  : trustState === "fail"
-                    ? (trust.error?.message ?? "The certificate was not trusted.")
-                    : "So HTTPS reads as plain text. macOS asks for your login password once."
-            }
-            action={
-              trustState === "next" || trustState === "fail" ? (
-                <Button
-                  size="2xs"
-                  variant={trustState === "fail" ? "border" : "solid"}
-                  color={trustState === "fail" ? "default" : "primary"}
-                  onClick={() => trust.mutate({})}
-                >
-                  {trustState === "fail" ? "Try Again" : "Trust Certificate"}
-                </Button>
-              ) : null
-            }
-          />
           {systemSupported && (
             <Step
-              n={2}
+              n={1}
               state={systemState}
               title={systemOn ? "System proxy on" : "Turn on the system proxy"}
               description={
@@ -128,49 +80,7 @@ export function FirstRun() {
             />
           )}
           <Step
-            n={systemSupported ? 3 : 2}
-            state={decrypt.state}
-            title="What to decrypt"
-            description={
-              everything ? (
-                <Tooltip
-                  wrap
-                  content="Except the built-in exclusions"
-                  delay={CONTROL_TOOLTIP_DELAY}
-                >
-                  <span>Everything</span>
-                </Tooltip>
-              ) : (
-                <Tooltip wrap content="From a flow or the sidebar" delay={CONTROL_TOOLTIP_DELAY}>
-                  <span>Pick as they appear</span>
-                </Tooltip>
-              )
-            }
-            action={
-              everything ? (
-                <Button
-                  size="2xs"
-                  variant="border"
-                  isLoading={saveDecryptList.isPending}
-                  onClick={() => setEverything(false)}
-                >
-                  Pick As They Appear
-                </Button>
-              ) : (
-                <Button
-                  size="2xs"
-                  variant="border"
-                  color={decrypt.state === "next" ? "primary" : "default"}
-                  isLoading={saveDecryptList.isPending}
-                  onClick={() => setEverything(true)}
-                >
-                  Everything
-                </Button>
-              )
-            }
-          />
-          <Step
-            n={systemSupported ? 4 : 3}
+            n={systemSupported ? 2 : 1}
             state={trafficState}
             title={
               encrypting != null
@@ -183,12 +93,12 @@ export function FirstRun() {
               encrypting != null
                 ? "Traffic captured before this version is being encrypted on disk. Recording starts when it's done."
                 : trafficState === "fail"
-                ? (retry.error?.message ?? proxyState?.startError ?? "The proxy has not started.")
-                : !recording
-                  ? "Recording is paused, so traffic passes through without being stored."
-                  : trafficState === "wait"
-                    ? "Open a website or send a request, and its flow appears here."
-                    : "Flows appear here as apps send requests."
+                  ? (retry.error?.message ?? proxyState?.startError ?? "The proxy has not started.")
+                  : !recording
+                    ? "Recording is paused, so traffic passes through without being stored."
+                    : trafficState === "wait"
+                      ? "Open a website or send a request, and its flow appears here."
+                      : "Flows appear here as apps send requests."
             }
             action={
               trafficState === "fail" ? (

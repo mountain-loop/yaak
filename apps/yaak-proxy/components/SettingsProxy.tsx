@@ -40,7 +40,7 @@ import { helperRow } from "../lib/systemProxy";
 import { proxyStateAtom, refreshProxyState } from "../lib/store";
 import { getOsType } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
-import { DecryptListEditor } from "./DecryptListEditor";
+import { DecryptionSettings } from "./DecryptListEditor";
 
 /**
  * The proxy's own settings tab: how it listens and the system proxy, what it decrypts, what
@@ -89,7 +89,7 @@ export function SettingsProxy() {
         </SettingsSection>
 
         <SettingsSection title="Decryption">
-          <DecryptListEditor className="py-4" />
+          <DecryptionSettings />
         </SettingsSection>
 
         <SettingsSection title="Traffic">

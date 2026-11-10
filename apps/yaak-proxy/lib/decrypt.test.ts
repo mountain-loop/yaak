@@ -11,8 +11,12 @@ import {
   decryptMenuAction,
   decrypts,
   decryptsEverything,
+  editDecrypts,
   entryLabel,
+  entrySubject,
   everythingEdit,
+  inverseEdit,
+  listSummary,
   isDecrypted,
   listEdit,
   normalizeEntry,
@@ -170,13 +174,29 @@ describe("the sidebar menu", () => {
   const a = { kind: "host", host: "a.com" } as const;
   const b = { kind: "host", host: "b.com" } as const;
 
-  test("offers Decrypt unless every selected row is decrypted", () => {
+  test("offers Decrypt unless every selected row is decrypted, naming what it changes", () => {
     expect(decryptMenuAction(user("host:a.com"), [a])).toEqual({
-      label: "Stop Decrypting",
+      label: "Stop Decrypting a.com",
       on: false,
+      subject: "a.com",
     });
-    expect(decryptMenuAction(user("host:a.com"), [a, b])).toEqual({ label: "Decrypt", on: true });
+    expect(decryptMenuAction(user("host:a.com"), [a, b])).toEqual({
+      label: "Decrypt 2 Hosts",
+      on: true,
+      subject: "2 hosts",
+    });
     expect(decryptMenuAction([], [])).toBeNull();
+  });
+
+  test("names sites, apps and mixed rows", () => {
+    const site = { kind: "site", site: "google.com" } as const;
+    const dia = { kind: "app", name: "Dia", bundleId: null } as const;
+    expect(decryptMenuAction([], [site])?.label).toBe("Decrypt *.google.com");
+    expect(decryptMenuAction([], [dia])?.label).toBe("Decrypt Dia");
+    expect(decryptMenuAction([], [site, { kind: "site", site: "x.com" }])?.label).toBe(
+      "Decrypt 2 Sites",
+    );
+    expect(decryptMenuAction([], [dia, a, site])?.label).toBe("Decrypt 3 Selected");
   });
 
   test("applies to every selected row, leaving those already so", () => {
@@ -225,8 +245,8 @@ describe("the Not decrypted detail's buttons", () => {
   });
 });
 
-describe("the first-run step", () => {
-  test("Everything adds *, and Pick as they appear takes it out", () => {
+describe("Decrypt Everything", () => {
+  test("adds *, and the switch off takes it out", () => {
     expect(decryptsEverything(BUILT_INS)).toBe(false);
     expect(decryptsEverything([...user("*"), ...BUILT_INS])).toBe(true);
     expect(everythingEdit(true)).toEqual({ add: ["*"], remove: [] });
@@ -301,5 +321,28 @@ describe("the list's autocomplete", () => {
       from: 4,
       labels: ['"Google Chrome"', "com.google.Chrome", "curl"],
     });
+  });
+});
+
+describe("what a change says", () => {
+  test("the pill counts the person's own positive entries", () => {
+    expect(listSummary([...user("app:Dia", "app:Slack", "host:*.google.com"), ...BUILT_INS])).toBe(
+      "2 apps, 1 host",
+    );
+    expect(listSummary([...user("*", "!host:a.com"), ...BUILT_INS])).toBeNull();
+  });
+
+  test("names an entry's subject", () => {
+    expect(entrySubject("host:www.google.com")).toBe("www.google.com");
+    expect(entrySubject("host:*.google.com")).toBe("*.google.com");
+    expect(entrySubject("app:Dia")).toBe("Dia");
+    expect(entrySubject("*")).toBe("Everything");
+  });
+
+  test("an edit can decrypt when it adds a positive entry or drops an exclusion", () => {
+    expect(editDecrypts({ add: ["host:a.com"], remove: [] })).toBe(true);
+    expect(editDecrypts({ add: [], remove: ["!host:a.com"] })).toBe(true);
+    expect(editDecrypts({ add: ["!app:Dia"], remove: ["host:a.com"] })).toBe(false);
+    expect(inverseEdit({ add: ["a"], remove: ["b"] })).toEqual({ add: ["b"], remove: ["a"] });
   });
 });

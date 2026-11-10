@@ -81,9 +81,14 @@ export const hideSystemAtom = atomWithStorage("sidebar_hide_system", false, unde
   getOnInit: true,
 });
 
+/** Encrypted connections are left out of All traffic, by Show in All Traffic in Encrypted's menu */
+export const hideEncryptedAtom = atomWithStorage("sidebar_hide_encrypted", false, undefined, {
+  getOnInit: true,
+});
+
 /** The search the list shows, from the filter applied, or null for all traffic */
 export const activeQueryAtom = atom<FlowQuery | null>((get) =>
-  activeQuery(get(appliedFilterAtom), get(hideSystemAtom)),
+  activeQuery(get(appliedFilterAtom), get(hideSystemAtom), get(hideEncryptedAtom)),
 );
 
 /** The saved searches, in their order */
@@ -103,13 +108,16 @@ const savedRowsAtom = atom<SavedRow[]>((get) => {
   }));
 });
 
-/** Flows All traffic covers in the database: every one, or all but System's while hidden */
+/**
+ * Flows All traffic covers in the database: every one, or all but System's and the encrypted
+ * connections while either is hidden
+ */
 export const allTrafficTotalAtom = atom((get) =>
-  get(hideSystemAtom) ? get(nonSystemTotalAtom) : get(flowTotalAtom),
+  get(hideSystemAtom) || get(hideEncryptedAtom) ? get(allTrafficShownAtom) : get(flowTotalAtom),
 );
 
-/** Flows in the database not from System, counted while System is hidden */
-export const nonSystemTotalAtom = atom(0);
+/** Flows in the database All traffic shows, counted while System or Encrypted is hidden */
+export const allTrafficShownAtom = atom(0);
 
 /**
  * The flows the sidebar counts: the window's, taken at most once a second, so a burst of traffic
@@ -450,9 +458,11 @@ export function syncFlows(store: Store) {
         win.total === res.total ? win : { ...win, total: res.total },
       );
     });
-    if (store.get(hideSystemAtom)) {
-      void rpc("list_flows", { hideSystem: true, limit: 0 }).then((res) => {
-        if (thisLoad === loads) store.set(nonSystemTotalAtom, res.matching ?? res.total);
+    const hideSystem = store.get(hideSystemAtom);
+    const hideEncrypted = store.get(hideEncryptedAtom);
+    if (hideSystem || hideEncrypted) {
+      void rpc("list_flows", { hideSystem, hideEncrypted, limit: 0 }).then((res) => {
+        if (thisLoad === loads) store.set(allTrafficShownAtom, res.matching ?? res.total);
       });
     }
     countSaved();
@@ -485,7 +495,10 @@ export function syncFlows(store: Store) {
       return;
     }
     counting = true;
-    rpc("count_saved_queries", { hideSystem: store.get(hideSystemAtom) })
+    rpc("count_saved_queries", {
+      hideSystem: store.get(hideSystemAtom),
+      hideEncrypted: store.get(hideEncryptedAtom),
+    })
       .then((counts) =>
         store.set(savedCountsAtom, Object.fromEntries(counts.map((c) => [c.id, c.count]))),
       )
@@ -643,9 +656,12 @@ export function syncFlows(store: Store) {
     // Read again, it keeps showing its rows until the new ones are in.
     const win = (keepRows ? store.get(searchWindowAtom)?.win : null) ?? emptyWindow;
     store.set(searchWindowAtom, { key, query, win, loading: true, buffered: [] });
-    void rpc("watch_query", { key, query: query.query, hideSystem: query.hideSystem }).catch(
-      (err) => console.warn("Failed to watch the search", err),
-    );
+    void rpc("watch_query", {
+      key,
+      query: query.query,
+      hideSystem: query.hideSystem,
+      hideEncrypted: query.hideEncrypted,
+    }).catch((err) => console.warn("Failed to watch the search", err));
     const settle = (page: FlowWindow | null) =>
       store.set(searchWindowAtom, (s) => {
         if (s?.key !== key) return s;
@@ -691,6 +707,9 @@ export function syncFlows(store: Store) {
 
   // All traffic's count, and the saved searches', leave System out while it is hidden.
   store.sub(hideSystemAtom, () => {
+    if (loaded) recount();
+  });
+  store.sub(hideEncryptedAtom, () => {
     if (loaded) recount();
   });
 
@@ -772,7 +791,7 @@ let reloadFlows: (() => void) | null = null;
 /** Empties the list, the search's too, and their counts, as a clear leaves them */
 const emptyFlowsAtom = atom(null, (_get, set) => {
   set(flowWindowAtom, emptyWindow);
-  set(nonSystemTotalAtom, 0);
+  set(allTrafficShownAtom, 0);
   set(searchWindowAtom, (s) => (s == null ? s : { ...s, win: emptyWindow, buffered: [] }));
   set(sortedWindowAtom, (s) =>
     s == null ? s : { ...s, flows: [], boundary: null, cursor: null, buffered: [] },

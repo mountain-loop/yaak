@@ -15,6 +15,7 @@ import {
   parseCookieHeaders,
   ResponseCookies,
   SplitLayout,
+  type TabItem,
   Tooltip,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
@@ -22,7 +23,7 @@ import { useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useMemo } from "react";
 import { BODY_TYPE_FORM_URLENCODED } from "@yaakapp-internal/ui/httpTypes";
 import { placeTabsAtom } from "../lib/atoms";
-import { findHeader } from "../lib/body";
+import { bodyTypeBadge, findHeader } from "../lib/body";
 import {
   browserTabMemory,
   defaultTabFor,
@@ -32,13 +33,12 @@ import {
   REQUEST_TAB_BODY,
   REQUEST_TAB_COOKIES,
   REQUEST_TAB_HEADERS,
+  REQUEST_TAB_INFO,
   REQUEST_TAB_PARAMS,
   RESPONSE_TAB_BODY,
   RESPONSE_TAB_COOKIES,
   RESPONSE_TAB_HEADERS,
-  RESPONSE_TAB_INFO,
   RESPONSE_TAB_MESSAGES,
-  RESPONSE_TAB_TIMELINE,
 } from "../lib/defaultTab";
 import { saveDialogFlowAtom, useFlowActions } from "../lib/flowActions";
 import {
@@ -54,7 +54,6 @@ import { FlowBodyViewer, useFlowBody } from "./FlowBodyViewer";
 import { FlowInfo } from "./FlowInfo";
 import { FlowRequestBody } from "./FlowRequestBody";
 import { FlowMessages } from "./FlowMessages";
-import { FlowTimeline } from "./FlowTimeline";
 import { ProxyEditorHost } from "./ProxyEditorHost";
 
 /**
@@ -150,7 +149,15 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
     ],
     [cookies, sentCount],
   );
+  const leadingTabs = useMemo<ExtraPaneTab[]>(
+    () => [{ tab: { value: REQUEST_TAB_INFO, label: "Info" }, content: <FlowInfo flow={flow} /> }],
+    [flow],
+  );
+  const contentType = findHeader(flow.requestHeaders, "content-type");
+  const badge = bodyTypeBadge(contentType, flow.requestSize, flow.graphqlOperation != null);
+  const bodyTab = useMemo(() => bodyTabItem(REQUEST_TAB_BODY, badge), [badge]);
   const available = [
+    REQUEST_TAB_INFO,
     REQUEST_TAB_BODY,
     REQUEST_TAB_PARAMS,
     REQUEST_TAB_HEADERS,
@@ -169,8 +176,11 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
       request={request}
       fullHeight
       forceUpdateKey={forceUpdateKey}
-      tabsStorageKey="proxy_request_tabs"
+      // Info joined as the first tab: an order dragged before it would put it last
+      tabsStorageKey="proxy_request_tabs.2"
       bodyLoader={loader}
+      bodyTab={bodyTab}
+      leadingTabs={leadingTabs}
       extraTabs={extraTabs}
       defaultTab={defaultTab}
       activeTab={activeTab}
@@ -206,6 +216,15 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
       )}
     />
   );
+}
+
+/** A half's body tab: Body, with the body's type beside it as the Headers count is, if any */
+function bodyTabItem(value: string, badge: string | null): TabItem {
+  return {
+    value,
+    label: "Body",
+    rightSlot: badge == null ? null : <CountBadge count={badge} />,
+  };
 }
 
 /** The method and URL, at the status line's height so the two header lines align */
@@ -244,14 +263,11 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
   const flowActions = useFlowActions();
   const messagesLabel = messagesTabLabel(flow);
 
+  const badge = bodyTypeBadge(flow.contentType, flow.responseSize);
+  const bodyTab = useMemo(() => bodyTabItem(RESPONSE_TAB_BODY, badge), [badge]);
   const extraTabs = useMemo<ExtraPaneTab[]>(
-    () => [
-      {
-        tab: { value: RESPONSE_TAB_TIMELINE, label: "Timeline" },
-        content: <FlowTimeline flow={flow} />,
-      },
-      { tab: { value: RESPONSE_TAB_INFO, label: "Info" }, content: <FlowInfo flow={flow} /> },
-      ...(messagesLabel == null
+    () =>
+      messagesLabel == null
         ? []
         : [
             {
@@ -269,16 +285,13 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
               },
               content: <FlowMessages flow={flow} />,
             },
-          ]),
-    ],
+          ],
     [flow, messagesLabel],
   );
   const available = [
     RESPONSE_TAB_BODY,
     RESPONSE_TAB_HEADERS,
     RESPONSE_TAB_COOKIES,
-    RESPONSE_TAB_TIMELINE,
-    RESPONSE_TAB_INFO,
     ...(messagesLabel == null ? [] : [RESPONSE_TAB_MESSAGES]),
   ];
   const { activeTab, defaultTab, onTabChange } = useShapeTab("response", flow, available);
@@ -299,6 +312,7 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
       activeTab={activeTab}
       onTabChange={onTabChange}
       extraTabs={extraTabs}
+      bodyTab={bodyTab}
       renderBodyViewer={() => <FlowBodyViewer flow={flow} which="response" />}
       statusLineCenter={
         flow.responseTruncated ? (

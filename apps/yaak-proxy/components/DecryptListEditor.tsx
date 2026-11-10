@@ -1,56 +1,205 @@
 import { Prec } from "@codemirror/state";
 import { type EditorView, keymap } from "@codemirror/view";
 import type { DecryptListEntry, SeenTargets } from "@yaakapp-internal/proxy-lib";
-import { CONTROL_TOOLTIP_DELAY, Icon, IconButton, Input, Tooltip } from "@yaakapp-internal/ui";
+import {
+  Button,
+  CONTROL_TOOLTIP_DELAY,
+  Icon,
+  IconButton,
+  Input,
+  SettingRow,
+  SettingRowBoolean,
+  Tooltip,
+} from "@yaakapp-internal/ui";
 import { filterAutocomplete } from "@yaakapp-internal/ui/editor";
 import classNames from "classnames";
 import { useMemo, useRef, useState } from "react";
-import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
+import { canTrustHere, useDecrypt, useTrustCertificate, useTrusting } from "../hooks/useDecrypt";
+import { useDecryptList } from "../hooks/useDecryptList";
 import { useRpcQuery } from "../hooks/useRpcQuery";
-import { decryptFilterOptions, entryLabel, normalizeEntry } from "../lib/decrypt";
+import {
+  decryptFilterOptions,
+  decryptsEverything,
+  entryLabel,
+  entrySubject,
+  EVERYTHING,
+  everythingEdit,
+  normalizeEntry,
+} from "../lib/decrypt";
+import { revealPath } from "../lib/opener";
+import { useShowToast } from "../lib/toast";
 
 /**
- * What HTTPS is decrypted: one row per entry, the user's in order and then the built-in
- * exclusions, each removable, and an input that adds one, suggesting `host:`, `app:` and `!`,
- * then the hosts and apps seen in the capture. Saves as it changes. Placed by Settings' Proxy
- * tab.
+ * Settings' Decryption section: the certificate, Decrypt everything as a switch over `*`, then
+ * the person's own hosts and apps in order, each removable, an input that adds one (suggesting
+ * `host:`, `app:` and `!`, then the hosts and apps seen), and the built-in exclusions folded
+ * into one row. Every change goes through Decrypt, so the first that decrypts something trusts
+ * the certificate first.
  */
-export function DecryptListEditor({ className }: { className?: string }) {
+export function DecryptionSettings() {
   const list = useDecryptList();
-  const save = useEditDecryptList();
+  const { apply } = useDecrypt();
+  const [busy, setBusy] = useState(false);
   // Read when the input opens its suggestions, so new traffic shows without rebuilding it.
   const seen = useRpcQuery("list_seen", {}, { staleTime: 0, refetchOnMount: "always" });
   const seenRef = useRef<SeenTargets | undefined>(seen.data);
   seenRef.current = seen.data;
+  const everything = decryptsEverything(list);
+  const own = list.filter((e) => !e.builtIn && e.entry !== EVERYTHING);
+  const builtIns = list.filter((e) => e.builtIn);
 
-  // Each change replaces the whole list, so one waits for the last to land rather than undo it.
-  const remove = (entry: string) => {
-    if (save.isPending) return;
-    save.mutate({ add: [], remove: [entry] });
+  // One change at a time, each applied to the list as it is when it lands.
+  const change = async (
+    edit: { add: string[]; remove: string[] },
+    message: string,
+    sub?: string,
+  ) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await apply({ edit, message, sub });
+    } finally {
+      setBusy(false);
+    }
   };
+  const remove = (entry: string) =>
+    void change(
+      { add: [], remove: [entry] },
+      entry.startsWith("!")
+        ? `Stopped excluding ${entrySubject(entry.slice(1))}`
+        : `Stopped decrypting ${entrySubject(entry)}`,
+    );
 
   return (
-    <div className={classNames(className, "grid gap-2")}>
-      <EntryInput
-        seenRef={seenRef}
-        list={list}
-        disabled={save.isPending}
-        onAdd={(entry) => save.mutate({ add: [entry], remove: [] })}
+    <>
+      <CertificateRow />
+      <SettingRowBoolean
+        title="Decrypt everything"
+        description="Except built-in exclusions"
+        checked={everything}
+        disabled={busy}
+        onChange={(on) =>
+          void change(
+            everythingEdit(on),
+            on ? "Decrypting everything" : "Stopped decrypting everything",
+            on ? "Except Apple services and apps that pin" : undefined,
+          )
+        }
       />
-      <div className="rounded-md border border-border-subtle divide-y divide-border-subtle">
-        {list.length === 0 && (
-          <div className="px-3 py-2 text-sm text-text-subtle">Nothing decrypted</div>
+      <div className="py-4 grid gap-2">
+        <div className="flex items-center text-text">
+          Hosts and apps
+          <span className="ml-auto text-sm text-text-subtlest">New connections</span>
+        </div>
+        <EntryInput
+          seenRef={seenRef}
+          list={list}
+          disabled={busy}
+          onAdd={(entry) =>
+            void change(
+              { add: [entry], remove: [] },
+              entry.startsWith("!")
+                ? `Excluding ${entrySubject(entry.slice(1))}`
+                : `Decrypting ${entrySubject(entry)}`,
+            )
+          }
+        />
+        <div className="rounded-md border border-border-subtle divide-y divide-border-subtle">
+          {own.length === 0 && (
+            <div className="px-3 py-2 text-sm text-text-subtle">Nothing listed</div>
+          )}
+          {own.map((e) => (
+            <EntryRow key={e.entry} entry={e} disabled={busy} onRemove={() => remove(e.entry)} />
+          ))}
+          {builtIns.length > 0 && <BuiltIns entries={builtIns} disabled={busy} onRemove={remove} />}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** The certificate: trusted, with Reveal for devices and tools with their own stores, or Trust */
+function CertificateRow() {
+  const caStatus = useRpcQuery("ca_status", {});
+  const trust = useTrustCertificate();
+  const trusting = useTrusting();
+  const showToast = useShowToast();
+  const status = caStatus.data;
+  if (status == null)
+    return (
+      <SettingRow title="Certificate" description="Yaak Proxy CA">
+        {null}
+      </SettingRow>
+    );
+  return (
+    <SettingRow title="Certificate" description="Yaak Proxy CA">
+      <div className="flex items-center gap-2">
+        {status.trusted ? (
+          <span className="flex items-center gap-1 text-sm text-success">
+            <Icon icon="badge_check" size="sm" />
+            Trusted
+          </span>
+        ) : (
+          <span className="text-sm text-text-subtle">Not trusted</span>
         )}
-        {list.map((e) => (
+        {!status.trusted && canTrustHere() ? (
+          <Button size="2xs" color="primary" isLoading={trusting} onClick={() => trust.mutate({})}>
+            {trusting ? "Waiting for macOS" : "Trust"}
+          </Button>
+        ) : (
+          <Button
+            size="2xs"
+            variant="border"
+            onClick={() =>
+              void revealPath(status.certPath, (message) =>
+                showToast({ id: "reveal-ca", color: "danger", message }),
+              )
+            }
+          >
+            Reveal
+          </Button>
+        )}
+      </div>
+    </SettingRow>
+  );
+}
+
+/** The built-in exclusions, folded into one row that opens to each, with its kind */
+function BuiltIns({
+  entries,
+  disabled,
+  onRemove,
+}: {
+  entries: DecryptListEntry[];
+  disabled: boolean;
+  onRemove: (entry: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const kinds = new Set(entries.map((e) => e.kind));
+  const summary = [kinds.has("apple") ? "Apple" : null, kinds.has("pinned") ? "pinned apps" : null]
+    .filter((k) => k != null)
+    .join(", ");
+  return (
+    <>
+      <button
+        type="button"
+        className="w-full flex items-center gap-2 h-xs pl-3 pr-2 text-sm text-text-subtle hover:bg-surface-highlight/50"
+        onClick={() => setOpen(!open)}
+      >
+        <Icon icon={open ? "chevron_down" : "chevron_right"} size="sm" className="shrink-0" />
+        {entries.length} built-in exclusions
+        <span className="ml-auto text-xs text-text-subtlest">{summary}</span>
+      </button>
+      {open &&
+        entries.map((e) => (
           <EntryRow
             key={e.entry}
             entry={e}
-            disabled={save.isPending}
-            onRemove={() => remove(e.entry)}
+            disabled={disabled}
+            onRemove={() => onRemove(e.entry)}
           />
         ))}
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -81,12 +230,10 @@ function EntryRow({
       <span className={classNames("truncate", entry.entry !== "*" && "font-mono text-xs")}>
         {entryLabel(entry.entry)}
       </span>
-      {entry.builtIn && (
-        <Tooltip wrap content="Ships with Yaak Proxy" delay={CONTROL_TOOLTIP_DELAY}>
-          <span className="shrink-0 text-2xs rounded px-1 border border-border-subtle">
-            built-in
-          </span>
-        </Tooltip>
+      {entry.builtIn && entry.kind != null && (
+        <span className="shrink-0 text-2xs rounded px-1 border border-border-subtle">
+          {entry.kind === "apple" ? "Apple" : "Pinned"}
+        </span>
       )}
       <IconButton
         size="xs"
@@ -160,7 +307,7 @@ function EntryInput({
           size="sm"
           stateKey={null}
           language={null}
-          placeholder="Add host, app or *"
+          placeholder="Add host or app"
           extensions={extensions}
           onChange={() => setError(null)}
         />

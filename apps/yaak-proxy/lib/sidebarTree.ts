@@ -14,7 +14,7 @@ import { appKeyOf, folderOf, isSystemFlow, runtimeFolderOf, sidebarPath, siteOf 
 
 export type SidebarKind =
   | "all"
-  | "tunnelled"
+  | "encrypted"
   | "saved"
   | "group"
   | "app"
@@ -48,6 +48,11 @@ export interface SidebarItem {
   value?: string;
   /** What Decrypt in the row's menu decrypts: its host, site or app */
   decrypt?: DecryptSubject;
+  /**
+   * Every flow under the row is encrypted, marked once something in the capture is decrypted,
+   * as in the first minute every row would be
+   */
+  encryptedOnly?: boolean;
   /** The saved search a Saved row is, for renaming and deleting it */
   savedId?: string;
   /**
@@ -71,7 +76,7 @@ export const SAVED_ID = "saved";
 export const APPS_ID = "apps";
 export const DOMAINS_ID = "domains";
 export const SYSTEM_ID = "system";
-export const TUNNELLED_ID = "tunnelled";
+export const ENCRYPTED_ID = "encrypted";
 
 /** A row a flow sits under, with what makes it, so a rebuild only looks it up */
 interface PlaceRow {
@@ -196,12 +201,14 @@ function programPath(flow: Flow): string | undefined {
 interface Trie {
   item: SidebarItem;
   children: Map<string, Trie>;
+  /** Encrypted flows under it */
+  encrypted?: number;
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
 /** Counts a flow under `parent`'s child `row`, making the child the first time */
-function child(parent: Trie, row: PlaceRow): Trie {
+function child(parent: Trie, row: PlaceRow, encrypted: boolean): Trie {
   let node = parent.children.get(row.id);
   if (node == null) {
     node = {
@@ -224,13 +231,25 @@ function child(parent: Trie, row: PlaceRow): Trie {
     delete node.item.path;
   }
   node.item.count++;
+  if (encrypted) node.encrypted = (node.encrypted ?? 0) + 1;
   return node;
 }
 
 /** Adds a flow under `parent` by where it went: its site, then its host, then its path */
-function addPlace(parent: Trie, rows: PlaceRow[]) {
+function addPlace(parent: Trie, rows: PlaceRow[], encrypted: boolean) {
   let node = parent;
-  for (const row of rows) node = child(node, row);
+  for (const row of rows) node = child(node, row, encrypted);
+}
+
+/** Marks the apps, sites and hosts whose every flow is encrypted */
+function markEncrypted(trie: Trie) {
+  for (const c of trie.children.values()) {
+    const kind = c.item.kind;
+    if ((kind === "app" || kind === "site" || kind === "host") && c.encrypted === c.item.count) {
+      c.item.encryptedOnly = true;
+    }
+    markEncrypted(c);
+  }
 }
 
 function toNodes(
@@ -264,9 +283,8 @@ function group(id: string, label: string): Trie {
 /**
  * The sidebar: All traffic, then Apps, each app opening to its own sites, hosts and paths, then
  * Domains by site, host and path, then System, macOS's daemons, apart from the apps. A group with
- * nothing in it is left out. Not decrypted, after All traffic, gathers the HTTPS passed through
- * undecrypted, when there is any, and Saved lists the saved searches, each with its count from
- * the database. `total` is All traffic's count: every flow it covers in the database.
+ * nothing in it is left out. Encrypted, last, gathers the HTTPS passed through undecrypted,
+ * when there is any, and Saved lists the saved searches, each with its count from the database. `total` is All traffic's count: every flow it covers in the database.
  */
 export function buildSidebarTree(
   flows: Flow[],
@@ -284,12 +302,12 @@ export function buildSidebarTree(
   const domains = group(DOMAINS_ID, "Domains");
   const system = { ...group(SYSTEM_ID, "System") };
   system.item.query = fieldTerm("is", "system");
-  let tunnelled = 0;
+  let encrypted = 0;
 
   for (const flow of flows) {
     const place = placeOf(flow);
-    if (flow.tunnelled) tunnelled++;
-    addPlace(domains, place.rows);
+    if (flow.tunnelled) encrypted++;
+    addPlace(domains, place.rows, flow.tunnelled);
     if (place.app == null) continue;
     const parent = place.system ? system : apps;
     const id = `app:${place.app}`;
@@ -318,8 +336,12 @@ export function buildSidebarTree(
       delete app.item.path;
     }
     app.item.count++;
+    if (flow.tunnelled) app.encrypted = (app.encrypted ?? 0) + 1;
     parent.item.count++;
-    addPlace(app, place.appRows);
+    addPlace(app, place.appRows, flow.tunnelled);
+  }
+  if (encrypted > 0 && encrypted < flows.length) {
+    for (const g of [apps, domains, system]) markEncrypted(g);
   }
   for (const site of domains.children.values()) domains.item.count += site.children.size;
 
@@ -329,20 +351,6 @@ export function buildSidebarTree(
     depth: 1,
     draggable: false,
   });
-  if (tunnelled > 0) {
-    root.children?.push({
-      item: {
-        id: TUNNELLED_ID,
-        kind: "tunnelled",
-        label: "Not decrypted",
-        count: tunnelled,
-        query: fieldTerm("is", "tunnelled"),
-      },
-      parent: root,
-      depth: 1,
-      draggable: false,
-    });
-  }
   if (saved.length > 0) {
     const node: TreeNode<SidebarItem> = {
       item: { id: SAVED_ID, kind: "group", label: "Saved", count: 0, query: "" },
@@ -377,6 +385,20 @@ export function buildSidebarTree(
     };
     node.children = toNodes(g.children.values(), node);
     root.children?.push(node);
+  }
+  if (encrypted > 0) {
+    root.children?.push({
+      item: {
+        id: ENCRYPTED_ID,
+        kind: "encrypted",
+        label: "Encrypted",
+        count: encrypted,
+        query: fieldTerm("is", "encrypted"),
+      },
+      parent: root,
+      depth: 1,
+      draggable: false,
+    });
   }
   return root;
 }

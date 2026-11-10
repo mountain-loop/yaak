@@ -1,6 +1,7 @@
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 
-/** The request half's tabs, named as the shared request pane names them */
+/** The request half's tabs, named as the shared request pane names them, Info first */
+export const REQUEST_TAB_INFO = "info";
 export const REQUEST_TAB_BODY = "body";
 export const REQUEST_TAB_PARAMS = "params";
 export const REQUEST_TAB_HEADERS = "headers";
@@ -11,8 +12,6 @@ export const REQUEST_TAB_COOKIES = "cookies";
 export const RESPONSE_TAB_BODY = "body";
 export const RESPONSE_TAB_HEADERS = "headers";
 export const RESPONSE_TAB_COOKIES = "cookies";
-export const RESPONSE_TAB_TIMELINE = "timeline";
-export const RESPONSE_TAB_INFO = "info";
 export const RESPONSE_TAB_MESSAGES = "messages";
 
 export type FlowPane = "request" | "response";
@@ -33,10 +32,13 @@ export function flowShape(
   return "neither";
 }
 
-/** The tab a half opens on for a shape, before anything was learned */
+/**
+ * The tab a half opens on for a shape, before anything was learned: the request half on its
+ * body when it has one, else on Info; the response half on what it has
+ */
 export function shapeDefaultTab(pane: FlowPane, shape: FlowShape, hasRequestBody: boolean): string {
   if (pane === "request") {
-    return hasRequestBody ? REQUEST_TAB_BODY : REQUEST_TAB_HEADERS;
+    return hasRequestBody ? REQUEST_TAB_BODY : REQUEST_TAB_INFO;
   }
   switch (shape) {
     case "response_body":
@@ -44,7 +46,6 @@ export function shapeDefaultTab(pane: FlowPane, shape: FlowShape, hasRequestBody
     case "stream":
       return RESPONSE_TAB_MESSAGES;
     case "no_response":
-      return RESPONSE_TAB_TIMELINE;
     case "request_body":
     case "neither":
       return RESPONSE_TAB_HEADERS;
