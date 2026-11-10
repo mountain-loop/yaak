@@ -73,17 +73,20 @@ interface Props {
   onResetSort: () => void;
   /** The rows' scrolling element, which a column dragged to its edge scrolls sideways */
   scrollElement: () => HTMLElement | null;
-  /** Where a dragged column would drop, in the window's coordinates, or null for nowhere */
-  onDropLine: (x: number | null) => void;
-  /** A column's drag: its start, the pointer's moves, and its end, for the list's ghost */
+  /** A column's drag, for the list to show: its ghost, and the columns making room for it */
   onColumnDrag: (event: ColumnDragEvent) => void;
 }
 
-/** A column's drag, for the ghost the list draws of it; `x` is the pointer, across the window */
+/**
+ * A column's drag: its start, the pointer's moves (`x`, across the window), the boundary it
+ * would drop at when that changes (`to`, null where it would stay), and its end, dropped there
+ * or put back
+ */
 export type ColumnDragEvent =
   | { type: "start"; id: ColumnId; x: number }
   | { type: "move"; x: number }
-  | { type: "end" };
+  | { type: "target"; to: number | null }
+  | { type: "end"; dropped: boolean };
 
 /**
  * The list's only control surface: a click on a label sorts by it alone, a second reverses it
@@ -102,7 +105,6 @@ export const FlowListHeader = memo(function FlowListHeader({
   onSetSort: setSort,
   onResetSort,
   scrollElement,
-  onDropLine,
   onColumnDrag,
 }: Props) {
   const setPrefs = useSetAtom(columnPrefsAtom);
@@ -111,10 +113,9 @@ export const FlowListHeader = memo(function FlowListHeader({
   const [menu, setMenu] = useState<{ x: number; y: number; column: ColumnDef | null } | null>(null);
   // Widths when a drag began, so each move sets the width from where it started.
   const startWidth = useRef(0);
-  const { dragging, sensors, dndHandlers, gridRef, onPointerDownCapture } = useColumnDrag({
+  const { sensors, dndHandlers, gridRef, onPointerDownCapture } = useColumnDrag({
     columns,
     scrollElement,
-    onDropLine,
     onColumnDrag,
     onDrop: (id, to) => setPrefs((p) => moveColumn(p, id, to, unavailable)),
   });
@@ -232,6 +233,7 @@ export const FlowListHeader = memo(function FlowListHeader({
       {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- a right-click opens the column's menu */}
       <div
         ref={gridRef}
+        data-flow-header
         onPointerDownCapture={onPointerDownCapture}
         onContextMenu={openMenu}
         style={{ gridTemplateColumns: template }}
@@ -258,7 +260,6 @@ export const FlowListHeader = memo(function FlowListHeader({
               key={c.id}
               column={c}
               sort={sort}
-              dragging={dragging?.id === c.id}
               onSort={onSort}
               onResizeStart={() => {
                 startWidth.current = c.current;
@@ -281,8 +282,6 @@ export const FlowListHeader = memo(function FlowListHeader({
 interface HeaderCellProps {
   column: Column;
   sort: FlowSortKey[];
-  /** Being dragged, so it dims where it was */
-  dragging: boolean;
   onSort: (column: ColumnId, add: boolean) => void;
   onResizeStart: () => void;
   /** How far the edge moved since the resize began */
@@ -293,7 +292,6 @@ interface HeaderCellProps {
 function HeaderCell({
   column: c,
   sort,
-  dragging,
   onSort,
   onResizeStart,
   onResizeMove,
@@ -303,13 +301,7 @@ function HeaderCell({
   const { listeners, setNodeRef } = useDraggable({ id: c.id });
   const sorted = sort.some((k) => k.column === c.id);
   return (
-    <span
-      data-column={c.id}
-      className={classNames(
-        "relative h-full flex items-center min-w-0 px-1.5",
-        dragging && "opacity-40",
-      )}
-    >
+    <span data-column={c.id} className="relative h-full flex items-center min-w-0 px-1.5">
       <button
         ref={setNodeRef}
         type="button"
@@ -363,19 +355,18 @@ function ColumnLabel({ column: c, sort }: { column: Column; sort: FlowSortKey[] 
 
 /**
  * Dragging a column's label: where it would drop, the boundary between the labels nearest the
- * pointer, and the list scrolling sideways while the pointer is near its edge. The columns only
- * move on the drop, so the rows lay out once.
+ * pointer as they were laid out when the drag began, and the list scrolling sideways while the
+ * pointer is near its edge. The list shows the drag; the columns only change order on the drop,
+ * so the rows lay out once.
  */
 function useColumnDrag({
   columns,
   scrollElement,
-  onDropLine,
   onColumnDrag,
   onDrop,
 }: {
   columns: Column[];
   scrollElement: () => HTMLElement | null;
-  onDropLine: (x: number | null) => void;
   onColumnDrag: (event: ColumnDragEvent) => void;
   /** Moves the column to the boundary `to` between those shown */
   onDrop: (id: ColumnId, to: number) => void;
@@ -384,44 +375,51 @@ function useColumnDrag({
     useSensor(PointerSensor, { activationConstraint: { distance: DRAG_DISTANCE } }),
   );
   const gridRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState<Column | null>(null);
   // Live while dragging, read each frame
   const state = useRef<{
-    /** The column dragged */
+    /** The column dragged, and its place among those shown */
     id: ColumnId;
+    from: number;
+    /** The labels' edges when the drag began, from the header's left, as the columns slide */
+    cells: { left: number; right: number }[];
     /** The pointer, across the window */
     x: number;
-    /** The boundary it would move to, null where it would stay, and the line drawn on it */
+    /** The boundary it would move to, null where it would stay */
     to: number | null;
-    line: number | null;
     /** The pointer the ghost was last moved to */
     ghostX: number;
     frame: number;
   } | null>(null);
-  const latest = useRef({ columns, scrollElement, onDropLine, onColumnDrag, onDrop });
+  const latest = useRef({ columns, scrollElement, onColumnDrag, onDrop });
   useLayoutEffect(() => {
-    latest.current = { columns, scrollElement, onDropLine, onColumnDrag, onDrop };
+    latest.current = { columns, scrollElement, onColumnDrag, onDrop };
   });
 
-  const stop = useCallback(() => {
+  /** Ends the drag, dropped or put back */
+  const stop = useCallback((dropped: boolean) => {
     const s = state.current;
     state.current = null;
-    if (s != null) cancelAnimationFrame(s.frame);
-    setDragging(null);
-    latest.current.onDropLine(null);
-    if (s != null) latest.current.onColumnDrag({ type: "end" });
+    if (s == null) return null;
+    cancelAnimationFrame(s.frame);
+    latest.current.onColumnDrag({ type: "end", dropped });
     return s;
   }, []);
 
   const onDragStart = useCallback((e: DragStartEvent) => {
-    const column = latest.current.columns.find((c) => c.id === e.active.id);
-    if (column == null) return;
+    const grid = gridRef.current;
+    const from = latest.current.columns.findIndex((c) => c.id === e.active.id);
+    if (grid == null || from === -1) return;
+    const gridLeft = grid.getBoundingClientRect().left;
+    const cells = Array.from(grid.querySelectorAll<HTMLElement>(":scope > [data-column]")).map(
+      (el) => {
+        const box = el.getBoundingClientRect();
+        return { left: box.left - gridLeft, right: box.right - gridLeft };
+      },
+    );
+    const id = e.active.id as ColumnId;
     const x = pointer.current;
-    state.current = { id: column.id, x, to: null, line: null, ghostX: x, frame: 0 };
-    // Before the column dims, so the ghost is of it as it shows
-    latest.current.onColumnDrag({ type: "start", id: column.id, x });
-    setDragging(column);
-    // The line shows from the drag's first movement, not a frame later
+    state.current = { id, from, cells, x, to: null, ghostX: x, frame: 0 };
+    latest.current.onColumnDrag({ type: "start", id, x });
     target(state.current);
 
     const tick = () => {
@@ -453,9 +451,13 @@ function useColumnDrag({
   const drop = useCallback(() => {
     // Where the pointer is now, as a release can come before the next frame reads it
     if (state.current != null) target(state.current);
-    const s = stop();
+    // The list lets go of the drag and the order changes in the same task, so nothing jumps.
+    const s = stop(true);
     if (s?.to != null) latest.current.onDrop(s.id, s.to);
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- `target` reads only refs
+  }, [stop]);
+  const cancel = useCallback(() => {
+    stop(false);
   }, [stop]);
 
   // The pointer from a press on the header until its release, read before dnd-kit sees it.
@@ -477,52 +479,46 @@ function useColumnDrag({
         track(e);
         drop();
       };
-      const cancel = () => {
+      const lost = () => {
         unlisten.current?.();
-        stop();
+        cancel();
       };
       window.addEventListener("pointermove", track, true);
       window.addEventListener("pointerup", up, true);
-      window.addEventListener("pointercancel", cancel, true);
+      window.addEventListener("pointercancel", lost, true);
       unlisten.current = () => {
         unlisten.current = null;
         window.removeEventListener("pointermove", track, true);
         window.removeEventListener("pointerup", up, true);
-        window.removeEventListener("pointercancel", cancel, true);
+        window.removeEventListener("pointercancel", lost, true);
       };
     },
-    [track, drop, stop],
+    [track, drop, cancel],
   );
 
   // A drag never outlives the header
   useEffect(
     () => () => {
       unlisten.current?.();
-      stop();
+      cancel();
     },
-    [stop],
+    [cancel],
   );
 
-  /** Sets where the drag would drop, from the pointer and the labels where they are now */
+  /** Sets where the drag would drop, telling the list when that changes */
   function target(s: NonNullable<typeof state.current>) {
-    const cells = Array.from(
-      gridRef.current?.querySelectorAll<HTMLElement>(":scope > [data-column]") ?? [],
-    ).map((el) => el.getBoundingClientRect());
-    // Its place is read each time, as the columns can change under a drag: Operation shows
-    // itself when a flow has one.
-    const from = latest.current.columns.findIndex((c) => c.id === s.id);
-    const { to, line } = dropBoundary(s.x, cells, from);
+    const gridLeft = gridRef.current?.getBoundingClientRect().left ?? 0;
+    const cells = s.cells.map((c) => ({ left: gridLeft + c.left, right: gridLeft + c.right }));
+    const to = dropBoundary(s.x, cells, s.from);
+    if (to === s.to) return;
     s.to = to;
-    // Told again only when it changes: another boundary, or the same one scrolled
-    if (line !== s.line) latest.current.onDropLine(line);
-    s.line = line;
+    latest.current.onColumnDrag({ type: "target", to });
   }
 
   return {
-    dragging,
     sensors,
     gridRef,
     onPointerDownCapture,
-    dndHandlers: { onDragStart, onDragEnd: drop, onDragCancel: stop },
+    dndHandlers: { onDragStart, onDragEnd: drop, onDragCancel: cancel },
   };
 }

@@ -6,6 +6,7 @@ import {
   addSortKey,
   allColumns,
   cellFilterTerm,
+  columnShifts,
   type ColumnPrefs,
   customPath,
   customPathProblem,
@@ -336,25 +337,37 @@ describe("column order", () => {
     expect(parseColumnPrefs({ order: "time" }).order).toEqual([]);
   });
 
-  test("the drop line shows at every boundary, its own slot's edges included", () => {
+  test("a drag's target is the boundary nearest the pointer, null in its own slot", () => {
     // Four columns 100px wide from x 24, after the mark column; the third is dragged
     const cells = [24, 124, 224, 324].map((left) => ({ left, right: left + 100 }));
     const at = (x: number) => dropBoundary(x, cells, 2);
     // Over the mark column or the first's left half: the first boundary
-    expect(at(5)).toEqual({ to: 0, line: 24 });
-    expect(at(60)).toEqual({ to: 0, line: 24 });
-    expect(at(80)).toEqual({ to: 1, line: 124 });
-    // The left neighbour's near half and its own left half: its left edge, staying
-    expect(at(190)).toEqual({ to: null, line: 224 });
-    expect(at(250)).toEqual({ to: null, line: 224 });
-    // Its own right half and the right neighbour's near half: its right edge, staying
-    expect(at(290)).toEqual({ to: null, line: 324 });
-    expect(at(350)).toEqual({ to: null, line: 324 });
+    expect(at(5)).toBe(0);
+    expect(at(60)).toBe(0);
+    expect(at(80)).toBe(1);
+    // The left neighbour's near half, its own column, the right neighbour's near half: staying
+    expect(at(190)).toBeNull();
+    expect(at(250)).toBeNull();
+    expect(at(290)).toBeNull();
+    expect(at(350)).toBeNull();
     // Past the right neighbour's middle, and past the end
-    expect(at(380)).toEqual({ to: 4, line: 424 });
-    expect(at(900)).toEqual({ to: 4, line: 424 });
+    expect(at(380)).toBe(4);
+    expect(at(900)).toBe(4);
     // The last column dragged to the end stays
-    expect(dropBoundary(900, cells, 3)).toEqual({ to: null, line: 424 });
+    expect(dropBoundary(900, cells, 3)).toBeNull();
+  });
+
+  test("the columns a drag passes slide by its width to make room", () => {
+    // Five columns; the second, 80px wide, is dragged
+    expect(columnShifts(5, 1, 80, null)).toEqual([0, 0, 0, 0, 0]);
+    // Right, to before the fifth: the third and fourth slide left
+    expect(columnShifts(5, 1, 80, 4)).toEqual([0, 0, -80, -80, 0]);
+    // Right, to the end: all after it slide left
+    expect(columnShifts(5, 1, 80, 5)).toEqual([0, 0, -80, -80, -80]);
+    // Left, to the start: the first slides right
+    expect(columnShifts(5, 1, 80, 0)).toEqual([80, 0, 0, 0, 0]);
+    // The fourth, dragged left to before the second: the second and third slide right
+    expect(columnShifts(5, 3, 60, 1)).toEqual([0, 60, 60, 0, 0]);
   });
 
   test("Reset Column Order puts every column back", () => {

@@ -301,21 +301,39 @@ export function resetOrder(prefs: ColumnPrefs): ColumnPrefs {
 
 /**
  * Where a dragged column would drop, from the pointer and the shown columns' edges, left to
- * right: the boundary before the first column whose middle is right of the pointer, and the
- * line's place on it. Over its own column or the near half of a neighbour, that is an edge of
- * its own slot, where it would stay, so `to` is null; the line still shows there. Left of the
- * first column, over the fixed mark column, it is the first boundary.
+ * right, as they are laid out before the drag: the boundary before the first column whose middle
+ * is right of the pointer. Over its own column or the near half of a neighbour, that is an edge
+ * of its own slot, where it would stay, so null. Left of the first column, over the fixed mark
+ * column, it is the first boundary.
  */
 export function dropBoundary(
   x: number,
   cells: { left: number; right: number }[],
   from: number,
-): { to: number | null; line: number | null } {
+): number | null {
   let at = cells.findIndex((r) => x < (r.left + r.right) / 2);
   if (at === -1) at = cells.length;
-  const line = cells[at]?.left ?? cells.at(-1)?.right ?? null;
   const stays = from === -1 || at === from || at === from + 1;
-  return { to: stays ? null : at, line };
+  return stays ? null : at;
+}
+
+/**
+ * How far, in pixels, each of `count` shown columns slides while the one at `from`, `width`
+ * wide, is dragged to the boundary `to`: those it would pass make room for it, leftwards when it
+ * goes right and rightwards when it goes left. The dragged column itself, and the rest, stay.
+ */
+export function columnShifts(
+  count: number,
+  from: number,
+  width: number,
+  to: number | null,
+): number[] {
+  return Array.from({ length: count }, (_, i) => {
+    if (to == null || i === from) return 0;
+    if (to > from && i > from && i < to) return -width;
+    if (to < from && i >= to && i < from) return width;
+    return 0;
+  });
 }
 
 /** Shows `id` alone */

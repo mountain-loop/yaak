@@ -30,6 +30,7 @@ import {
   type Column,
   type ColumnId,
   cellFilterTerm,
+  columnShifts,
   customValue,
   gridTemplate,
   gridWidth,
@@ -308,15 +309,10 @@ export function FlowList({ style, className }: Props) {
     el.scrollLeft += e.deltaX;
   }, []);
 
-  // A dragged column's drop line, from the window's coordinates to the list's
+  // A dragged column: its ghost, and the others sliding aside to make room for it
   const rootRef = useRef<HTMLDivElement>(null);
-  const [dropLine, setDropLine] = useState<number | null>(null);
   const getScrollElement = useCallback(() => scrollRef.current, []);
-  const { ghostColumn, onColumnDrag } = useColumnGhost(rootRef, headerScrollRef, scrollRef);
-  const handleDropLine = useCallback((x: number | null) => {
-    const root = rootRef.current;
-    setDropLine(x == null || root == null ? null : x - root.getBoundingClientRect().left);
-  }, []);
+  const onColumnDrag = useColumnDragView(rootRef, headerScrollRef, scrollRef);
 
   // A list too short to scroll still loads older flows on scrolling up.
   const handleWheel = useCallback(
@@ -449,27 +445,9 @@ export function FlowList({ style, className }: Props) {
           onSetSort={handleSetSort}
           onResetSort={follow}
           scrollElement={getScrollElement}
-          onDropLine={handleDropLine}
           onColumnDrag={onColumnDrag}
         />
       </div>
-      {/* A dragged column's cells dim where they are, in one rule rather than a render a row */}
-      {ghostColumn != null && (
-        <style>{`[data-flow-rows] [data-column="${ghostColumn}"] > * { opacity: 0.4; }`}</style>
-      )}
-      {/* Where a dragged column would drop, down the header and the rows in view, over its ghost */}
-      {dropLine != null && (
-        <div
-          aria-hidden
-          style={{ right: scrollbarWidth }}
-          className="pointer-events-none absolute inset-y-0 left-0 z-30 overflow-hidden"
-        >
-          <div
-            style={{ left: dropLine }}
-            className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-primary"
-          />
-        </div>
-      )}
       <div className="relative min-h-0">
         <div
           ref={scrollRef}
@@ -583,44 +561,129 @@ function useArrivals(flows: Flow[], following: boolean): Map<string, number> {
   }, [flows, following]);
 }
 
+/** How long the columns take to slide aside for a dragged column, or back */
+const SLIDE_MS = 150;
+
 /**
- * The ghost of a dragged column: its header and the cells of the rows in view, copied once when
- * the drag starts, at the column's width and the list's height. It follows the pointer sideways,
- * kept within the list, by a transform, so the rows don't render while it moves; flows arriving
- * or the list scrolling sideways meanwhile leave the copy as it was.
+ * Shows a column's drag without rendering a row. Its ghost is its header and the cells of the
+ * rows in view, copied once when the drag starts and following the pointer sideways. The column
+ * hides where it is, and the columns between it and where it would drop slide aside by its width
+ * to leave a gap there, all by one style element: a rule a column, header and cells together,
+ * which rows arriving meanwhile follow too. Dropped, the rules go as the order changes, in the
+ * same task, so nothing animates or jumps; put back, the columns slide home first.
  */
-function useColumnGhost(
+function useColumnDragView(
   rootRef: RefObject<HTMLDivElement | null>,
   headerRef: RefObject<HTMLDivElement | null>,
   listRef: RefObject<HTMLDivElement | null>,
-): { ghostColumn: ColumnId | null; onColumnDrag: (event: ColumnDragEvent) => void } {
-  const [ghostColumn, setGhostColumn] = useState<ColumnId | null>(null);
-  const ghost = useRef<ColumnGhost | null>(null);
+): (event: ColumnDragEvent) => void {
+  const drag = useRef<ColumnDragView | null>(null);
+  // Columns sliding home after a drag was put back, until they are there
+  const settling = useRef<{ style: HTMLStyleElement; timer: number } | null>(null);
+
+  const settle = useCallback(() => {
+    const s = settling.current;
+    settling.current = null;
+    if (s == null) return;
+    clearTimeout(s.timer);
+    s.style.remove();
+  }, []);
 
   const onColumnDrag = useCallback(
     (event: ColumnDragEvent) => {
-      if (event.type === "move") {
-        ghost.current?.move(event.x);
-        return;
+      const d = drag.current;
+      switch (event.type) {
+        case "move":
+          d?.ghost?.move(event.x);
+          return;
+        case "target":
+          if (d == null) return;
+          d.to = event.to;
+          d.style.textContent = columnDragCss(d);
+          return;
+        case "end": {
+          drag.current = null;
+          if (d == null) return;
+          d.ghost?.remove();
+          if (event.dropped || d.to == null) {
+            d.style.remove();
+            return;
+          }
+          d.to = null;
+          d.style.textContent = columnDragCss(d);
+          settling.current = { style: d.style, timer: window.setTimeout(settle, SLIDE_MS) };
+          return;
+        }
+        case "start": {
+          settle();
+          d?.ghost?.remove();
+          d?.style.remove();
+          drag.current = null;
+          const root = rootRef.current;
+          const header = headerRef.current;
+          const list = listRef.current;
+          if (root == null || header == null || list == null) return;
+          const cells = Array.from(
+            header.querySelectorAll<HTMLElement>("[data-flow-header] > [data-column]"),
+          );
+          const ids = cells.map((c) => c.dataset.column as ColumnId);
+          const from = ids.indexOf(event.id);
+          if (from === -1) return;
+          // Copied before it hides
+          const ghost = snapshotColumn(event.id, event.x, root, header, list);
+          const style = document.createElement("style");
+          document.head.append(style);
+          const width = cells[from]?.getBoundingClientRect().width ?? 0;
+          drag.current = { ghost, ids, from, width, to: null, style };
+          style.textContent = columnDragCss(drag.current);
+        }
       }
-      ghost.current?.remove();
-      ghost.current = null;
-      if (event.type === "end") {
-        setGhostColumn(null);
-        return;
-      }
-      const root = rootRef.current;
-      const header = headerRef.current;
-      const list = listRef.current;
-      if (root == null || header == null || list == null) return;
-      ghost.current = snapshotColumn(event.id, event.x, root, header, list);
-      setGhostColumn(event.id);
     },
-    [rootRef, headerRef, listRef],
+    [rootRef, headerRef, listRef, settle],
   );
 
-  useEffect(() => () => ghost.current?.remove(), []);
-  return { ghostColumn, onColumnDrag };
+  useEffect(
+    () => () => {
+      settle();
+      drag.current?.ghost?.remove();
+      drag.current?.style.remove();
+      drag.current = null;
+    },
+    [settle],
+  );
+  return onColumnDrag;
+}
+
+interface ColumnDragView {
+  ghost: ColumnGhost | null;
+  /** The columns shown, the dragged one's place among them and its width, and its target */
+  ids: ColumnId[];
+  from: number;
+  width: number;
+  to: number | null;
+  style: HTMLStyleElement;
+}
+
+/** The rules for a drag: the column hidden, and those it passes slid aside */
+function columnDragCss({ ids, from, width, to }: ColumnDragView): string {
+  // A row's cell is the box in its grid: the column's child, or inside the `contents` span a
+  // tooltip wraps it in, as a box that is only its contents can't move
+  const cells = (is: string) =>
+    `[data-flow-rows] ${is} > :not(.contents), [data-flow-rows] ${is} > .contents > *`;
+  const column = (id: ColumnId) => {
+    const is = `[data-column="${CSS.escape(id)}"]`;
+    return `[data-flow-header] > ${is}, ${cells(is)}`;
+  };
+  const rules = [
+    `[data-flow-header] > [data-column], ${cells("[data-column]")} { transition: transform ${SLIDE_MS}ms ease; }`,
+  ];
+  const dragged = ids[from];
+  if (dragged != null) rules.push(`${column(dragged)} { visibility: hidden; }`);
+  columnShifts(ids.length, from, width, to).forEach((dx, i) => {
+    const id = ids[i];
+    if (dx !== 0 && id != null) rules.push(`${column(id)} { transform: translateX(${dx}px); }`);
+  });
+  return rules.join("\n");
 }
 
 interface ColumnGhost {
