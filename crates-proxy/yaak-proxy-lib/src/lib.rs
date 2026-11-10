@@ -4279,14 +4279,11 @@ mod tests {
         tcp
     }
 
-    /// Whether `tcp` still relays: a ping comes back.
+    /// Whether `tcp` still relays: a ping comes back, rather than the connection ending.
     async fn still_open(tcp: &mut tokio::net::TcpStream) -> bool {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let mut echoed = [0u8; 4];
-        tcp.write_all(b"ping").await.is_ok()
-            && tokio::time::timeout(Duration::from_secs(2), tcp.read_exact(&mut echoed))
-                .await
-                .is_ok_and(|r| r.is_ok())
+        tcp.write_all(b"ping").await.is_ok() && tcp.read_exact(&mut echoed).await.is_ok()
     }
 
     async fn spawn_echo() -> u16 {
@@ -4325,11 +4322,14 @@ mod tests {
         let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
         ctx.start().unwrap();
         let echo = spawn_echo().await;
-        let target = format!("localhost:{echo}");
+        // The address the echo listens on, not `localhost`, which Windows tries as `::1` first
+        // and takes seconds to give up on.
+        let target = format!("127.0.0.1:{echo}");
+        let host = "host:127.0.0.1".to_string();
 
         // Run 1: one tunnel, listed as reconnectable once the list names its host.
         let mut old = open_tunnel(ctx.port().unwrap(), &target).await;
-        ctx.edit_decrypt_list(&["host:localhost".into()], &[]).unwrap();
+        ctx.edit_decrypt_list(std::slice::from_ref(&host), &[]).unwrap();
         wait_for_open_tunnels(&ctx, 1).await;
         let listed = ctx.reconnectable_tunnels(&tunnels::TunnelScope::default()).unwrap();
         let ids: Vec<String> = listed.iter().map(|t| t.id.clone()).collect();
@@ -4347,29 +4347,33 @@ mod tests {
         };
         tokio::task::spawn_blocking(move || reached_rx.recv().unwrap()).await.unwrap();
 
-        // Meanwhile the engine restarts, and the new run's first tunnel is number 1 too. A
-        // restart that has to wait for the reconnect to finish is let go of first.
-        let mut restarting = {
-            let ctx = ctx.clone();
-            tokio::task::spawn_blocking(move || {
-                ctx.stop().unwrap();
-                ctx.edit_decrypt_list(&[], &["host:localhost".into()]).unwrap();
-                ctx.start().unwrap();
-            })
-        };
-        if tokio::time::timeout(Duration::from_secs(1), &mut restarting).await.is_err() {
-            let _ = go_tx.send(());
+        // Then the engine restarts, and the new run's first tunnel is number 1 too. While the
+        // reconnect holds the engine's lock, a restart would wait for it, so it is let go
+        // first; were the lock not held, the restart and the new tunnel land in between.
+        let holds_engine = ctx.handle.try_lock().is_err();
+        if holds_engine {
+            go_tx.send(()).unwrap();
         }
-        restarting.await.unwrap();
+        let restarting = ctx.clone();
+        tokio::task::spawn_blocking(move || {
+            restarting.stop().unwrap();
+            restarting.edit_decrypt_list(&[], std::slice::from_ref(&host)).unwrap();
+            restarting.start().unwrap();
+        })
+        .await
+        .unwrap();
         let mut new = open_tunnel(ctx.port().unwrap(), &target).await;
         wait_for_open_tunnels(&ctx, 1).await;
         assert_eq!(ctx.tunnels.list()[0].engine_id, 1, "the new run's first tunnel");
-        let _ = go_tx.send(());
+        if !holds_engine {
+            go_tx.send(()).unwrap();
+        }
 
         let closed = reconnecting.await.unwrap().unwrap();
         assert!(still_open(&mut new).await, "the new run's tunnel was closed");
         assert!(!still_open(&mut old).await, "the old run's tunnel outlived its engine");
-        assert!(closed <= 1, "closed {closed}");
+        assert!(holds_engine, "looked up without the engine's lock held");
+        assert_eq!(closed, 1, "the old run's tunnel, closed in its own run");
     }
 
     /// An owner from before the count answers a forwarded save without it.

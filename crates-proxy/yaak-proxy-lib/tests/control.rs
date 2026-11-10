@@ -523,7 +523,9 @@ async fn tunnels_listed_before_the_app_took_over_close_nothing_after() {
             });
         }
     });
-    let target = format!("localhost:{echo_port}");
+    // The address the echo listens on, not `localhost`, which Windows tries as `::1` first and
+    // takes seconds to give up on.
+    let target = format!("127.0.0.1:{echo_port}");
     let open = |port: u16| {
         let target = target.clone();
         async move {
@@ -539,10 +541,7 @@ async fn tunnels_listed_before_the_app_took_over_close_nothing_after() {
     };
     let alive = |mut tcp: tokio::net::TcpStream| async move {
         let mut echoed = [0u8; 4];
-        let ok = tcp.write_all(b"ping").await.is_ok()
-            && tokio::time::timeout(Duration::from_secs(2), tcp.read_exact(&mut echoed))
-                .await
-                .is_ok_and(|r| r.is_ok());
+        let ok = tcp.write_all(b"ping").await.is_ok() && tcp.read_exact(&mut echoed).await.is_ok();
         (ok, tcp)
     };
     let listed = |app: &ProxyCtx| {
@@ -563,16 +562,16 @@ async fn tunnels_listed_before_the_app_took_over_close_nothing_after() {
     // The CLI's tunnel, listed through it.
     let (ok, _old) = alive(open(cli.port().unwrap()).await).await;
     assert!(ok);
-    rpc(&app, "edit_decrypt_list", json!({"add": ["host:localhost"]})).await.unwrap();
+    rpc(&app, "edit_decrypt_list", json!({"add": ["host:127.0.0.1"]})).await.unwrap();
     let old = listed(&app).await;
 
     // The app takes over, and its first tunnel is number 1 again.
     assert_eq!(rpc(&app, "take_over", json!({})).await.unwrap(), json!(true));
     daemon.join().unwrap();
-    rpc(&app, "edit_decrypt_list", json!({"remove": ["host:localhost"]})).await.unwrap();
+    rpc(&app, "edit_decrypt_list", json!({"remove": ["host:127.0.0.1"]})).await.unwrap();
     let (ok, new) = alive(open(app.port().unwrap()).await).await;
     assert!(ok);
-    rpc(&app, "edit_decrypt_list", json!({"add": ["host:localhost"]})).await.unwrap();
+    rpc(&app, "edit_decrypt_list", json!({"add": ["host:127.0.0.1"]})).await.unwrap();
     let current = listed(&app).await;
     assert_ne!(current["id"], old["id"]);
     assert_ne!(current["flowId"], old["flowId"]);
@@ -585,7 +584,7 @@ async fn tunnels_listed_before_the_app_took_over_close_nothing_after() {
     assert!(ok, "the app's tunnel was closed by the CLI's ids");
 
     // An entry is resolved against what is open now.
-    let by_entry = rpc(&app, "reconnect_tunnels", json!({"entry": "host:localhost"})).await;
+    let by_entry = rpc(&app, "reconnect_tunnels", json!({"entry": "host:127.0.0.1"})).await;
     assert_eq!(by_entry.unwrap()["closed"], 1);
     let mut rest = Vec::new();
     let _ = new.read_to_end(&mut rest).await;
