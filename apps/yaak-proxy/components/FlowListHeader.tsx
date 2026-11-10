@@ -411,6 +411,11 @@ function useColumnDrag({
     const grid = gridRef.current;
     const from = latest.current.columns.findIndex((c) => c.id === e.active.id);
     if (grid == null || from === -1) return;
+    const id = e.active.id as ColumnId;
+    const x = pointer.current;
+    // First, as it ends the last drag's columns sliding home, so the edges read below are where
+    // the columns are laid out, not where they were sliding
+    latest.current.onColumnDrag({ type: "start", id, x });
     const gridLeft = grid.getBoundingClientRect().left;
     const cells = Array.from(grid.querySelectorAll<HTMLElement>(":scope > [data-column]")).map(
       (el) => {
@@ -418,11 +423,8 @@ function useColumnDrag({
         return { left: box.left - gridLeft, right: box.right - gridLeft };
       },
     );
-    const id = e.active.id as ColumnId;
-    const x = pointer.current;
     const shown = shownKey(latest.current.columns);
     state.current = { id, from, cells, shown, x, to: null, ghostX: x, frame: 0 };
-    latest.current.onColumnDrag({ type: "start", id, x });
     target(state.current);
 
     const tick = () => {
