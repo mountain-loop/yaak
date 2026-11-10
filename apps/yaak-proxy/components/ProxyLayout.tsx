@@ -18,6 +18,7 @@ import { proxyStatusOf, statusTintColor } from "../lib/proxyStatus";
 import { lockedAtom, noFlowsAtom, proxyStateAtom, systemProxyEverOnAtom } from "../lib/store";
 import { getOsType } from "../lib/tauri";
 import { AddColumnDialog } from "./AddColumnDialog";
+import { ClearFlowsButton } from "./ClearFlowsButton";
 import { FirstRun } from "./FirstRun";
 import { FlowDetail } from "./FlowDetail";
 import { FlowList } from "./FlowList";
@@ -95,6 +96,7 @@ export function ProxyLayout() {
             </div>
           </div>
           <div data-tauri-drag-region className="flex items-center justify-end gap-1 pr-1">
+            <ClearFlowsButton />
             <IconButton
               className="pointer-events-auto"
               icon={flowLayout === "horizontal" ? "columns_2" : "rows_2"}

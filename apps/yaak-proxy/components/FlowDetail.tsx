@@ -31,7 +31,7 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
               <Keys keys={["↑", "↓"]} />
               <span>Pause or resume recording</span>
               <Keys keys={["⌘", "R"]} />
-              <span>Clear traffic</span>
+              <span>Clear flows</span>
               <Keys keys={["⌘", "⇧", "K"]} />
             </div>
           </EmptyState>
