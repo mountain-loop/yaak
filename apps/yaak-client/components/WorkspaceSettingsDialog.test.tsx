@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import type { Workspace, WorkspaceMeta } from "@yaakapp-internal/models";
+import { workspaceMetasAtom } from "@yaakapp-internal/models";
+import { getDefaultStore, type PrimitiveAtom } from "jotai";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
@@ -19,7 +21,7 @@ const mocks = vi.hoisted(() => ({
     id: "wm_test",
     model: "workspace_meta",
     workspaceId: "wk_test",
-    settingSyncDir: null,
+    settingSyncDir: "/sync/broken",
     encryptionKey: null,
   } as WorkspaceMeta,
 }));
@@ -29,8 +31,8 @@ vi.mock("@yaakapp-internal/models", async () => {
   const { atom } = await import("jotai");
   return {
     workspacesAtom: atom([mocks.workspace]),
-    // The workspace failed to load, so the store has no meta for it
-    workspaceMetasAtom: atom([]),
+    // Starts empty in each test: the workspace failed to load, so the store has no meta for it
+    workspaceMetasAtom: atom<WorkspaceMeta[]>([]),
     mergeModelsInStore: mocks.mergeModelsInStore,
     patchModel: vi.fn(),
   };
@@ -58,7 +60,11 @@ vi.mock("./core/Button", () => ({
     </button>
   ),
 }));
-vi.mock("./core/PlainInput", () => ({ PlainInput: () => null }));
+vi.mock("./core/PlainInput", () => ({
+  PlainInput: ({ label, defaultValue }: { label: string; defaultValue: string }) => (
+    <input aria-label={label} defaultValue={defaultValue} />
+  ),
+}));
 vi.mock("./core/SettingRow", () => ({
   SettingsList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SettingsSection: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -66,7 +72,9 @@ vi.mock("./core/SettingRow", () => ({
 // Render every tab at once so the test can see all of them
 vi.mock("./core/Tabs/Tabs", () => ({
   Tabs: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  TabContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  TabContent: ({ children, value }: { children: ReactNode; value: string }) => (
+    <div data-tab={value}>{children}</div>
+  ),
 }));
 vi.mock("./DnsOverridesEditor", () => ({ DnsOverridesEditor: () => null }));
 vi.mock("./HeadersEditor", () => ({ HeadersEditor: () => null }));
@@ -74,14 +82,25 @@ vi.mock("./HttpAuthenticationEditor", () => ({ HttpAuthenticationEditor: () => n
 vi.mock("./MarkdownEditor", () => ({ MarkdownEditor: () => null }));
 vi.mock("./ModelSettingsEditor", () => ({ ModelSettingsEditor: () => null }));
 vi.mock("./SyncToFilesystemSetting", () => ({
-  SyncToFilesystemSetting: () => <div>Sync setting</div>,
+  SyncToFilesystemSetting: ({ value }: { value: { filePath: string | null } }) => (
+    <div data-testid="sync-setting">{value.filePath}</div>
+  ),
 }));
-vi.mock("./WorkspaceEncryptionSetting", () => ({ WorkspaceEncryptionSetting: () => null }));
+vi.mock("./WorkspaceEncryptionSetting", () => ({
+  WorkspaceEncryptionSetting: () => <div data-testid="encryption-setting" />,
+}));
 
 let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
   vi.clearAllMocks();
+  // Behave like the real store: merged models land in the atom the dialog reads
+  const store = getDefaultStore();
+  const metasAtom = workspaceMetasAtom as unknown as PrimitiveAtom<WorkspaceMeta[]>;
+  store.set(metasAtom, []);
+  mocks.mergeModelsInStore.mockImplementation((_model: string, models: WorkspaceMeta[]) =>
+    store.set(metasAtom, (prev) => [...prev, ...models]),
+  );
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   host = document.createElement("div");
   document.body.append(host);
@@ -98,6 +117,12 @@ async function render() {
   await act(async () =>
     root.render(<WorkspaceSettingsDialog workspaceId="wk_test" hide={() => {}} />),
   );
+}
+
+function tab(value: string) {
+  const el = host.querySelector(`[data-tab="${value}"]`);
+  if (el == null) throw new Error(`No ${value} tab`);
+  return el;
 }
 
 function deleteButton() {
@@ -119,20 +144,34 @@ test("a workspace with no meta in the store still offers Delete", async () => {
   expect(mocks.deleteModelWithConfirm).toHaveBeenCalledWith(workspace, { confirmName: "Broken" });
 });
 
-test("a missing meta is fetched, which creates it, and put in the store", async () => {
+test("a missing meta is fetched, put in the store, and its settings rendered", async () => {
   mocks.rpc.mockResolvedValue(workspaceMeta);
   await render();
 
   expect(mocks.rpc).toHaveBeenCalledWith("cmd_get_workspace_meta", { workspaceId: "wk_test" });
   expect(mocks.mergeModelsInStore).toHaveBeenCalledWith("workspace_meta", [workspaceMeta]);
+
+  const settings = tab("settings");
+  expect(settings.querySelector('[data-testid="sync-setting"]')?.textContent).toBe("/sync/broken");
+  expect(settings.querySelector('[data-testid="encryption-setting"]')).not.toBeNull();
+  expect(host.querySelector('[role="alert"]')).toBeNull();
 });
 
-test("a meta that cannot be loaded shows the error where sync and encryption go", async () => {
+test("a meta that cannot be loaded shows the error only where sync and encryption go", async () => {
   mocks.rpc.mockRejectedValue("database is locked");
   await render();
 
-  const banner = host.querySelector('[role="alert"]');
-  expect(banner?.textContent).toContain("database is locked");
-  expect(host.textContent).not.toContain("Sync setting");
-  expect(deleteButton()).toBeDefined();
+  // The error is the one banner, inside the Settings tab, in place of sync and encryption
+  const banners = host.querySelectorAll('[role="alert"]');
+  expect(banners).toHaveLength(1);
+  expect(tab("settings").contains(banners[0] ?? null)).toBe(true);
+  expect(banners[0]?.textContent).toContain("database is locked");
+  expect(host.querySelector('[data-testid="sync-setting"]')).toBeNull();
+  expect(host.querySelector('[data-testid="encryption-setting"]')).toBeNull();
+  expect(mocks.mergeModelsInStore).not.toHaveBeenCalled();
+
+  // The workspace's own settings and Delete still render
+  const general = tab("general");
+  expect(general.querySelector<HTMLInputElement>('input[aria-label="Name"]')?.value).toBe("Broken");
+  expect(general.contains(deleteButton() ?? null)).toBe(true);
 });
