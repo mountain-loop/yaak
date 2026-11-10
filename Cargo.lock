@@ -11577,6 +11577,7 @@ dependencies = [
 name = "yaak-commands"
 version = "0.0.0"
 dependencies = [
+ "rusqlite",
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",

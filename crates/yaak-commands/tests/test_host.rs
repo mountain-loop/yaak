@@ -23,7 +23,9 @@ use yaak_commands::{Host, PluginHost};
 use yaak_core::WorkspaceContext;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_models::blob_manager::BlobManager;
-use yaak_models::models::{AnyModel, Environment, EnvironmentVariable, Plugin, Workspace};
+use yaak_models::models::{
+    AnyModel, Environment, EnvironmentVariable, HttpRequest, Plugin, Workspace,
+};
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{ModelPayload, UpdateSource};
 use yaak_plugins::events::{
@@ -577,4 +579,107 @@ async fn template_function_values_are_rendered_before_the_host_sees_them() {
         "the template should have been rendered before reaching the host, got {:?}",
         seen.get("token"),
     );
+}
+
+impl SingleThreadedHost {
+    fn new() -> Self {
+        let TestHost { inner } = TestHost::new();
+        Self {
+            inner: Rc::new(Arc::into_inner(inner).expect("sole owner")),
+            auth_values: Rc::new(RefCell::new(None)),
+            fn_values: Rc::new(RefCell::new(None)),
+        }
+    }
+
+    /// Change rows behind the app's back, the way a damaged or hand-edited
+    /// database would.
+    fn raw_sql(&self, sql: &str, id: &str) {
+        let conn =
+            rusqlite::Connection::open(self.inner._dir.path().join("db.sqlite")).expect("open db");
+        conn.execute(sql, [id]).expect("raw sql");
+    }
+
+    async fn create_workspace(&self) -> String {
+        let workspace = Workspace { name: "No meta".to_string(), ..Default::default() };
+        models_upsert(self.clone(), ModelsUpsertReq { model: AnyModel::Workspace(workspace) })
+            .await
+            .expect("upsert workspace")
+    }
+
+    async fn delete_workspace(&self, id: &str) {
+        let workspace = self.db().get_workspace(id).expect("get workspace");
+        let deleted =
+            models_delete(self.clone(), ModelsDeleteReq { model: AnyModel::Workspace(workspace) })
+                .await
+                .expect("delete workspace");
+        assert_eq!(deleted, id);
+        assert!(self.db().get_workspace(id).is_err(), "workspace should be gone");
+    }
+}
+
+/// A workspace can exist without its meta row: one written by the CLI, an
+/// import or an older version, or one whose row was removed. Opening it is the
+/// one place that creates the row, and deleting it never needs the row.
+#[tokio::test]
+async fn opening_a_workspace_without_a_meta_row_creates_one() {
+    let host = SingleThreadedHost::new();
+    let id = host.create_workspace().await;
+    assert!(host.db().get_workspace_meta(&id).is_none(), "a new workspace has no meta yet");
+
+    let open = || {
+        models_workspace_models(
+            host.clone(),
+            ModelsWorkspaceModelsReq { workspace_id: Some(id.clone()) },
+        )
+    };
+    let has_meta = |json: &str| {
+        let models: Vec<AnyModel> = serde_json::from_str(json).expect("parse payload");
+        models.iter().any(|m| matches!(m, AnyModel::WorkspaceMeta(m) if m.workspace_id == id))
+    };
+
+    assert!(has_meta(&open().await.expect("open")), "opening should load a created meta");
+
+    host.raw_sql("DELETE FROM workspace_metas WHERE workspace_id = ?1", &id);
+    assert!(host.db().get_workspace_meta(&id).is_none());
+    assert!(has_meta(&open().await.expect("reopen")), "a removed meta should be recreated");
+
+    host.raw_sql("DELETE FROM workspace_metas WHERE workspace_id = ?1", &id);
+    host.delete_workspace(&id).await;
+}
+
+/// When something else in the workspace is damaged, opening it fails and the
+/// app never receives the meta. Workspace Settings then asks for the meta on
+/// its own, which has to work, and the workspace has to stay deletable.
+#[tokio::test]
+async fn a_workspace_that_fails_to_open_still_gets_its_meta_and_can_be_deleted() {
+    let host = SingleThreadedHost::new();
+    let id = host.create_workspace().await;
+    let request = HttpRequest { workspace_id: id.clone(), ..Default::default() };
+    let request_id =
+        models_upsert(host.clone(), ModelsUpsertReq { model: AnyModel::HttpRequest(request) })
+            .await
+            .expect("upsert request");
+    host.raw_sql("UPDATE http_requests SET created_at = 'garbage' WHERE id = ?1", &request_id);
+
+    // Reading the damaged row panics rather than returning an error, so run the
+    // load as its own task and count either as a failed open
+    let open = models_workspace_models(
+        host.clone(),
+        ModelsWorkspaceModelsReq { workspace_id: Some(id.clone()) },
+    );
+    let opened = tokio::task::LocalSet::new()
+        .run_until(async { tokio::task::spawn_local(open).await })
+        .await;
+    assert!(!matches!(opened, Ok(Ok(_))), "the damaged request should fail the load");
+
+    host.raw_sql("DELETE FROM workspace_metas WHERE workspace_id = ?1", &id);
+    let meta =
+        cmd_get_workspace_meta(host.clone(), CmdGetWorkspaceMetaReq { workspace_id: id.clone() })
+            .await
+            .expect("workspace meta");
+    assert_eq!(meta.workspace_id, id);
+    assert!(host.db().get_workspace_meta(&id).is_some(), "the meta should have been created");
+
+    host.raw_sql("DELETE FROM workspace_metas WHERE workspace_id = ?1", &id);
+    host.delete_workspace(&id).await;
 }
