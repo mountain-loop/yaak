@@ -155,7 +155,8 @@ fn passes(body: &GraphQlBody, path: &str) -> bool {
     let mut score = 0;
     let mut has_document = false;
     let query = body.query.as_str();
-    let trimmed = query.trim();
+    // From the document's first token: comments and whitespace before it don't count.
+    let trimmed = skip_leading_ignored(query).trim_end();
 
     if has_graphql_path_word(&path.to_lowercase()) {
         score += 2;
@@ -187,6 +188,20 @@ fn passes(body: &GraphQlBody, path: &str) -> bool {
     }
 
     has_document && score >= 4
+}
+
+/// `document` from its first token: GraphQL's ignored tokens before it (whitespace, commas, a
+/// byte order mark and `#` comments to the end of their line) left out.
+fn skip_leading_ignored(document: &str) -> &str {
+    let mut rest = document;
+    loop {
+        let trimmed =
+            rest.trim_start_matches(|c: char| c.is_whitespace() || c == ',' || c == '\u{feff}');
+        match trimmed.strip_prefix('#') {
+            Some(comment) => rest = comment.find(['\n', '\r']).map_or("", |end| &comment[end..]),
+            None => return trimmed,
+        }
+    }
 }
 
 fn is_word_byte(b: u8) -> bool {
@@ -450,6 +465,45 @@ mod tests {
             query Real { id }
         "#;
         assert_eq!(first_operation_name(doc), Some("Real".into()));
+    }
+
+    /// Comments and whitespace before a document's first token don't hide its keyword or its
+    /// selection set, from detection or the name scan.
+    #[test]
+    fn detects_documents_after_leading_comments() {
+        let commented = "# viewer query\nquery GetViewer { viewer { id } }";
+        let body = json!({ "query": commented });
+        assert!(is_body(JSON, body.clone(), "https://api.example.com/graphql"));
+        let op = detect(
+            "POST",
+            "https://api.example.com/graphql",
+            JSON,
+            Some(body.to_string().as_bytes()),
+        );
+        assert_eq!(op.map(|o| o.label()).as_deref(), Some("GetViewer"));
+
+        for document in [
+            "\n\n  # one\r\n# two\n  mutation Save { save { id } }",
+            "#only a comment line\nsubscription OnEvent { event { id } }",
+            "\u{feff}  , # list\n{ viewer { id } }",
+        ] {
+            let body = json!({ "query": document });
+            assert!(is_body(JSON, body, "https://api.example.com/graphql"), "{document:?}");
+        }
+        // A selection set alone after a comment needs no GraphQL path.
+        let bare = json!({ "query": "# who\n{ viewer { id } }", "variables": {} });
+        assert!(is_body(JSON, bare, "https://api.example.com/v1"));
+
+        assert_eq!(
+            first_operation_name("# c\n  # query Hidden { x }\n query Shown { a }"),
+            Some("Shown".into())
+        );
+        // A comment and nothing else is no document.
+        assert!(!is_body(
+            JSON,
+            json!({ "query": "# query X { a }" }),
+            "https://api.example.com/graphql"
+        ));
     }
 
     #[test]
