@@ -179,6 +179,22 @@ async fn send_many(
     let mut success_count = 0usize;
     let mut failures: Vec<(String, String)> = Vec::new();
 
+    // The CLI sends HTTP only, so the rest of a folder is reported, not counted as failing.
+    let mut skipped: Vec<String> = Vec::new();
+    let mut request_ids = request_ids;
+    request_ids.retain(|id| match request::get_any_request(ctx, id) {
+        Ok(AnyRequest::GrpcRequest(r)) => {
+            skipped.push(format!("{id} - gRPC {}", r.name));
+            false
+        }
+        Ok(AnyRequest::WebsocketRequest(r)) => {
+            skipped.push(format!("{id} - WebSocket {}", r.name));
+            false
+        }
+        // A request that has gone missing since it was listed fails when sent, as before
+        Ok(AnyRequest::HttpRequest(_)) | Err(_) => true,
+    });
+
     match mode {
         ExecutionMode::Sequential => {
             for request_id in request_ids {
@@ -229,7 +245,18 @@ async fn send_many(
     }
 
     let failure_count = failures.len();
-    println!("Send summary: {success_count} succeeded, {failure_count} failed");
+    if skipped.is_empty() {
+        println!("Send summary: {success_count} succeeded, {failure_count} failed");
+    } else {
+        println!(
+            "Send summary: {success_count} succeeded, {failure_count} failed, {} skipped",
+            skipped.len()
+        );
+        println!("Skipped, since the CLI can only send HTTP requests so far:");
+        for line in &skipped {
+            println!("  {line}");
+        }
+    }
 
     if failure_count == 0 {
         return Ok(());

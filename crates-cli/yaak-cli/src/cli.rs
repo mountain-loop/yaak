@@ -241,8 +241,12 @@ pub struct ExportArgs {
     #[arg(long, conflicts_with = "workspace_ids")]
     pub all: bool,
 
-    /// Include private environments in the export
-    #[arg(long)]
+    /// Include private environments in the export. Environments made in the app are private
+    /// unless marked shareable, so they are left out by default, as the app's export does.
+    #[arg(
+        long = "include-private",
+        visible_alias = "include-private-environments"
+    )]
     pub include_private_environments: bool,
 }
 
