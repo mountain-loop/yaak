@@ -15,7 +15,7 @@ const jotaiStore = createStore();
 
 syncProxyState(jotaiStore);
 // Before the flows load, so they load for the filter it restores
-syncNavigation(jotaiStore);
+await syncNavigation(jotaiStore);
 syncFlows(jotaiStore);
 syncSidebarSelection(jotaiStore);
 

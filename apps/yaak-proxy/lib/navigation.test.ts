@@ -14,6 +14,8 @@ import { EMPTY_PLACE, stackOf } from "./places";
 
 const existing = new Set<string>();
 const recorded: string[] = [];
+let lastFilter = "";
+let windowPlaces: string | null = null;
 
 vi.mock("./rpc", () => ({
   rpc: vi.fn(async (cmd: string, payload: { ids?: string[]; filter?: string }) => {
@@ -21,6 +23,10 @@ vi.mock("./rpc", () => ({
       return (payload.ids ?? []).filter((id) => existing.has(id)).map((id) => flow(id));
     }
     if (cmd === "record_filter") recorded.push(payload.filter ?? "");
+    if (cmd === "get_last_filter") return lastFilter;
+    if (cmd === "get_window_places") return windowPlaces;
+    if (cmd === "set_window_places") windowPlaces = (payload as { places: string }).places;
+    if (cmd === "set_last_filter") lastFilter = payload.filter ?? "";
     return true;
   }),
   listen: vi.fn(() => () => {}),
@@ -29,7 +35,7 @@ vi.mock("./tauri", () => ({ command: vi.fn(async () => {}), subscribe: vi.fn(() 
 // The package's index reaches for the window as it loads; the sidebar's selection is all used.
 vi.mock("@yaakapp-internal/ui", () => ({ selectedIdsFamily: () => atom<string[]>([]) }));
 
-const { applyFilter, goToPlace, searchDraftAtom, searchDraftVersionAtom } =
+const { applyFilter, goToPlace, searchDraftAtom, searchDraftVersionAtom, syncNavigation } =
   await import("./navigation");
 
 function flow(id: string): Flow {
@@ -47,6 +53,65 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 beforeEach(() => {
   existing.clear();
   recorded.length = 0;
+  lastFilter = "";
+  windowPlaces = null;
+});
+
+describe("syncNavigation", () => {
+  test("a launch restores the last filter applied, and keeps each one applied after", async () => {
+    lastFilter = "@host:*.github.com";
+    const store = createStore();
+    await syncNavigation(store);
+    await settle();
+    expect(store.get(appliedFilterAtom)).toBe("@host:*.github.com");
+    expect(store.get(searchDraftAtom)).toBe("@host:*.github.com");
+    expect(store.get(canGoBackAtom)).toBe(false);
+
+    applyFilter(store, "stripe");
+    await settle();
+    expect(lastFilter).toBe("stripe");
+  });
+
+  test("a launch the person has already moved on from keeps where they are", async () => {
+    lastFilter = "old";
+    const store = createStore();
+    await syncNavigation(store);
+    applyFilter(store, "new");
+    await settle();
+    expect(store.get(appliedFilterAtom)).toBe("new");
+  });
+
+  test("a reload takes back the places, the tabs and the selection, not the last filter", async () => {
+    existing.add("B");
+    lastFilter = "elsewhere";
+    const before = createStore();
+    await syncNavigation(before);
+    applyFilter(before, "x");
+    goToPlace(before, "add", { selection: ["B"], flow: flow("B") });
+    goToPlace(before, "update", { tabs: { response: "headers" } });
+    await settle();
+
+    const after = createStore();
+    await syncNavigation(after);
+    await settle();
+    expect(after.get(appliedFilterAtom)).toBe("x");
+    expect(after.get(placeAtom).tabs).toEqual({ response: "headers" });
+    expect(after.get(selectedFlowAtom)?.id).toBe("B");
+    expect(goToPlace(after, "back")).toBe(true);
+  });
+
+  test("a late read of the selected flow leaves a newer one alone", async () => {
+    existing.add("A");
+    const store = newStore();
+    goToPlace(store, "add", { selection: ["A"], flow: flow("A") });
+    goToPlace(store, "add", { selection: ["B"], flow: flow("B") });
+    store.set(selectedFlowAtom, null);
+    goToPlace(store, "back");
+    const newer = { ...flow("A"), status: 200 } as Flow;
+    goToPlace(store, "update", { selection: ["A"], flow: newer });
+    await settle();
+    expect(store.get(selectedFlowAtom)).toBe(newer);
+  });
 });
 
 describe("goToPlace", () => {

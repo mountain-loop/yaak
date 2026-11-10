@@ -163,49 +163,61 @@ function readSelected(store: Store, id: string) {
         store.set(placeStackAtom, (s) => stackWithout(s, new Set([id])));
         return;
       }
-      // The window has moved on meanwhile.
-      if (currentPlace(store.get(placeStackAtom)).selection.has(id)) {
-        store.set(selectedFlowAtom, found);
-      }
+      // The window has moved on meanwhile, or shows the flow already, as it was since.
+      const current = currentPlace(store.get(placeStackAtom)).selection.has(id);
+      if (current && store.get(selectedFlowAtom) == null) store.set(selectedFlowAtom, found);
     })
     .catch((err) => console.warn("Failed to read the selected flow", err));
 }
 
-/** Where the window's places are kept for a reload, for this session */
-const PLACES_KEY = "proxy_places";
-/** Where the filter last applied is kept for the next launch */
-const LAST_FILTER_KEY = "proxy_last_filter";
-
-function read(storage: () => Storage, key: string): string | null {
-  try {
-    return storage().getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function write(storage: () => Storage, key: string, value: string) {
-  try {
-    storage().setItem(key, value);
-  } catch {
-    // Not kept: the next reload starts from the last filter.
-  }
-}
-
 /**
- * Restores where the window was, before anything reads the filter: its places after a reload,
- * or the last filter applied at launch. Keeps them as they change.
+ * Restores where the window was, before the flows load for its filter: its places after a
+ * reload, which the engine holds in memory while the app runs, or at launch the last filter
+ * applied, which the encrypted database keeps. Filters can hold captured values, so neither is
+ * kept in the web view's storage. Keeps them as they change.
  */
-export function syncNavigation(store: Store) {
-  const kept = stackFromJson(read(() => sessionStorage, PLACES_KEY));
-  const lastFilter = read(() => localStorage, LAST_FILTER_KEY) ?? "";
-  const stack = kept ?? stackOf({ ...EMPTY_PLACE, filter: lastFilter });
+export async function syncNavigation(store: Store) {
+  const kept = stackFromJson(await rpc("get_window_places", {}).catch(() => null));
+  const stack = kept ?? stackOf(EMPTY_PLACE);
   store.set(placeStackAtom, stack);
   showPlace(store, currentPlace(stack), { filter: true, reveal: true });
+  if (kept == null) {
+    // Unread while traffic is locked, as the database is.
+    rpc("get_last_filter", {})
+      .then((filter) => {
+        // Only over the window as it opened, not where it has been taken since.
+        const now = store.get(placeStackAtom);
+        if (filter === "" || now.places.length > 1 || currentPlace(now).filter !== "") return;
+        goToPlace(store, "update", { filter });
+      })
+      .catch(() => {});
+  }
+
+  // One write at a time, the latest places after it, so they arrive in order.
+  let pending: string | null = null;
+  let writing = false;
+  const write = () => {
+    if (writing || pending == null) return;
+    const places = pending;
+    pending = null;
+    writing = true;
+    rpc("set_window_places", { places })
+      .catch(() => {})
+      .finally(() => {
+        writing = false;
+        write();
+      });
+  };
   store.sub(placeStackAtom, () => {
-    const now = store.get(placeStackAtom);
-    write(() => sessionStorage, PLACES_KEY, stackToJson(now));
-    write(() => localStorage, LAST_FILTER_KEY, currentPlace(now).filter);
+    pending = stackToJson(store.get(placeStackAtom));
+    write();
+  });
+  let lastFilter = store.get(appliedFilterAtom);
+  store.sub(appliedFilterAtom, () => {
+    const filter = store.get(appliedFilterAtom);
+    if (filter === lastFilter) return;
+    lastFilter = filter;
+    rpc("set_last_filter", { filter }).catch(() => {});
   });
 }
 

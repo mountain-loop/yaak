@@ -82,10 +82,11 @@ export function LockedHarness() {
   const [synced, setSynced] = useState(false);
   useEffect(() => {
     syncProxyState(store);
-    syncNavigation(store);
-    syncFlows(store);
-    syncSidebarSelection(store);
-    setSynced(true);
+    void syncNavigation(store).then(() => {
+      syncFlows(store);
+      syncSidebarSelection(store);
+      setSynced(true);
+    });
   }, [store]);
   if (!synced) return null;
   return (

@@ -1,10 +1,10 @@
-import { useSetAtom } from "jotai";
+import { useSetAtom, useStore } from "jotai";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { AddColumnDialog } from "../components/AddColumnDialog";
 import { FlowDetail } from "../components/FlowDetail";
 import { FlowList } from "../components/FlowList";
-import { selectedFlowAtom } from "../lib/atoms";
 import { browserTabMemory, learnedTabKey, flowShape } from "../lib/defaultTab";
+import { goToPlace } from "../lib/navigation";
 import { flowWindowAtom } from "../lib/store";
 import { type FlowFixture, fixtures } from "./fixtures";
 
@@ -42,7 +42,7 @@ export function FlowPanesHarness() {
 
 function FixtureCard({ fixture }: { fixture: FlowFixture }) {
   const params = new URLSearchParams(location.search);
-  const setSelected = useSetAtom(selectedFlowAtom);
+  const store = useStore();
   const setWindow = useSetAtom(flowWindowAtom);
   const [ready, setReady] = useState(false);
   useLayoutEffect(() => {
@@ -52,7 +52,8 @@ function FixtureCard({ fixture }: { fixture: FlowFixture }) {
       browserTabMemory()?.setItem(learnedTabKey("response", flowShape(fixture.flow)), tab);
     }
     setWindow({ flows, hasOlder: false, total: flows.length });
-    setSelected(flows.find((f) => f.id === fixture.flow.id) ?? fixture.flow);
+    const shown = flows.find((f) => f.id === fixture.flow.id) ?? fixture.flow;
+    goToPlace(store, "update", { selection: [shown.id], flow: shown });
     setReady(true);
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- once per fixture
   }, [fixture]);

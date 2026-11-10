@@ -525,6 +525,7 @@ mod tests {
                 "flow_sweep_pending",
                 "flows",
                 "grpc_schemas",
+                "last_filter",
                 "saved_queries"
             ]
         );

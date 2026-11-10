@@ -72,6 +72,7 @@ function emit(event: string, payload: unknown = {}) {
 /** Filters applied, newest first, and saved searches, kept across reloads as the database is */
 const HISTORY_KEY = "harness_filter_history";
 const SAVED_KEY = "harness_saved_queries";
+const LAST_FILTER_KEY = "harness_last_filter";
 
 function stored<T>(key: string): T[] {
   try {
@@ -146,6 +147,17 @@ function answer(cmd: string, payload: unknown): unknown {
       store(HISTORY_KEY, []);
       emit("filter_history_changed");
       return 0;
+    // Held by the engine for as long as the app runs; the tab's session here
+    case "get_window_places":
+      return sessionStorage.getItem("harness_window_places");
+    case "set_window_places":
+      sessionStorage.setItem("harness_window_places", String(req.places));
+      return true;
+    case "get_last_filter":
+      return localStorage.getItem(LAST_FILTER_KEY) ?? "";
+    case "set_last_filter":
+      localStorage.setItem(LAST_FILTER_KEY, String(req.filter));
+      return true;
     case "list_saved_queries":
       return stored<SavedQuery>(SAVED_KEY);
     case "create_saved_query": {

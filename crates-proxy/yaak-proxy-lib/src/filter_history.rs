@@ -84,6 +84,38 @@ pub fn clear(db: &ProxyQueryManager) -> Result<usize, String> {
     .map_err(|e| failed("clear", e))
 }
 
+/// The filter the window last applied, in any way, or empty for none. Empty for a database from
+/// before it, read without migrating.
+pub fn last(db: &ProxyQueryManager) -> Result<String, String> {
+    db.with_conn(|c| {
+        let conn = c.conn().resolve();
+        let Ok(mut stmt) = conn.prepare("SELECT filter FROM last_filter WHERE id = 1") else {
+            return Ok(String::new());
+        };
+        match stmt.query_row([], |row| row.get(0)) {
+            Ok(filter) => Ok(filter),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(String::new()),
+            Err(e) => Err(failed("read the last filter from", e)),
+        }
+    })
+}
+
+/// Keeps the filter the window applied, for the next launch to restore.
+pub fn set_last(db: &ProxyQueryManager, filter: &str) -> Result<(), String> {
+    db.with_tx(|c| {
+        c.conn()
+            .resolve()
+            .execute(
+                "INSERT INTO last_filter (id, filter) VALUES (1, ?) \
+                ON CONFLICT (id) DO UPDATE SET filter = excluded.filter",
+                [filter],
+            )
+            .map(|_| ())
+            .map_err(yaak_database::Error::from)
+    })
+    .map_err(|e| failed("keep the last filter in", e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,6 +166,20 @@ mod tests {
         let kept = filters(&db);
         assert_eq!((kept.len(), kept[0].as_str()), (MAX_FILTERS, "f5"));
         assert!(kept.contains(&"f6".to_string()));
+    }
+
+    #[test]
+    fn keeps_the_last_filter_applied() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = open(&dir);
+        assert_eq!(last(&db).unwrap(), "");
+        set_last(&db, "@host:*.github.com").unwrap();
+        set_last(&db, "stripe").unwrap();
+        assert_eq!(last(&db).unwrap(), "stripe");
+        set_last(&db, "").unwrap();
+        assert_eq!(last(&db).unwrap(), "");
+        // Apart from the history, which only Enter writes.
+        assert_eq!(filters(&db), Vec::<String>::new());
     }
 
     #[test]

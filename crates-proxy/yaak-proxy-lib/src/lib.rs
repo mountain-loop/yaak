@@ -110,6 +110,9 @@ pub struct ProxyCtx {
     /// Captured traffic is to be emptied as the databases are first unlocked, this launch
     /// being set to clear it. Taken once it is.
     clear_at_launch: Arc<AtomicBool>,
+    /// The window's places, as it last sent them, for a reload of it to take back. Held in
+    /// memory only, as filters can hold captured values, and gone when the app quits.
+    window_places: Arc<Mutex<Option<String>>>,
     /// `traffic.lock`, locked shared for as long as this process has the databases open, so
     /// another launch can't delete them from under it: clearing them takes it alone.
     traffic_lock: Arc<Mutex<Option<std::fs::File>>>,
@@ -167,6 +170,7 @@ impl ProxyCtx {
             resets: Arc::new(AtomicU64::new(0)),
             sweeper: Default::default(),
             clear_at_launch: Arc::new(AtomicBool::new(false)),
+            window_places: Arc::new(Mutex::new(None)),
             traffic_lock: Arc::new(Mutex::new(None)),
             system_proxy_intent: Arc::new(Mutex::new(())),
             watching_system_proxy: Arc::new(AtomicBool::new(false)),
@@ -1780,6 +1784,28 @@ pub struct FilterHistoryChangedPayload {}
 
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
+pub struct GetLastFilterRequest {}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct GetWindowPlacesRequest {}
+
+/// The window's places, opaque to the engine, kept in memory for a reload of the window.
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SetWindowPlacesRequest {
+    pub places: String,
+}
+
+/// The filter the window applied, kept in the encrypted database for the next launch.
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SetLastFilterRequest {
+    pub filter: String,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
 pub struct ClearFlowsRequest {}
 
 #[derive(Serialize, TS)]
@@ -2809,6 +2835,27 @@ fn list_filter_history(
     filter_history::list(&ctx.db()?).map_err(rpc_error)
 }
 
+fn get_window_places(
+    ctx: &ProxyCtx,
+    _req: GetWindowPlacesRequest,
+) -> Result<Option<String>, RpcError> {
+    Ok(ctx.window_places.lock().unwrap_or_else(PoisonError::into_inner).clone())
+}
+
+fn set_window_places(ctx: &ProxyCtx, req: SetWindowPlacesRequest) -> Result<bool, RpcError> {
+    *ctx.window_places.lock().unwrap_or_else(PoisonError::into_inner) = Some(req.places);
+    Ok(true)
+}
+
+fn get_last_filter(ctx: &ProxyCtx, _req: GetLastFilterRequest) -> Result<String, RpcError> {
+    filter_history::last(&ctx.db()?).map_err(rpc_error)
+}
+
+fn set_last_filter(ctx: &ProxyCtx, req: SetLastFilterRequest) -> Result<bool, RpcError> {
+    filter_history::set_last(&ctx.db()?, &req.filter).map_err(rpc_error)?;
+    Ok(true)
+}
+
 fn record_filter(ctx: &ProxyCtx, req: RecordFilterRequest) -> Result<bool, RpcError> {
     let recorded = filter_history::record(&ctx.db()?, &req.filter).map_err(rpc_error)?;
     if recorded {
@@ -3722,6 +3769,10 @@ define_rpc! {
         record_filter(RecordFilterRequest) -> bool,
         delete_filter_history(DeleteFilterHistoryRequest) -> bool,
         clear_filter_history(ClearFilterHistoryRequest) -> usize,
+        get_last_filter(GetLastFilterRequest) -> String,
+        set_last_filter(SetLastFilterRequest) -> bool,
+        get_window_places(GetWindowPlacesRequest) -> Option<String>,
+        set_window_places(SetWindowPlacesRequest) -> bool,
         list_grpc_schemas(ListGrpcSchemasRequest) -> Vec<GrpcSchema>,
         list_messages(ListMessagesRequest) -> ListMessagesResponse,
         remove_grpc_schema(RemoveGrpcSchemaRequest) -> bool,
@@ -4562,6 +4613,24 @@ mod tests {
         assert!(get_flows(ctx.clone(), req).await.unwrap().is_empty());
     }
 
+    /// The window's places are held for a reload of it, in memory, and none at launch.
+    #[test]
+    fn window_places_are_held_in_memory_for_a_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        assert_eq!(get_window_places(&ctx, GetWindowPlacesRequest {}).unwrap(), None);
+        let places = r#"{"places":[{"filter":"stripe","selection":[],"tabs":{}}],"index":0}"#;
+        set_window_places(&ctx, SetWindowPlacesRequest { places: places.into() }).unwrap();
+        let held = get_window_places(&ctx.clone(), GetWindowPlacesRequest {}).unwrap();
+        assert_eq!(held.as_deref(), Some(places));
+        drop(ctx);
+
+        let (events, _rx) = RpcEventEmitter::new();
+        let next = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        assert_eq!(get_window_places(&next, GetWindowPlacesRequest {}).unwrap(), None);
+    }
+
     /// Filters applied are listed newest first, each once, and the app hears of each change.
     #[test]
     fn filter_history_commands_record_list_and_forget() {
@@ -5191,6 +5260,7 @@ mod tests {
             flow_with_response(&ctx, "fl_b", "text/plain", b"two");
             saved_queries::create(&ctx.db().unwrap(), "Errors", "@status:>=400").unwrap();
             filter_history::record(&ctx.db().unwrap(), "@host:api.stripe.com").unwrap();
+            filter_history::set_last(&ctx.db().unwrap(), "@status:>=400").unwrap();
             assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 2);
         }
         if let Some(settings) = settings {
@@ -5217,6 +5287,7 @@ mod tests {
             history.iter().map(|h| h.filter.as_str()).collect::<Vec<_>>(),
             ["@host:api.stripe.com"]
         );
+        assert_eq!(filter_history::last(&db).unwrap(), "@status:>=400");
         // New traffic is written as before.
         flow_with_response(&ctx, "fl_c", "text/plain", b"three");
         assert_eq!(flows::count(&db).unwrap(), 1);
