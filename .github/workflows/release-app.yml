@@ -389,6 +389,9 @@ jobs:
           echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
           security import "$RUNNER_TEMP/certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           rm "$RUNNER_TEMP/certificate.p12"
+          # Lets codesign use the key unattended; without it the first signature can wait on a
+          # prompt nobody answers
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
           security list-keychain -d user -s "$KEYCHAIN_PATH"
 
       # Builds the helper for the target and signs it and protoc before bundling (the bundle
