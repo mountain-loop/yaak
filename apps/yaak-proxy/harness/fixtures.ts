@@ -75,6 +75,27 @@ const graphqlRequest = JSON.stringify({
   operationName: "GetViewer",
 });
 const formRequest = "grant_type=client_credentials&client_id=yaak-proxy&scope=read+write";
+const csvResponse = [
+  "id,email,plan,created_at",
+  "1,ada@example.com,pro,2026-10-01",
+  "2,grace@example.com,team,2026-10-14",
+  "3,linus@example.com,free,2026-11-02",
+].join("\n");
+const multipartBoundary = "yaakBoundary7MA4YWxk";
+const multipartRequest = [
+  `--${multipartBoundary}`,
+  'Content-Disposition: form-data; name="title"',
+  "",
+  "Quarterly report",
+  `--${multipartBoundary}`,
+  'Content-Disposition: form-data; name="meta"; filename="meta.json"',
+  "Content-Type: application/json",
+  "",
+  '{"pages":12,"draft":false}',
+  `--${multipartBoundary}--`,
+  "",
+].join("\r\n");
+const textResponse = "Uploaded 2 parts";
 const htmlResponse =
   "<!doctype html><html><body style='font-family:sans-serif'><h1>Signed in</h1><p>You can close this window.</p></body></html>";
 // A 24x24 PNG gradient
@@ -197,6 +218,41 @@ export const fixtures: FlowFixture[] = [
     },
     requestBody: body(graphqlRequest),
     responseBody: body('{"data":{"viewer":{"login":"yaak"}}}'),
+  },
+  {
+    label: "CSV GET",
+    flow: {
+      ...base,
+      id: "fl_csv",
+      url: "https://api.example.com/users/export.csv",
+      contentType: "text/csv",
+      requestHeaders: [{ name: "Accept", value: "text/csv" }],
+      responseHeaders: [{ name: "Content-Type", value: "text/csv; charset=utf-8" }],
+      responseSize: csvResponse.length,
+    },
+    requestBody: body(""),
+    responseBody: body(csvResponse),
+  },
+  {
+    label: "Multipart POST",
+    flow: {
+      ...base,
+      id: "fl_multipart",
+      method: "POST",
+      url: "https://api.example.com/reports",
+      contentType: "text/plain",
+      requestHeaders: [
+        {
+          name: "Content-Type",
+          value: `multipart/form-data; boundary=${multipartBoundary}`,
+        },
+      ],
+      responseHeaders: [{ name: "Content-Type", value: "text/plain; charset=utf-8" }],
+      requestSize: multipartRequest.length,
+      responseSize: textResponse.length,
+    },
+    requestBody: body(multipartRequest),
+    responseBody: body(textResponse),
   },
   {
     label: "gRPC call",

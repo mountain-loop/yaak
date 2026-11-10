@@ -43,8 +43,12 @@ export interface HttpResponsePaneViewProps {
   className?: string;
   /** Shown before there's a response */
   emptyState: ReactNode;
-  viewMode: ResponseViewMode;
-  onViewModeChange: (viewMode: ResponseViewMode) => void;
+  viewMode?: ResponseViewMode;
+  /**
+   * Offers the raw view in the Response tab's menu. Left out where the body tab has a view-mode
+   * switch of its own, as the proxy's does
+   */
+  onViewModeChange?: (viewMode: ResponseViewMode) => void;
   /** Where the tab order and the active tab are remembered */
   tabsStorageKey?: string;
   /** Remembers the active tab per request or flow */
@@ -95,7 +99,7 @@ export function HttpResponsePaneView({
   style,
   className,
   emptyState,
-  viewMode,
+  viewMode = "pretty",
   onViewModeChange,
   tabsStorageKey = "http_response_tabs",
   activeTabKey,
@@ -165,21 +169,23 @@ export function HttpResponsePaneView({
       ? cookieCounts.received
       : cookieCounts.sent + cookieCounts.received;
     return [
-      {
-        value: RESPONSE_TAB_BODY,
-        empty: dimEmptyTabs && noBody,
-        options: {
-          value: viewMode,
-          onChange: (v) => onViewModeChange(v === "raw" ? "raw" : "pretty"),
-          items: [
-            { label: "Response", value: "pretty" },
-            ...(mimeType?.startsWith("image")
-              ? []
-              : [{ label: "Response (Raw)", shortLabel: "Raw", value: "raw" }]),
-          ],
-          itemsAfter: itemsAfter.length > 0 ? itemsAfter : undefined,
-        },
-      },
+      onViewModeChange == null && itemsAfter.length === 0
+        ? { value: RESPONSE_TAB_BODY, label: "Response", empty: dimEmptyTabs && noBody }
+        : {
+            value: RESPONSE_TAB_BODY,
+            empty: dimEmptyTabs && noBody,
+            options: {
+              value: viewMode,
+              onChange: (v: string | null) => onViewModeChange?.(v === "raw" ? "raw" : "pretty"),
+              items: [
+                { label: "Response", value: "pretty" },
+                ...(onViewModeChange == null || mimeType?.startsWith("image")
+                  ? []
+                  : [{ label: "Response (Raw)", shortLabel: "Raw", value: "raw" }]),
+              ],
+              itemsAfter: itemsAfter.length > 0 ? itemsAfter : undefined,
+            },
+          },
       ...(requestShownApart
         ? []
         : [

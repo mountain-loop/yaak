@@ -13,14 +13,13 @@ import {
   IconButton,
   parseCookieHeaders,
   ResponseCookies,
-  type ResponseViewMode,
   SplitLayout,
   Tooltip,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useSetAtom } from "jotai";
-import { useCallback, useMemo, useState } from "react";
-import { BODY_TYPE_BINARY } from "@yaakapp-internal/ui/httpTypes";
+import { useCallback, useMemo } from "react";
+import { BODY_TYPE_FORM_URLENCODED } from "@yaakapp-internal/ui/httpTypes";
 import { findHeader } from "../lib/body";
 import {
   browserTabMemory,
@@ -166,12 +165,15 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
       renderBody={(editor) => (
         <FlowRequestBody
           body={body}
-          editor={editor}
-          // The proxy's own viewer, with its hexdump and save, rather than a size alone
-          binaryViewer={
-            request.bodyType === BODY_TYPE_BINARY ? (
-              <FlowBodyViewer flow={flow} which="request" pretty />
-            ) : null
+          // The response's viewer choice, with the form's fields as a URL-encoded body's
+          // formatted view
+          viewer={
+            <FlowBodyViewer
+              flow={flow}
+              which="request"
+              form={request.bodyType === BODY_TYPE_FORM_URLENCODED ? editor : undefined}
+              hideCutNote
+            />
           }
           requestSize={flow.requestSize}
         />
@@ -199,7 +201,6 @@ function UrlLine({ flow }: { flow: Flow }) {
 }
 
 function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }) {
-  const [viewMode, setViewMode] = useState<ResponseViewMode>("pretty");
   // A stream's body is its messages, read by the Messages tab; reading it whole again on every
   // message would only hold copies of it
   const loadBody = flow.streamKind == null;
@@ -268,16 +269,12 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
       body={loader}
       requestBody={null}
       emptyState={<EmptyStateText>Waiting for a response</EmptyStateText>}
-      viewMode={viewMode}
-      onViewModeChange={setViewMode}
       tabsStorageKey="proxy_response_tabs"
       activeTabKey={flow.id}
       defaultTab={defaultTab}
       onTabChange={onTabChange}
       extraTabs={extraTabs}
-      renderBodyViewer={() => (
-        <FlowBodyViewer flow={flow} which="response" pretty={viewMode === "pretty"} />
-      )}
+      renderBodyViewer={() => <FlowBodyViewer flow={flow} which="response" />}
       statusLineCenter={
         flow.responseTruncated ? (
           <span

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { platform } from "@yaakapp-internal/platform";
 import type { AgentSetupStatus, AppMetaData } from "@yaakapp-internal/rpc-schema";
-import { Banner, Heading, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { Banner, Heading, Icon, InlineCode, SegmentedControl, VStack } from "@yaakapp-internal/ui";
 import { useEffect } from "react";
 import { useKeyValue } from "../../hooks/useKeyValue";
 import { usePluginInfos } from "../../hooks/usePluginInfo";
@@ -14,7 +14,6 @@ import {
 import { appInfo } from "../../lib/appInfo";
 import { rpc } from "../../lib/rpc";
 import { Link } from "../core/Link";
-import { SegmentedControl } from "../core/SegmentedControl";
 import {
   SettingCommand,
   SettingSnippet,

@@ -1,3 +1,4 @@
+export { ACTIONS_BAR_CONTAINER, ActionsBar, PINNED_ACTION } from "./components/ActionsBar";
 export type { BannerProps } from "./components/Banner";
 export { Banner } from "./components/Banner";
 export type { ButtonProps } from "./components/Button";
@@ -60,7 +61,13 @@ export type {
 export { eventDeltas, formatEventDelta, formatEventTime } from "./components/events/streamEvents";
 export type { ExternalLinkProps } from "./components/ExternalLink";
 export { ExternalLink } from "./components/ExternalLink";
-export { ConfirmLargeResponse } from "./components/http/ConfirmLargeResponse";
+export type { PrettyView } from "./components/http/BodyViewModeSwitch";
+export {
+  BodyViewModeSwitch,
+  prettyViewFor,
+  viewModeLabels,
+} from "./components/http/BodyViewModeSwitch";
+export { ConfirmLargeResponse, LARGE_BODY_BYTES } from "./components/http/ConfirmLargeResponse";
 export { FormMultipartEditor } from "./components/http/FormMultipartEditor";
 export { FormUrlencodedEditor } from "./components/http/FormUrlencodedEditor";
 export { HeadersEditor } from "./components/http/HeadersEditor";
@@ -125,6 +132,8 @@ export type { SelectProps } from "./components/Select";
 export { Select } from "./components/Select";
 export type { ErrorBoundaryProps } from "./components/ErrorBoundary";
 export { ErrorBoundary } from "./components/ErrorBoundary";
+export type { FormattableEditor } from "./components/FormatAction";
+export { FormatAction, formatEditor } from "./components/FormatAction";
 export { FormattedError } from "./components/FormattedError";
 export { HeaderSize } from "./components/HeaderSize";
 export type { HeadersTableProps } from "./components/HeadersTable";
@@ -147,6 +156,8 @@ export { Overlay } from "./components/Overlay";
 export type { PlainInputProps } from "./components/PlainInput";
 export { PlainInput } from "./components/PlainInput";
 export { Portal } from "./components/Portal";
+export type { SegmentedControlOption, SegmentedControlProps } from "./components/SegmentedControl";
+export { SegmentedControl } from "./components/SegmentedControl";
 export type { SeparatorAction } from "./components/Separator";
 export { Separator } from "./components/Separator";
 export type { SettingRowBaseProps, SettingSnippetLanguage } from "./components/settings/SettingRow";
