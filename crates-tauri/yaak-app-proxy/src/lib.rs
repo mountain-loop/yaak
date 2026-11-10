@@ -90,8 +90,11 @@ fn bundled_protoc<R: Runtime>(app: &tauri::AppHandle<R>) -> Option<yaak_proxy_li
 
 /// The main window's label.
 const MAIN_WINDOW_LABEL: &str = "main_0";
-/// The Settings window's label, by which its page renders the settings alone.
-const SETTINGS_WINDOW_LABEL: &str = "settings";
+/// The name the Settings window is opened under, and the key its size and position are kept by.
+const SETTINGS_WINDOW_NAME: &str = "settings";
+/// The Settings window's label, by which its page renders the settings alone: its name with the
+/// prefix the shared code gives each child window, as Yaak's Settings window has.
+const SETTINGS_WINDOW_LABEL: &str = "other__settings";
 /// The event that moves an open Settings window to another tab.
 const SETTINGS_TAB_EVENT: &str = "settings_tab";
 /// The Settings window's size, as Yaak's.
@@ -105,8 +108,10 @@ fn settings_tab_script(tab: &str) -> String {
     format!("window.__YAAK_SETTINGS_TAB__ = {tab};")
 }
 
-/// Opens Settings in its own window on `tab`, or, when it is open, brings it forward and moves
-/// it to `tab` if one is given.
+/// Opens Settings on `tab` in a child of the main window, or, when it is open, brings it forward
+/// and moves it to `tab` if one is given. As Yaak's, the child sits over the middle of the main
+/// window the first time and where it was left after; it stays in front, taking focus back when
+/// the main window is clicked, and closes with it.
 #[tauri::command]
 async fn cmd_open_settings(
     app_handle: tauri::AppHandle,
@@ -124,51 +129,23 @@ async fn cmd_open_settings(
         return Ok(());
     }
 
-    // Over the middle of the main window the first time, as Yaak's; after that, where it was left
-    let position = app_handle
+    let main = app_handle
         .get_webview_window(MAIN_WINDOW_LABEL)
-        .and_then(|main| centered_over(&main, SETTINGS_WINDOW_SIZE).ok());
-    let config = CreateWindowConfig {
-        url: "/",
-        label: SETTINGS_WINDOW_LABEL,
-        title: "Yaak Proxy Settings",
-        inner_size: Some(SETTINGS_WINDOW_SIZE),
-        position,
-        initialization_script: tab.as_deref().map(settings_tab_script),
-        hidden: true,
-        hide_titlebar: true,
-        ..Default::default()
-    };
-    let win = yaak_window::window::create_window(&app_handle, config).map_err(|e| e.to_string())?;
+        .ok_or("The main window is not open to open Settings over")?;
+    let win = yaak_window::window::create_child_window(
+        &main,
+        "/",
+        SETTINGS_WINDOW_NAME,
+        "Yaak Proxy Settings",
+        SETTINGS_WINDOW_SIZE,
+        tab.as_deref().map(settings_tab_script),
+        false,
+    )
+    .map_err(|e| e.to_string())?;
     let (width, height) = SETTINGS_WINDOW_MIN_SIZE;
     win.set_min_size(Some(tauri::LogicalSize::new(width, height))).map_err(|e| e.to_string())?;
     handle_menu_events(&win);
     Ok(())
-}
-
-/// Where a window of `size` sits centred over `parent`, in logical pixels.
-fn centered_over<R: Runtime>(
-    parent: &WebviewWindow<R>,
-    (width, height): (f64, f64),
-) -> tauri::Result<(f64, f64)> {
-    let scale = parent.scale_factor()?;
-    let pos = parent.inner_position()?.to_logical::<f64>(scale);
-    let size = parent.inner_size()?.to_logical::<f64>(scale);
-    Ok((pos.x + (size.width - width) / 2.0, pos.y + (size.height - height) / 2.0))
-}
-
-/// Closing the main window closes Settings with it, which would otherwise keep the app open
-/// with nothing to set.
-fn close_settings_with<R: Runtime>(main: &WebviewWindow<R>) {
-    let app_handle = main.app_handle().clone();
-    main.on_window_event(move |event| {
-        if let tauri::WindowEvent::CloseRequested { .. } = event
-            && let Some(settings) = app_handle.get_webview_window(SETTINGS_WINDOW_LABEL)
-            && let Err(e) = settings.close()
-        {
-            warn!("Failed to close the settings window: {e}");
-        }
-    });
 }
 
 #[tauri::command]
@@ -262,10 +239,7 @@ pub fn run() {
                     ..Default::default()
                 };
                 match yaak_window::window::create_window(app_handle, config) {
-                    Ok(win) => {
-                        setup_window_menu(&win);
-                        close_settings_with(&win);
-                    }
+                    Ok(win) => setup_window_menu(&win),
                     Err(e) => error!("Failed to create proxy window: {e:?}"),
                 }
             }
@@ -331,6 +305,18 @@ mod tests {
         for needed in ["core:default", "core:window:allow-close"] {
             assert!(permissions.contains(&needed), "{needed} missing from {permissions:?}");
         }
+    }
+
+    /// The page knows the Settings window by the label the shared code gives a child window
+    /// opened under its name, or it would render the whole app in it.
+    #[test]
+    fn the_page_knows_the_settings_window_by_its_label() {
+        assert_eq!(SETTINGS_WINDOW_LABEL, format!("other__{SETTINGS_WINDOW_NAME}"));
+        let windows = include_str!("../../../apps/yaak-proxy/lib/windows.ts");
+        assert!(
+            windows.contains(&format!("SETTINGS_WINDOW_LABEL = \"{SETTINGS_WINDOW_LABEL}\"")),
+            "the page's Settings window label is not {SETTINGS_WINDOW_LABEL}"
+        );
     }
 
     /// The tab reaches the new window's page as a string literal, whatever it holds.

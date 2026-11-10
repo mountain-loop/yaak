@@ -1,5 +1,8 @@
-/** The Settings window's label, which `cmd_open_settings` gives it */
-export const SETTINGS_WINDOW_LABEL = "settings";
+/**
+ * The Settings window's label, which `cmd_open_settings` gives it: opened as a child of the
+ * main window, as Yaak's, it takes the prefix the shared window code gives child windows
+ */
+export const SETTINGS_WINDOW_LABEL = "other__settings";
 
 /** The event that moves an open Settings window to another tab */
 export const SETTINGS_TAB_EVENT = "settings_tab";

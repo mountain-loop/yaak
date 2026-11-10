@@ -3,7 +3,7 @@ import { openSettingsVia, requestedSettingsTab, windowKind } from "./windows";
 
 describe("windowKind", () => {
   test("the Settings window holds the settings", () => {
-    expect(windowKind("settings")).toBe("settings");
+    expect(windowKind("other__settings")).toBe("settings");
   });
 
   test("a main window holds the app", () => {
@@ -13,6 +13,7 @@ describe("windowKind", () => {
 
   test("a page outside the app's windows holds the app on its own", () => {
     expect(windowKind("harness")).toBe("page");
+    expect(windowKind("settings")).toBe("page");
     expect(windowKind("settings_0")).toBe("page");
     expect(windowKind("")).toBe("page");
   });

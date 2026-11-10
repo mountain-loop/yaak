@@ -33,9 +33,9 @@ describe("windowSync", () => {
   });
 
   test("a change is announced as coming from this window", () => {
-    tauri.label = "settings";
+    tauri.label = "other__settings";
     announceEngineChange();
-    expect(tauri.sent).toEqual([{ event: "window_changed_engine", payload: { from: "settings" } }]);
+    expect(tauri.sent).toEqual([{ event: "window_changed_engine", payload: { from: "other__settings" } }]);
   });
 
   test("a change in another window reads the state and the settings' queries again", () => {
@@ -44,7 +44,7 @@ describe("windowSync", () => {
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");
     syncFromOtherWindows(store, queryClient);
 
-    tauri.handlers.get("window_changed_engine")?.({ from: "settings" });
+    tauri.handlers.get("window_changed_engine")?.({ from: "other__settings" });
 
     expect(refreshProxyState).toHaveBeenCalledWith(store);
     expect(invalidate).toHaveBeenCalledTimes(1);
