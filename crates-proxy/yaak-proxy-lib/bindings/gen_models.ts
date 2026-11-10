@@ -148,6 +148,37 @@ graphqlOperation: string | null,
  */
 tunnelled: boolean, 
 /**
+ * Why a tunnelled flow was not decrypted. None for other flows, and for tunnels recorded
+ * before the reason was.
+ */
+tunnelReason: TunnelReason | null, 
+/**
+ * For a tunnel the decrypt list excluded, the exclusion that kept it out, as stored:
+ * `!host:*.apple.com`.
+ */
+tunnelExcludedBy: string | null, 
+/**
+ * That exclusion is one of the built-in ones.
+ */
+tunnelExcludedBuiltIn: boolean, 
+/**
+ * For a tunnel passed through after a client rejected the proxy's certificate, the id of
+ * the flow of that refused handshake, when it was recorded.
+ */
+tunnelRejectedBy: string | null, 
+/**
+ * The proxy closed this tunnel on request, so its client would reconnect.
+ */
+reconnectRequested: boolean, 
+/**
+ * A client's refused TLS handshake, recorded as its host and port began to be passed
+ * through: how it refused, its alert (`unknown_ca`, `bad_certificate`,
+ * `certificate_unknown`, ...) or `hang_up`. Such a flow has no method, its URL is
+ * `https://<authority>`, and its error says it rejected the certificate. A handshake that
+ * failed otherwise is recorded the same way with this None and the failure as its error.
+ */
+tlsRejected: string | null, 
+/**
  * An agent read the flow through the control API: its detail, a body or its messages.
  * Never written by an upsert, which keeps what is stored.
  */
@@ -291,3 +322,8 @@ key: string, matches: boolean, };
  * The streaming protocol a flow carries.
  */
 export type StreamKind = "websocket" | "sse" | "grpc" | "grpc_web";
+
+/**
+ * Why a tunnel was passed through undecrypted.
+ */
+export type TunnelReason = "not_listed" | "excluded" | "rejected";

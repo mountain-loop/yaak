@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use ts_rs::TS;
-use yaak_proxy::{BUILT_IN_EXCLUSIONS, DEFAULT_CAPTURE_BODY_LIMIT, DecryptEntry, DecryptPolicy};
+use yaak_proxy::{
+    BUILT_IN_EXCLUSIONS, BuiltInKind, DEFAULT_CAPTURE_BODY_LIMIT, DecryptEntry, DecryptPolicy,
+};
 
 /// `settings.json` in the proxy data directory. Missing keys take their defaults.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,6 +71,30 @@ pub struct DecryptListEntry {
     pub entry: String,
     /// Shipped with the app: an exclusion of Apple's services or a pinned app's hosts.
     pub built_in: bool,
+    /// Why a built-in exclusion ships. None for the user's own entries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub kind: Option<ExclusionKind>,
+}
+
+/// Why a built-in exclusion ships.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub enum ExclusionKind {
+    /// Apple's own services, which macOS daemons reach with pinned certificates.
+    Apple,
+    /// The hosts of an app that pins its certificates.
+    Pinned,
+}
+
+impl From<BuiltInKind> for ExclusionKind {
+    fn from(kind: BuiltInKind) -> Self {
+        match kind {
+            BuiltInKind::Apple => Self::Apple,
+            BuiltInKind::Pinned => Self::Pinned,
+        }
+    }
 }
 
 /// What HTTPS is decrypted: the user's entries in order, then the built-in exclusions not
@@ -115,12 +141,19 @@ impl ProxySettings {
 
     /// The user's entries, then the built-in exclusions they kept.
     pub fn decrypt_list(&self) -> DecryptList {
-        let user =
-            self.decrypt.iter().map(|e| DecryptListEntry { entry: e.clone(), built_in: false });
+        let user = self.decrypt.iter().map(|e| DecryptListEntry {
+            entry: e.clone(),
+            built_in: false,
+            kind: None,
+        });
         let built_in = BUILT_IN_EXCLUSIONS
             .iter()
-            .filter(|e| !self.decrypt_built_ins_removed.iter().any(|r| r == *e))
-            .map(|e| DecryptListEntry { entry: e.to_string(), built_in: true });
+            .filter(|(e, _)| !self.decrypt_built_ins_removed.iter().any(|r| r == e))
+            .map(|(e, kind)| DecryptListEntry {
+                entry: e.to_string(),
+                built_in: true,
+                kind: Some((*kind).into()),
+            });
         DecryptList { entries: user.chain(built_in).collect() }
     }
 
@@ -142,8 +175,8 @@ impl ProxySettings {
         self.decrypt = user;
         self.decrypt_built_ins_removed = BUILT_IN_EXCLUSIONS
             .iter()
-            .filter(|e| !kept_built_ins.iter().any(|k| k == *e))
-            .map(|e| e.to_string())
+            .filter(|(e, _)| !kept_built_ins.iter().any(|k| k == e))
+            .map(|(e, _)| e.to_string())
             .collect();
         Ok(())
     }
@@ -346,7 +379,10 @@ mod tests {
         ];
         // Every built-in exclusion but zoom.us, kept.
         entries.extend(
-            BUILT_IN_EXCLUSIONS.iter().filter(|e| **e != "!host:*.zoom.us").map(|e| e.to_string()),
+            BUILT_IN_EXCLUSIONS
+                .iter()
+                .filter(|(e, _)| *e != "!host:*.zoom.us")
+                .map(|(e, _)| e.to_string()),
         );
         settings.set_decrypt_list(&entries).unwrap();
         assert_eq!(settings.decrypt, ["host:api.example.com", "*", "app:Google Chrome"]);
@@ -354,9 +390,13 @@ mod tests {
         let list = settings.decrypt_list();
         assert_eq!(
             list.entries[0],
-            DecryptListEntry { entry: "host:api.example.com".into(), built_in: false }
+            DecryptListEntry { entry: "host:api.example.com".into(), built_in: false, kind: None }
         );
         assert!(list.entries[3].built_in);
+        assert_eq!(list.entries[3].entry, "!host:*.apple.com");
+        assert_eq!(list.entries[3].kind, Some(ExclusionKind::Apple));
+        let onepassword = list.entries.iter().find(|e| e.entry == "!host:*.1password.com");
+        assert_eq!(onepassword.unwrap().kind, Some(ExclusionKind::Pinned));
         assert!(!list.entries.iter().any(|e| e.entry == "!host:*.zoom.us"));
 
         // Written again, a built-in exclusion is restored.

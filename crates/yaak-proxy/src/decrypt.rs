@@ -14,28 +14,51 @@
 
 use std::fmt;
 
-/// Hosts excluded by default: Apple's own services, which macOS daemons reach with pinned
-/// certificates, and the sync hosts of common apps that pin theirs. Each is removable.
-pub const BUILT_IN_EXCLUSIONS: &[&str] = &[
-    "!host:*.apple.com",
-    "!host:*.icloud.com",
-    "!host:*.mzstatic.com",
-    "!host:*.apple-cloudkit.com",
-    "!host:*.icloud-content.com",
-    "!host:*.cdn-apple.com",
+/// Why a built-in exclusion ships: Apple's own services, which macOS daemons reach with pinned
+/// certificates, or the sync hosts of a common app that pins its certificates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BuiltInKind {
+    Apple,
+    Pinned,
+}
+
+impl BuiltInKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Apple => "apple",
+            Self::Pinned => "pinned",
+        }
+    }
+}
+
+/// Hosts excluded by default, each with why: Apple's own services, and the sync hosts of common
+/// apps that pin their certificates. Each is removable.
+pub const BUILT_IN_EXCLUSIONS: &[(&str, BuiltInKind)] = &[
+    ("!host:*.apple.com", BuiltInKind::Apple),
+    ("!host:*.icloud.com", BuiltInKind::Apple),
+    ("!host:*.mzstatic.com", BuiltInKind::Apple),
+    ("!host:*.apple-cloudkit.com", BuiltInKind::Apple),
+    ("!host:*.icloud-content.com", BuiltInKind::Apple),
+    ("!host:*.cdn-apple.com", BuiltInKind::Apple),
     // Push and FaceTime, kept apart so they stay excluded without the rest of apple.com.
-    "!host:*.push.apple.com",
-    "!host:*.ess.apple.com",
-    "!host:*.1password.com",
-    "!host:*.1password.ca",
-    "!host:*.1password.eu",
-    "!host:*.signal.org",
-    "!host:*.whispersystems.org",
-    "!host:*.dropboxapi.com",
-    "!host:client*.dropbox.com",
-    "!host:bolt.dropbox.com",
-    "!host:*.zoom.us",
+    ("!host:*.push.apple.com", BuiltInKind::Apple),
+    ("!host:*.ess.apple.com", BuiltInKind::Apple),
+    ("!host:*.1password.com", BuiltInKind::Pinned),
+    ("!host:*.1password.ca", BuiltInKind::Pinned),
+    ("!host:*.1password.eu", BuiltInKind::Pinned),
+    ("!host:*.signal.org", BuiltInKind::Pinned),
+    ("!host:*.whispersystems.org", BuiltInKind::Pinned),
+    ("!host:*.dropboxapi.com", BuiltInKind::Pinned),
+    ("!host:client*.dropbox.com", BuiltInKind::Pinned),
+    ("!host:bolt.dropbox.com", BuiltInKind::Pinned),
+    ("!host:*.zoom.us", BuiltInKind::Pinned),
 ];
+
+/// The kind of the built-in exclusion `entry` is, as stored (`!host:*.apple.com`), or None when
+/// it is not one.
+pub fn built_in_kind(entry: &str) -> Option<BuiltInKind> {
+    BUILT_IN_EXCLUSIONS.iter().find(|(e, _)| *e == entry).map(|(_, kind)| *kind)
+}
 
 /// What an entry matches.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,7 +106,7 @@ impl DecryptEntry {
             parse_host(host).ok_or_else(|| format!("Invalid host in decrypt entry {input:?}"))?
         };
         let mut entry = Self { negated, target, built_in: false };
-        entry.built_in = BUILT_IN_EXCLUSIONS.contains(&entry.to_string().as_str());
+        entry.built_in = built_in_kind(&entry.to_string()).is_some();
         Ok(entry)
     }
 
@@ -252,6 +275,12 @@ impl DecryptPolicy {
     /// Whether to decrypt `conn`: a positive entry matches and no negative one excludes it. A
     /// built-in exclusion yields to a positive entry at least as specific as itself.
     pub fn decrypts(&self, conn: &DecryptQuery) -> bool {
+        self.judge(conn) == Verdict::Decrypt
+    }
+
+    /// [`Self::decrypts`], saying why not: no positive entry matches, or an exclusion keeps it
+    /// out, the first in the list that does.
+    pub fn judge(&self, conn: &DecryptQuery) -> Verdict {
         let Some(best) = self
             .entries
             .iter()
@@ -259,12 +288,34 @@ impl DecryptPolicy {
             .map(DecryptEntry::specificity)
             .max()
         else {
-            return false;
+            return Verdict::NotListed;
         };
-        !self
+        match self
             .entries
             .iter()
-            .any(|e| e.negated && e.matches(conn) && (!e.built_in || e.specificity() > best))
+            .find(|e| e.negated && e.matches(conn) && (!e.built_in || e.specificity() > best))
+        {
+            Some(exclusion) => Verdict::Excluded(exclusion.clone()),
+            None => Verdict::Decrypt,
+        }
+    }
+}
+
+/// What the policy makes of a connection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Verdict {
+    Decrypt,
+    /// No positive entry matches it.
+    NotListed,
+    /// A positive entry matches it, and this exclusion keeps it out.
+    Excluded(DecryptEntry),
+}
+
+impl DecryptEntry {
+    /// Whether the entry names `conn`, read without its `!`: the connections it decrypts, or,
+    /// for an exclusion, the ones it keeps out.
+    pub fn covers(&self, conn: &DecryptQuery) -> bool {
+        self.matches(conn)
     }
 }
 
@@ -287,7 +338,7 @@ mod tests {
 
     fn with_built_ins(entries: &[&str]) -> DecryptPolicy {
         let mut all: Vec<&str> = entries.to_vec();
-        all.extend(BUILT_IN_EXCLUSIONS);
+        all.extend(BUILT_IN_EXCLUSIONS.iter().map(|(e, _)| *e));
         policy(&all)
     }
 
@@ -385,9 +436,52 @@ mod tests {
     }
 
     #[test]
+    fn the_verdict_says_why_not() {
+        let p = with_built_ins(&["*", "!host:secret.example.com"]);
+        assert_eq!(p.judge(&to("api.example.com", 443)), Verdict::Decrypt);
+        let Verdict::Excluded(by) = p.judge(&to("secret.example.com", 443)) else {
+            panic!("not excluded");
+        };
+        assert_eq!((by.to_string().as_str(), by.built_in), ("!host:secret.example.com", false));
+        let Verdict::Excluded(by) = p.judge(&to("gateway.icloud.com", 443)) else {
+            panic!("not excluded");
+        };
+        assert_eq!((by.to_string().as_str(), by.built_in), ("!host:*.icloud.com", true));
+        assert_eq!(with_built_ins(&["host:a.com"]).judge(&to("b.com", 443)), Verdict::NotListed);
+        assert_eq!(policy(&[]).judge(&to("b.com", 443)), Verdict::NotListed);
+    }
+
+    #[test]
+    fn built_in_kinds() {
+        assert_eq!(built_in_kind("!host:*.apple.com"), Some(BuiltInKind::Apple));
+        assert_eq!(built_in_kind("!host:*.1password.com"), Some(BuiltInKind::Pinned));
+        assert_eq!(built_in_kind("!host:*.example.com"), None);
+        assert_eq!(built_in_kind("host:*.apple.com"), None);
+        // Every one parses back to itself and reads as built in.
+        for (entry, _) in BUILT_IN_EXCLUSIONS {
+            let parsed = DecryptEntry::parse(entry).unwrap();
+            assert!(parsed.built_in && parsed.negated, "{entry}");
+            assert_eq!(parsed.to_string(), *entry);
+        }
+    }
+
+    #[test]
+    fn an_entry_covers_what_it_names_either_way() {
+        let exclusion = DecryptEntry::parse("!host:*.chase.com").unwrap();
+        assert!(exclusion.covers(&to("www.chase.com", 443)));
+        assert!(!exclusion.covers(&to("www.example.com", 443)));
+        let app = DecryptEntry::parse("app:Dia").unwrap();
+        assert!(app.covers(&from_app("a.com", "Dia", None)));
+        assert!(!app.covers(&to("a.com", 443)));
+    }
+
+    #[test]
     fn a_removed_exclusion_no_longer_applies() {
-        let kept: Vec<&str> =
-            BUILT_IN_EXCLUSIONS.iter().copied().filter(|e| *e != "!host:*.zoom.us").collect();
+        let kept: Vec<&str> = BUILT_IN_EXCLUSIONS
+            .iter()
+            .map(|(e, _)| *e)
+            .filter(|e| *e != "!host:*.zoom.us")
+            .collect();
         let mut entries = vec!["*"];
         entries.extend(kept);
         let p = policy(&entries);

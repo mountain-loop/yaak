@@ -28,12 +28,13 @@ use tokio_rustls::{LazyConfigAcceptor, TlsConnector};
 
 use crate::body::{BodyParser, CaptureBody, Direction};
 use crate::connection::serve_tls;
+use crate::decrypt::Verdict;
 use crate::grpc::{self, GrpcParser};
 use crate::messages::{MessageDirection, StreamKind};
 use crate::sse::SseParser;
 use crate::tunnel::{Counted, Rewind, is_own_connection, splice, tunnel};
 use crate::ws::{self, WsFlow};
-use crate::{ClientConn, Engine, ProxyEvent};
+use crate::{ClientConn, Engine, ProxyEvent, TunnelReason};
 
 pub(crate) type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
 type BoxError = Box<dyn Error + Send + Sync>;
@@ -436,13 +437,23 @@ async fn intercept<S>(
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    if !engine.decrypts(&target.server_name, target.port, conn.connection).await {
-        debug!("Tunneling {} undecrypted, as the decrypt list leaves it out", target.addr);
-        return Ok(tunnel_flow(client, &target, conn, &engine).await?);
+    match engine.verdict(&target.server_name, target.port, conn.connection).await {
+        Verdict::Decrypt => {}
+        Verdict::NotListed => {
+            debug!("Tunneling {} undecrypted, as the decrypt list leaves it out", target.addr);
+            return Ok(tunnel_flow(client, &target, conn, &engine, TunnelReason::NotListed).await?);
+        }
+        Verdict::Excluded(entry) => {
+            debug!("Tunneling {} undecrypted, as {entry} excludes it", target.addr);
+            let reason =
+                TunnelReason::Excluded { entry: entry.to_string(), built_in: entry.built_in };
+            return Ok(tunnel_flow(client, &target, conn, &engine, reason).await?);
+        }
     }
     // The fallback for clients that rejected the engine's certificate.
-    if engine.is_passthrough(&target.addr) {
-        return Ok(tunnel_flow(client, &target, conn, &engine).await?);
+    if let Some(rejected_by) = engine.passthrough_of(&target.addr) {
+        let reason = TunnelReason::Rejected { rejected_by };
+        return Ok(tunnel_flow(client, &target, conn, &engine, reason).await?);
     }
 
     let mut buf = vec![0u8; 4096];
@@ -461,6 +472,7 @@ where
         return Ok(tunnel(client, &target.addr, &buf).await?);
     }
 
+    let attempt = HandshakeAttempt { started_at: SystemTime::now(), start: Instant::now() };
     let acceptor = rustls::server::Acceptor::default();
     let start = LazyConfigAcceptor::new(acceptor, Rewind::new(Bytes::from(buf), client)).await?;
     let server_name = start
@@ -472,7 +484,11 @@ where
     let mut tls = match start.into_stream(config).await {
         Ok(tls) => tls,
         Err(e) => {
-            record_handshake_failure(&engine, &target.addr, is_certificate_rejection(&e), &e);
+            let rejection = certificate_rejection(&e)
+                .map(String::from)
+                .or_else(|| is_hang_up(&e).then(|| HANG_UP.to_string()));
+            let alert = certificate_rejection(&e).is_some();
+            record_handshake_failure(&engine, &target, conn, &attempt, alert, rejection, &e);
             return Ok(());
         }
     };
@@ -484,7 +500,8 @@ where
     let n = match tls.read(&mut buf).await {
         Ok(n) => n,
         Err(e) if is_hang_up(&e) => {
-            record_handshake_failure(&engine, &target.addr, false, &e);
+            let rejection = Some(HANG_UP.to_string());
+            record_handshake_failure(&engine, &target, conn, &attempt, false, rejection, &e);
             return Ok(());
         }
         Err(e) => return Err(e.into()),
@@ -509,6 +526,7 @@ async fn tunnel_flow<S>(
     target: &Target,
     conn: ClientConn,
     engine: &Engine,
+    reason: TunnelReason,
 ) -> std::io::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin,
@@ -518,16 +536,27 @@ where
     }
     let id = engine.next_flow_id();
     let start = Instant::now();
+    // Registered before its start is announced, so it can be closed as soon as it is known.
+    let (close_tx, close_rx) = tokio::sync::oneshot::channel();
+    engine.tunnels.lock().unwrap().insert(id, close_tx);
     engine.emit(ProxyEvent::TunnelStart {
         id,
         started_at: SystemTime::now(),
         authority: target.authority.clone(),
+        host: target.server_name.clone(),
+        port: target.port,
         connection: conn.connection,
         client_addr: conn.addr,
+        reason,
     });
     let client = Counted::new(client);
     let (sent, received) = client.counters();
-    let result = tunnel(client, &target.addr, &[]).await;
+    // Closed on request: dropping the relay closes both sides.
+    let (result, reconnect_requested) = tokio::select! {
+        result = tunnel(client, &target.addr, &[]) => (result, false),
+        _ = close_rx => (Ok(()), true),
+    };
+    engine.tunnels.lock().unwrap().remove(&id);
     let (sent, received) = (sent.load(Ordering::Relaxed), received.load(Ordering::Relaxed));
     // A tunnel that carried the server's bytes and then broke ended as connections do; one that
     // never did failed to reach the server.
@@ -541,17 +570,43 @@ where
         received,
         elapsed_ms: start.elapsed().as_millis() as u64,
         error,
+        reconnect_requested,
     });
     result
 }
 
+/// When a client's TLS handshake with the engine began.
+struct HandshakeAttempt {
+    started_at: SystemTime,
+    start: Instant,
+}
+
+/// How a client that hangs up on the engine's handshake is recorded as rejecting it.
+const HANG_UP: &str = "hang_up";
+
+/// Counts a failed handshake toward passing the address through, and, when this one starts
+/// passing it through, records the failure as a flow of its own.
 fn record_handshake_failure(
     engine: &Engine,
-    addr: &str,
-    certificate_rejected: bool,
+    target: &Target,
+    conn: ClientConn,
+    attempt: &HandshakeAttempt,
+    certificate_alert: bool,
+    rejection: Option<String>,
     e: &std::io::Error,
 ) {
-    if engine.record_handshake_failure(addr, certificate_rejected) {
+    let addr = &target.addr;
+    let failed = |id| ProxyEvent::HandshakeFailed {
+        id,
+        started_at: attempt.started_at,
+        authority: target.authority.clone(),
+        connection: conn.connection,
+        client_addr: conn.addr,
+        rejection,
+        error: error_chain(e),
+        elapsed_ms: attempt.start.elapsed().as_millis() as u64,
+    };
+    if engine.record_handshake_failure(addr, certificate_alert, failed) {
         info!("Client rejected the proxy for {addr}, passing it through: {e}");
     } else {
         debug!("TLS handshake with client failed for {addr}: {e}");
@@ -564,22 +619,27 @@ fn is_hang_up(e: &std::io::Error) -> bool {
     matches!(e.kind(), UnexpectedEof | ConnectionReset | ConnectionAborted)
 }
 
-fn is_certificate_rejection(e: &std::io::Error) -> bool {
+/// The alert a client sent rejecting the engine's certificate, by its name in the TLS spec, or
+/// None when `e` is not such an alert.
+fn certificate_rejection(e: &std::io::Error) -> Option<&'static str> {
     use rustls::AlertDescription::{
         BadCertificate, CertificateExpired, CertificateRevoked, CertificateUnknown, UnknownCA,
         UnsupportedCertificate,
     };
-    matches!(
-        e.get_ref().and_then(|inner| inner.downcast_ref::<rustls::Error>()),
-        Some(rustls::Error::AlertReceived(
-            BadCertificate
-                | UnsupportedCertificate
-                | CertificateRevoked
-                | CertificateExpired
-                | CertificateUnknown
-                | UnknownCA
-        ))
-    )
+    let Some(rustls::Error::AlertReceived(alert)) =
+        e.get_ref().and_then(|inner| inner.downcast_ref::<rustls::Error>())
+    else {
+        return None;
+    };
+    Some(match alert {
+        BadCertificate => "bad_certificate",
+        UnsupportedCertificate => "unsupported_certificate",
+        CertificateRevoked => "certificate_revoked",
+        CertificateExpired => "certificate_expired",
+        CertificateUnknown => "certificate_unknown",
+        UnknownCA => "unknown_ca",
+        _ => return None,
+    })
 }
 
 enum Upstream {

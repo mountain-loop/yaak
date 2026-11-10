@@ -1,7 +1,7 @@
 use crate::bodies;
 use crate::db::{ProxyQueryManager, Stores};
 use crate::models::{Flow, FlowBody};
-use crate::query::{FlowColumns, FlowQuery};
+use crate::query::{FlowColumns, FlowQuery, Hidden};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use rusqlite::types::Value;
@@ -23,6 +23,10 @@ pub struct FlowFilter {
     /// `@is:system` itself.
     #[ts(optional, as = "Option<bool>")]
     pub hide_system: bool,
+    /// Leaves out HTTPS connections passed through undecrypted, as hiding Encrypted does,
+    /// unless the query says `@is:encrypted` itself.
+    #[ts(optional, as = "Option<bool>")]
+    pub hide_encrypted: bool,
     /// At most this many flows, the newest.
     #[ts(optional, type = "number")]
     pub limit: Option<usize>,
@@ -338,7 +342,8 @@ impl FlowFilter {
         Self { query: Some(query.into()), ..Self::default() }
     }
 
-    /// The filter from a query string's `query`, `hide_system`, `limit`, `after` and `before`.
+    /// The filter from a query string's `query`, `hide_system`, `hide_encrypted`, `limit`,
+    /// `after` and `before`.
     pub fn from_query(query: &str) -> Result<Self, String> {
         let mut filter = Self::default();
         for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
@@ -348,6 +353,12 @@ impl FlowFilter {
                 "hide_system" => {
                     filter.hide_system = value
                         .map(|v| v.parse().map_err(|_| format!("Invalid hide_system {v:?}")))
+                        .transpose()?
+                        .unwrap_or_default()
+                }
+                "hide_encrypted" => {
+                    filter.hide_encrypted = value
+                        .map(|v| v.parse().map_err(|_| format!("Invalid hide_encrypted {v:?}")))
                         .transpose()?
                         .unwrap_or_default()
                 }
@@ -368,9 +379,11 @@ impl FlowFilter {
         let mut query = url::form_urlencoded::Serializer::new(String::new());
         let limit = self.limit.map(|l| l.to_string());
         let hide_system = self.hide_system.then(|| "true".to_string());
+        let hide_encrypted = self.hide_encrypted.then(|| "true".to_string());
         for (key, value) in [
             ("query", &self.query),
             ("hide_system", &hide_system),
+            ("hide_encrypted", &hide_encrypted),
             ("limit", &limit),
             ("after", &self.after),
             ("before", &self.before),
@@ -384,7 +397,12 @@ impl FlowFilter {
 
     /// The search, prepared to run now.
     pub fn flow_query(&self) -> FlowQuery {
-        FlowQuery::new(self.query.as_deref().unwrap_or_default(), self.hide_system)
+        FlowQuery::new(self.query.as_deref().unwrap_or_default(), self.hidden())
+    }
+
+    /// What the filter leaves out unless its query names it.
+    pub fn hidden(&self) -> Hidden {
+        Hidden { system: self.hide_system, encrypted: self.hide_encrypted }
     }
 
     /// Narrows more than `after`, `before` and `limit` do, so it covers fewer than all flows.
@@ -1867,6 +1885,67 @@ mod tests {
         assert_eq!(hidden("@host:*.github.com OR @is:SYSTEM"), vec!["fl_daemon", "fl_node"]);
     }
 
+    /// Hiding encrypted connections leaves them out of the list and its count, the totals the
+    /// sidebar reads, and saved searches' counts, unless the search names them.
+    #[test]
+    fn hides_encrypted_connections() {
+        let dir = tempfile::tempdir().unwrap();
+        let db =
+            ProxyQueryManager::new(&dir.path().join("proxy.db"), &crate::db::test_key()).unwrap();
+        let flow = |id: &str, url: &str, tunnelled: bool, path: Option<&str>| Flow {
+            id: id.into(),
+            url: url.into(),
+            method: if tunnelled { "CONNECT" } else { "GET" }.into(),
+            tunnelled,
+            client_path: path.map(String::from),
+            ..Default::default()
+        };
+        for f in [
+            flow("fl_get", "https://api.example.com/v1", false, None),
+            flow("fl_tunnel", "https://bank.example.com", true, None),
+            flow("fl_daemon_tunnel", "https://p01.icloud.com", true, Some("/usr/libexec/trustd")),
+        ] {
+            db.with_tx(|tx| tx.upsert(&f, &yaak_database::UpdateSource::Background)).unwrap();
+        }
+        let filter = |query: &str, hide_system: bool| FlowFilter {
+            hide_encrypted: true,
+            hide_system,
+            ..FlowFilter::search(query)
+        };
+        let ids = |filter: FlowFilter| -> Vec<String> {
+            let mut ids: Vec<String> =
+                list(&db, &filter).unwrap().into_iter().map(|f| f.id).collect();
+            ids.sort();
+            ids
+        };
+        assert_eq!(ids(filter("", false)), vec!["fl_get"]);
+        assert_eq!(ids(filter("example", false)), vec!["fl_get"]);
+        assert_eq!(ids(filter("@is:encrypted", false)), vec!["fl_daemon_tunnel", "fl_tunnel"]);
+        assert_eq!(ids(filter("@is:encrypted", true)), vec!["fl_tunnel"]);
+        assert_eq!(ids(filter("@is:tunnelled", false)).len(), 2);
+
+        // The totals: everything stored, and what shows with encrypted connections hidden.
+        let page = sorted_page(&db, &FlowFilter { limit: Some(0), ..filter("", false) }).unwrap();
+        assert_eq!((page.total, page.matching), (3, Some(1)));
+        let page = sorted_page(&db, &FlowFilter::default()).unwrap();
+        assert_eq!((page.total, page.matching), (3, None));
+        assert!(FlowFilter { hide_encrypted: true, ..Default::default() }.narrows());
+        assert_eq!(
+            count_each(&db, &[filter("", false), filter("@is:encrypted", true)]).unwrap(),
+            [1, 1]
+        );
+
+        // Saved searches count as the list would show them.
+        let all = crate::saved_queries::create(&db, "All HTTPS", "@scheme:https").unwrap();
+        let count = |hidden: Hidden| {
+            let counts = crate::saved_queries::counts(&db, hidden).unwrap();
+            counts.into_iter().find(|c| c.id == all.id).unwrap().count
+        };
+        assert_eq!(count(Hidden::default()), 3);
+        assert_eq!(count(Hidden { system: false, encrypted: true }), 1);
+        assert_eq!(count(Hidden { system: true, encrypted: false }), 2);
+    }
+
     #[test]
     fn tells_system_daemons_apart() {
         assert!(is_system(None, Some("/usr/libexec/nsurlsessiond")));
@@ -1897,6 +1976,13 @@ mod tests {
         };
         assert_eq!(filter.to_query(), "query=post+%40status%3A4xx&hide_system=true&limit=20");
         assert_eq!(FlowFilter::from_query(&filter.to_query()).unwrap(), filter);
+        let filter = FlowFilter { hide_encrypted: true, ..filter };
+        assert_eq!(
+            filter.to_query(),
+            "query=post+%40status%3A4xx&hide_system=true&hide_encrypted=true&limit=20"
+        );
+        assert_eq!(FlowFilter::from_query(&filter.to_query()).unwrap(), filter);
+        assert!(FlowFilter::from_query("hide_encrypted=maybe").is_err());
         assert_eq!(FlowFilter::from_query("").unwrap(), FlowFilter::default());
         assert!(FlowFilter::from_query("limit=lots").is_err());
         assert!(FlowFilter::from_query("hide_system=maybe").is_err());

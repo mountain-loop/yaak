@@ -30,7 +30,8 @@ pub const FLAGS: &[&str] = &[
     "error",
     "pending",
     "system",
-    "tunnelled",
+    "encrypted",
+    "rejected",
     "saved",
     "read",
     "loop",
@@ -39,6 +40,10 @@ pub const FLAGS: &[&str] = &[
     "grpc",
     "graphql",
 ];
+
+/// Other names `@is:` takes for a flag, kept for queries written with them: `tunnelled` is
+/// `encrypted`'s name from before.
+const FLAG_ALIASES: &[(&str, &str)] = &[("tunnelled", "encrypted")];
 
 /// Flags `@is:` will take once flows have what they need. Valid, matching nothing.
 const FLAGS_NOT_YET: &[&str] = &["marked"];
@@ -84,7 +89,12 @@ pub fn schema() -> &'static Schema {
                 field("status", number(), "Response status", "@status:4xx  @status:>=400"),
                 field("type", text(), "Content type", "@type:json"),
                 field("app", text(), "App or program", "@app:Slack"),
-                field("is", text(), "error, pending, system, …", "@is:error  -@is:system"),
+                field(
+                    "is",
+                    text(),
+                    "error, pending, system, encrypted, rejected, …",
+                    "@is:error  -@is:system  @is:encrypted",
+                ),
                 map("header", "A header on either side", "@header.content-type:json"),
                 map("req.header", "A request header", "@req.header.accept:*"),
                 map("res.header", "A response header", "@res.header.x-cache:hit"),
@@ -130,30 +140,53 @@ const TIME_UNITS: &[(&str, f64)] = &[
 
 // -- Preparing --
 
-/// A query prepared for running: its shorthands written out, System left out when hidden.
+/// What a query leaves out unless it names it: System's flows, encrypted connections.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Hidden {
+    pub system: bool,
+    pub encrypted: bool,
+}
+
+/// System alone hidden, or nothing.
+impl From<bool> for Hidden {
+    fn from(system: bool) -> Self {
+        Self { system, encrypted: false }
+    }
+}
+
+/// A query prepared for running: its shorthands written out, hidden flows left out.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FlowQuery {
     root: Option<Node>,
 }
 
 impl FlowQuery {
-    /// `text` as of now. With `hide_system`, macOS's own daemons are left out, unless the text
-    /// says `@is:system` itself.
-    pub fn new(text: &str, hide_system: bool) -> Self {
-        Self::at(text, hide_system, Utc::now())
+    /// `text` as of now. With `hidden.system`, macOS's own daemons are left out, unless the text
+    /// says `@is:system` itself; with `hidden.encrypted`, connections tunnelled undecrypted,
+    /// unless it says `@is:encrypted` (or `@is:tunnelled`).
+    pub fn new(text: &str, hidden: impl Into<Hidden>) -> Self {
+        Self::at(text, hidden, Utc::now())
     }
 
     /// [`Self::new`], with `now` for the times `@time` counts back from.
-    pub fn at(text: &str, hide_system: bool, now: DateTime<Utc>) -> Self {
+    pub fn at(text: &str, hidden: impl Into<Hidden>, now: DateTime<Utc>) -> Self {
+        let hidden = hidden.into();
         let parsed = yaak_query::parse(text);
-        let mentions_system = parsed.as_ref().is_some_and(mentions_system);
+        let mentions = |flags: &[&str]| parsed.as_ref().is_some_and(|r| mentions_flag(r, flags));
+        let hide: Vec<&str> = [
+            (hidden.system && !mentions(&["system"])).then_some("system"),
+            (hidden.encrypted && !mentions(&["encrypted", "tunnelled"])).then_some("encrypted"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
         let mut root = parsed.map(|root| prepare(&root, now, &mut Vec::new()));
-        if hide_system && !mentions_system {
+        for flag in hide {
             let span = Span::default();
-            let not_system = Node::Not { node: Box::new(is_flag("system", span)), span };
+            let not_flag = Node::Not { node: Box::new(is_flag(flag, span)), span };
             root = Some(match root {
-                None => not_system,
-                Some(root) => Node::And { children: vec![root, not_system], span },
+                None => not_flag,
+                Some(root) => Node::And { children: vec![root, not_flag], span },
             });
         }
         Self { root }
@@ -197,15 +230,15 @@ fn is_flag(flag: &str, span: Span) -> Node {
     }
 }
 
-/// The query names `@is:system`, either way, so hiding System leaves it be.
-fn mentions_system(root: &Node) -> bool {
+/// The query names `@is:` one of `flags`, either way, so hiding it leaves it be.
+fn mentions_flag(root: &Node, flags: &[&str]) -> bool {
     let mut found = false;
     root.walk(&mut |node| {
         if let Node::Field { path, value, .. } = node
             && path.len() == 1
             && path[0].eq_ignore_ascii_case("is")
             && let FieldValue::Text { text, .. } | FieldValue::Wildcard { pattern: text } = value
-            && text.eq_ignore_ascii_case("system")
+            && flags.iter().any(|f| text.eq_ignore_ascii_case(f))
         {
             found = true;
         }
@@ -295,7 +328,10 @@ fn prepare(node: &Node, now: DateTime<Utc>, issues: &mut Vec<Issue>) -> Node {
                     with(FieldValue::Wildcard { pattern: text.clone() })
                 }
                 ("is", FieldValue::Text { text, .. }) if !text.is_empty() => {
-                    let flag = text.to_lowercase();
+                    let mut flag = text.to_lowercase();
+                    if let Some((_, to)) = FLAG_ALIASES.iter().find(|(alias, _)| *alias == flag) {
+                        flag = to.to_string();
+                    }
                     if FLAGS.contains(&flag.as_str()) {
                         with(FieldValue::Wildcard { pattern: flag })
                     } else if FLAGS_NOT_YET.contains(&flag.as_str()) {
@@ -441,22 +477,22 @@ pub struct LiveSearch(RwLock<Option<Watched>>);
 struct Watched {
     key: String,
     text: String,
-    hide_system: bool,
+    hidden: Hidden,
 }
 
 impl LiveSearch {
     /// Matches flows against `text` from now on, their events naming `key`; None stops.
-    pub fn watch(&self, watched: Option<(String, String, bool)>) {
-        let watched = watched.map(|(key, text, hide_system)| Watched { key, text, hide_system });
+    pub fn watch(&self, watched: Option<(String, String, Hidden)>) {
+        let watched = watched.map(|(key, text, hidden)| Watched { key, text, hidden });
         *self.0.write().unwrap_or_else(PoisonError::into_inner) = watched;
     }
 
     /// `flow` matched against the search shown, if any.
     pub fn check(&self, flow: &Flow) -> Option<SearchMatch> {
         let watched = self.0.read().unwrap_or_else(PoisonError::into_inner);
-        let Watched { key, text, hide_system } = watched.as_ref()?;
+        let Watched { key, text, hidden } = watched.as_ref()?;
         // Prepared again for each flow, so `@time:<5m` counts back from now.
-        let matches = FlowQuery::new(text, *hide_system).matches(flow);
+        let matches = FlowQuery::new(text, *hidden).matches(flow);
         Some(SearchMatch { key: key.clone(), matches })
     }
 
@@ -812,7 +848,8 @@ fn flags(flow: &Flow) -> Vec<&'static str> {
                 && flow.elapsed_ms.is_none()
         }
         "system" => is_system(flow.client_bundle_id.as_deref(), flow.client_path.as_deref()),
-        "tunnelled" => flow.tunnelled,
+        "encrypted" => flow.tunnelled,
+        "rejected" => flow.tls_rejected.is_some(),
         "saved" => flow.saved_request_id.is_some(),
         "read" => flow.agent_read,
         "loop" => flow.status == Some(508),
@@ -970,7 +1007,11 @@ impl FlowColumns {
             return name.to_string();
         }
         match name {
-            "cancelled" | "tunnelled" | "agent_read" => "0".into(),
+            "cancelled"
+            | "tunnelled"
+            | "agent_read"
+            | "reconnect_requested"
+            | "tunnel_excluded_built_in" => "0".into(),
             _ => "NULL".into(),
         }
     }
@@ -1145,7 +1186,8 @@ impl Sql<'_> {
                 c("cancelled")
             ),
             "system" => format!("is_system({}, {})", c("client_bundle_id"), c("client_path")),
-            "tunnelled" => c("tunnelled"),
+            "encrypted" => c("tunnelled"),
+            "rejected" => format!("{} IS NOT NULL", c("tls_rejected")),
             "saved" => format!("{} IS NOT NULL", c("saved_request_id")),
             "read" => c("agent_read"),
             "loop" => "status = 508".into(),

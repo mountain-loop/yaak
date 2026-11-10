@@ -141,16 +141,20 @@ export function useFlowActions(): (flow: Flow) => DropdownItem[] {
         }
       };
       const noResponse = (flow.error != null || flow.cancelled) && flow.status == null;
+      // A failed TLS handshake, recorded without a request, has nothing to replay.
+      const noRequest = flow.method === "";
       return [
         {
           label: flow.savedRequestId == null ? "Save as Yaak Request" : "Save to Yaak Again",
           icon: "bookmark",
+          disabled: noRequest,
           onSelect: () => openSave(flow),
         },
         { type: "separator" },
         {
           label: "Copy as cURL",
           icon: "square_terminal",
+          disabled: noRequest,
           onSelect: async () => {
             let body: string | null = null;
             if (flow.requestSize > 0) {

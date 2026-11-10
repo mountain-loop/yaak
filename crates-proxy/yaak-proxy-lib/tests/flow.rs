@@ -530,16 +530,17 @@ async fn the_decrypt_list_rpcs_save_and_apply() {
         json!([
             {"entry": "host:api.example.com", "builtIn": false},
             {"entry": "app:Google Chrome", "builtIn": false},
-            {"entry": "!host:*.apple.com", "builtIn": true},
+            {"entry": "!host:*.apple.com", "builtIn": true, "kind": "apple"},
         ])
     );
+    assert_eq!(list["stillEncrypted"], 0);
     let saved = ProxySettings::load(&dir.path().join("settings.json")).unwrap();
     assert_eq!(saved.decrypt, ["host:api.example.com", "app:Google Chrome"]);
     assert!(saved.decrypt_built_ins_removed.contains(&"!host:*.icloud.com".to_string()));
 
     let invalid = rpc(&ctx, "set_decrypt_list", json!({"entries": ["host:a b"]})).await;
     assert!(invalid.unwrap_err().contains("Invalid host"));
-    assert_eq!(rpc(&ctx, "get_decrypt_list", json!({})).await.unwrap(), list);
+    assert_eq!(rpc(&ctx, "get_decrypt_list", json!({})).await.unwrap()["entries"], list["entries"]);
 
     // Applied to the running engine's next connection: decrypting everything intercepts a
     // CONNECT, which a client that does not trust the CA then rejects.
@@ -629,7 +630,7 @@ async fn decrypt_list_edits_apply_to_the_latest_list_and_are_announced() {
     let changes: Vec<_> =
         event_rx.try_iter().filter(|e| e.event == "decrypt_list_changed").collect();
     assert_eq!(changes.len(), 3);
-    assert_eq!(changes[2].payload["list"], list);
+    assert_eq!(changes[2].payload["list"]["entries"], list["entries"]);
 }
 
 /// Capture throughput through the engine, end to end: 3,000 requests, 16 at a time over

@@ -56,13 +56,12 @@ export function FirstRun() {
       ? "done"
       : systemSwitch.failed
         ? "fail"
-        : trusted
-          ? "next"
-          : "todo";
+        : "next";
   const decrypt = decryptStep(decryptList, trusted);
   const everything = decrypt.choice === "everything";
   const setEverything = (on: boolean) => saveDecryptList.mutate(everythingEdit(on));
-  const ready = trusted && (systemOn || !systemSupported);
+  // The certificate is optional here: nothing needs it until something is decrypted.
+  const ready = systemOn || !systemSupported;
   const encrypting = !running && !otherOwner ? encryptingPercent(proxyState) : null;
   const trafficState: StepState =
     encrypting != null ? "wait" : !running && !otherOwner ? "fail" : ready ? "wait" : "todo";

@@ -11,8 +11,10 @@ use crate::macos::SystemProxyStatus;
 use crate::messages::{self, FlowMessage, MessageKind};
 use crate::models::{FlowBody, find_header};
 use crate::save::SaveFlowRequest;
+use crate::tunnels::TunnelScope;
 use crate::{
-    AddGrpcSchemaRequest, EditDecryptListRequest, ListMessagesResponse, ProxyCtx, ProxyState,
+    AddGrpcSchemaRequest, EditDecryptListRequest, ForgetPassthroughRequest, ListMessagesResponse,
+    PassthroughResponse, ProxyCtx, ProxyState, ReconnectTunnelsRequest, ReconnectTunnelsResponse,
     ReflectGrpcHostRequest, bodies,
 };
 use bytes::Bytes;
@@ -626,15 +628,24 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
             };
             Ok(response(StatusCode::OK, "application/x-pem-file", ca.pem().to_string()))
         }
-        (&Method::POST, ["ca", "trust"]) => {
-            // Off the runtime's few workers: it may wait for the keychain or a conversion.
-            let ca = {
-                let ctx = ctx.clone();
-                blocking(move || ctx.load_ca()).await?
-            };
-            ca::trust(ca.cert_path()).await.map_err(bad_request)?;
-            ctx.forget_passthrough();
-            json(&ca::status(ca.cert_path()).await?)
+        (&Method::POST, ["ca", "trust"]) => json(&ctx.trust_ca().await.map_err(bad_request)?),
+        (&Method::GET, ["passthrough"]) => {
+            json(&PassthroughResponse { addresses: ctx.passthrough() })
+        }
+        (&Method::POST, ["passthrough", "forget"]) => {
+            let body: ForgetPassthroughRequest = read_json(req).await?;
+            json(&ctx.forget_passthrough_request(&body).map_err(bad_request)?)
+        }
+        (&Method::GET, ["tunnels", "reconnectable"]) => {
+            let scope = tunnel_scope(&query);
+            let ctx = ctx.clone();
+            json(&blocking(move || ctx.reconnectable_tunnels(&scope)).await.map_err(bad_request)?)
+        }
+        (&Method::POST, ["tunnels", "reconnect"]) => {
+            let body: ReconnectTunnelsRequest = read_json(req).await?;
+            let ctx = ctx.clone();
+            let closed = blocking(move || ctx.reconnect_tunnels(body.ids.as_deref(), &body.scope));
+            json(&ReconnectTunnelsResponse { closed: closed.await.map_err(bad_request)? })
         }
         (&Method::GET, ["system-proxy"]) => {
             let ctx = ctx.clone();
@@ -721,6 +732,20 @@ fn message_page(query: &str) -> Result<(Option<i64>, Option<usize>), ApiError> {
         }
     }
     Ok((after, limit))
+}
+
+/// `entry` and `flowId` from a query string.
+fn tunnel_scope(query: &str) -> TunnelScope {
+    let mut scope = TunnelScope::default();
+    for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
+        let value = Some(value.into_owned()).filter(|v| !v.is_empty());
+        match key.as_ref() {
+            "entry" => scope.entry = value,
+            "flowId" => scope.flow_id = value,
+            _ => {}
+        }
+    }
+    scope
 }
 
 fn body_limit(query: &str) -> Result<usize, ApiError> {

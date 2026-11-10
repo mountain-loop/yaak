@@ -33,8 +33,8 @@ use tokio_tungstenite::tungstenite::protocol::Role;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use yaak_proxy::{
-    CaStore, DecryptApp, DecryptPolicy, MessageDirection, MessageKind, ProxyConfig, ProxyEvent,
-    ProxyHandle, StreamKind, StreamMessage, start_proxy,
+    BUILT_IN_EXCLUSIONS, CaStore, DecryptApp, DecryptPolicy, MessageDirection, MessageKind,
+    ProxyConfig, ProxyEvent, ProxyHandle, StreamKind, StreamMessage, TunnelReason, start_proxy,
 };
 
 const BIG_BODY: usize = 64 * 1024;
@@ -406,6 +406,7 @@ fn is_terminal(event: &ProxyEvent) -> bool {
             | ProxyEvent::Cancelled { .. }
             | ProxyEvent::StreamEnd { .. }
             | ProxyEvent::TunnelEnd { .. }
+            | ProxyEvent::HandshakeFailed { .. }
     )
 }
 
@@ -426,7 +427,8 @@ fn flow_id(event: &ProxyEvent) -> u64 {
         | ProxyEvent::Message { id, .. }
         | ProxyEvent::StreamEnd { id, .. }
         | ProxyEvent::TunnelStart { id, .. }
-        | ProxyEvent::TunnelEnd { id, .. } => *id,
+        | ProxyEvent::TunnelEnd { id, .. }
+        | ProxyEvent::HandshakeFailed { id, .. } => *id,
     }
 }
 
@@ -1318,12 +1320,59 @@ async fn an_empty_decrypt_list_tunnels_https_untouched() {
         let (connection, authority) = find!(events, ProxyEvent::TunnelStart { connection, authority, .. } => (*connection, authority.clone()));
         assert_eq!(connection, 1);
         assert_eq!(authority, format!("localhost:{}", upstream.port()));
-        let (sent, received, error) = find!(events, ProxyEvent::TunnelEnd { sent, received, error, .. } => (*sent, *received, error.clone()));
+        let (host, port, reason) = find!(events, ProxyEvent::TunnelStart { host, port, reason, .. } => (host.clone(), *port, reason.clone()));
+        assert_eq!((host.as_str(), port), ("localhost", upstream.port()));
+        assert_eq!(reason, TunnelReason::NotListed);
+        let (sent, received, error, reconnect) = find!(events, ProxyEvent::TunnelEnd { sent, received, error, reconnect_requested, .. } => (*sent, *received, error.clone(), *reconnect_requested));
         assert_eq!(error, None);
+        assert!(!reconnect);
         // The ClientHello and request one way, the certificate and response the other.
         assert!(sent > 100, "sent {sent}");
         assert!(received as usize > response.len(), "received {received}");
         assert!(!events.iter().any(|e| matches!(e, ProxyEvent::RequestStart { .. })));
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_excluded_host_is_tunnelled_with_the_exclusion_that_kept_it_out() {
+    within(async {
+        let mut entries = vec!["*", "!host:localhost"];
+        entries.extend(BUILT_IN_EXCLUSIONS.iter().map(|(e, _)| *e));
+        let h = Harness::start_with(1024, with_policy(&entries));
+        let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+        let tls = upstream_tls(&h, upstream.port(), &[b"http/1.1"]).await;
+        assert!(get_hello_and_close(tls).await.ends_with("hello"));
+        let events = h.flow_events();
+        let reason = find!(events, ProxyEvent::TunnelStart { reason, .. } => reason.clone());
+        let entry = "!host:localhost".to_string();
+        assert_eq!(reason, TunnelReason::Excluded { entry, built_in: false });
+    })
+    .await
+}
+
+/// A tunnel closed on request ends at once, both sides closed, marked as asked to reconnect.
+#[tokio::test(flavor = "multi_thread")]
+async fn closing_a_tunnel_ends_it_for_a_reconnect() {
+    within(async {
+        let h = Harness::start_with(1024, with_policy(&[]));
+        let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+        let mut tls = upstream_tls(&h, upstream.port(), &[b"http/1.1"]).await;
+        let started = h.events.recv_timeout(Duration::from_secs(10)).unwrap();
+        let ProxyEvent::TunnelStart { id, .. } = started else {
+            panic!("expected a tunnel, got {started:?}");
+        };
+        assert_eq!(h.proxy.close_tunnels(&[id + 100]), 0, "no such tunnel");
+        assert_eq!(h.proxy.close_tunnels(&[id]), 1);
+        // The client sees its connection end.
+        let mut rest = Vec::new();
+        let _ = tokio::time::timeout(Duration::from_secs(5), tls.read_to_end(&mut rest))
+            .await
+            .expect("the tunnel stayed open");
+        let events = h.flow_events();
+        let (end_id, error, reconnect) = find!(events, ProxyEvent::TunnelEnd { id, error, reconnect_requested, .. } => (*id, error.clone(), *reconnect_requested));
+        assert_eq!((end_id, error, reconnect), (id, None, true));
+        assert_eq!(h.proxy.close_tunnels(&[id]), 0, "closed already");
     })
     .await
 }
@@ -1439,11 +1488,68 @@ async fn certificate_alert_passes_through_on_the_next_connection() {
     let name = ServerName::try_from("localhost").unwrap();
 
     assert!(pinned.connect(name.clone(), h.connect_tunnel(port).await).await.is_err());
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    pinned
+    let failed = h.events.recv_timeout(Duration::from_secs(10)).unwrap();
+    let ProxyEvent::HandshakeFailed { id: rejected, authority, rejection, connection, .. } = failed
+    else {
+        panic!("expected the refused handshake, got {failed:?}");
+    };
+    assert_eq!(authority, format!("localhost:{port}"));
+    assert_eq!(rejection.as_deref(), Some("unknown_ca"));
+    assert_eq!(connection, 1);
+    assert_eq!(h.proxy.passthrough(), vec![format!("localhost:{port}")]);
+    let tls = pinned
         .connect(name, h.connect_tunnel(port).await)
         .await
         .expect("one certificate alert should be enough to pass the host through");
+    let started = h.events.recv_timeout(Duration::from_secs(10)).unwrap();
+    let ProxyEvent::TunnelStart { reason, .. } = started else {
+        panic!("expected a tunnel, got {started:?}");
+    };
+    assert_eq!(reason, TunnelReason::Rejected { rejected_by: rejected });
+    drop(tls);
+
+    // Forgotten, the address is intercepted again, and a refusal is a new flow.
+    let addr = format!("localhost:{port}");
+    assert!(!h.proxy.forget_passthrough_address("localhost:1"));
+    assert!(h.proxy.forget_passthrough_address(&addr));
+    assert!(h.proxy.passthrough().is_empty());
+}
+
+/// Clients refusing the certificate together make one flow for the address, not one each.
+#[tokio::test(flavor = "multi_thread")]
+async fn concurrent_refusals_are_one_flow() {
+    within(async {
+        let h = Harness::start(1024);
+        let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+        let port = upstream.port();
+        let mut roots = RootCertStore::empty();
+        roots.add(h.pki.ca_der.clone()).unwrap();
+        let config = ClientConfig::builder_with_provider(ring())
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        let pinned = TlsConnector::from(Arc::new(config));
+        let name = ServerName::try_from("localhost").unwrap();
+        // Every connection is made before any handshake starts, so they all race.
+        let mut tunnels = Vec::new();
+        for _ in 0..8 {
+            tunnels.push(h.connect_tunnel(port).await);
+        }
+        let attempts = tunnels.into_iter().map(|tcp| {
+            let (pinned, name) = (pinned.clone(), name.clone());
+            tokio::spawn(async move { pinned.connect(name, tcp).await.map(drop) })
+        });
+        for attempt in attempts.collect::<Vec<_>>() {
+            let _ = attempt.await.unwrap();
+        }
+        let mut failed = 0;
+        while let Ok(event) = h.events.recv_timeout(Duration::from_millis(300)) {
+            failed += usize::from(matches!(event, ProxyEvent::HandshakeFailed { .. }));
+        }
+        assert_eq!(failed, 1);
+    })
+    .await
 }
 
 /// SChannel (native-tls on Windows) checks the certificate only after sending its Finished, so
@@ -1462,6 +1568,13 @@ async fn hang_up_after_the_handshake_passes_through() {
         drop(tls);
         h.wait_for_handshake_state(&addr, state).await;
     }
+    // Recorded once, as the second hang-up passes it through.
+    let failed = h.events.recv_timeout(Duration::from_secs(10)).unwrap();
+    let ProxyEvent::HandshakeFailed { rejection, .. } = failed else {
+        panic!("expected the refused handshake, got {failed:?}");
+    };
+    assert_eq!(rejection.as_deref(), Some("hang_up"));
+    assert!(h.events.recv_timeout(Duration::from_millis(100)).is_err());
 
     let mut roots = RootCertStore::empty();
     roots.add(h.pki.ca_der.clone()).unwrap();
