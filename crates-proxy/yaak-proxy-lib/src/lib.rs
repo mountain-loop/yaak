@@ -626,6 +626,9 @@ impl ProxyCtx {
         let mut handle = self.handle.lock().map_err(|_| "lock poisoned".to_string())?;
         // Under the handle's lock, so a start waiting for the databases sees it.
         self.stops.fetch_add(1, Ordering::SeqCst);
+        // Its tunnels go with it, in the same turn of the lock, so nothing reads them as open
+        // once it is gone.
+        self.tunnels.stop_run();
         // Dropping the handle stops the listener and joins its thread.
         let port = handle.take().map(|h| h.port);
         drop(handle);
@@ -1135,47 +1138,69 @@ impl ProxyCtx {
         change(&mut settings)?;
         settings.save(&self.settings_path())?;
         let policy = settings.decrypt_policy();
-        if let Ok(handle) = self.handle.lock()
-            && let Some(handle) = handle.as_ref()
-        {
-            handle.set_decrypt_policy(policy.clone());
-        }
+        // Applied and counted against the one engine running, whose tunnels these are.
+        let still_encrypted = self.with_engine(|engine| {
+            let Some(engine) = engine else {
+                return Ok::<_, String>(0);
+            };
+            engine.set_decrypt_policy(policy.clone());
+            let all = tunnels::TunnelScope::default();
+            Ok(self.reconnectable_in(engine, &policy, &all)?.len())
+        })?;
         let list = settings.decrypt_list();
         self.events.emit("decrypt_list_changed", &DecryptListChangedPayload { list: list.clone() });
-        let open = self.tunnels.list();
-        let all = tunnels::TunnelScope::default();
-        let still_encrypted = tunnels::reconnectable(&open, &policy, &self.passthrough(), &all)?;
-        Ok(DecryptListSaved { list, still_encrypted: still_encrypted.len() })
+        Ok(DecryptListSaved { list, still_encrypted })
+    }
+
+    /// `f` with the engine running now, if any, under its lock. Starting and stopping the engine
+    /// swap it and the open-tunnel registry's run under this same lock, so what `f` reads of
+    /// the engine's tunnels and pass-through set and what it does to them belong to one run.
+    fn with_engine<T>(&self, f: impl FnOnce(Option<&ProxyHandle>) -> T) -> T {
+        let handle = self.handle.lock().unwrap_or_else(PoisonError::into_inner);
+        f(handle.as_ref())
+    }
+
+    /// The open tunnels of `engine` within `scope` that `policy` would decrypt if their clients
+    /// reconnected. For a caller holding the engine's lock.
+    fn reconnectable_in(
+        &self,
+        engine: &ProxyHandle,
+        policy: &yaak_proxy::DecryptPolicy,
+        scope: &tunnels::TunnelScope,
+    ) -> Result<Vec<tunnels::OpenTunnel>, String> {
+        tunnels::reconnectable(&self.tunnels.list(), policy, &engine.passthrough(), scope)
     }
 
     /// Intercepts again the hosts passed through after clients rejected the CA, as they no
     /// longer will once it is trusted.
     pub fn forget_passthrough(&self) {
-        if let Ok(handle) = self.handle.lock()
-            && let Some(handle) = handle.as_ref()
-        {
-            handle.forget_passthrough();
-        }
-        self.passthrough_changed();
+        let addresses = self.with_engine(|engine| {
+            let engine = engine?;
+            engine.forget_passthrough();
+            Some(engine.passthrough())
+        });
+        let addresses = addresses.unwrap_or_default();
+        self.events.emit("passthrough_changed", &PassthroughChangedPayload { addresses });
     }
 
     /// Intercepts again one address (`host:port`) passed through after a client rejected the
-    /// CA. Returns whether it was passed through.
-    pub fn forget_passthrough_address(&self, address: &str) -> bool {
-        let forgotten = self.handle.lock().ok().is_some_and(|handle| {
-            handle.as_ref().is_some_and(|h| h.forget_passthrough_address(address))
+    /// CA. Returns whether it was passed through, and what still is, read from the same engine.
+    pub fn forget_passthrough_address(&self, address: &str) -> (bool, Vec<String>) {
+        let (forgotten, addresses) = self.with_engine(|engine| match engine {
+            Some(e) => (e.forget_passthrough_address(address), e.passthrough()),
+            None => (false, Vec::new()),
         });
         if forgotten {
-            self.passthrough_changed();
+            let payload = PassthroughChangedPayload { addresses: addresses.clone() };
+            self.events.emit("passthrough_changed", &payload);
         }
-        forgotten
+        (forgotten, addresses)
     }
 
     /// The addresses (`host:port`) the running engine passes through after clients rejected
     /// the CA. Empty while it is stopped.
     pub fn passthrough(&self) -> Vec<String> {
-        let handle = self.handle.lock().unwrap_or_else(PoisonError::into_inner);
-        handle.as_ref().map(ProxyHandle::passthrough).unwrap_or_default()
+        self.with_engine(|engine| engine.map(ProxyHandle::passthrough).unwrap_or_default())
     }
 
     /// [`Self::forget_passthrough_address`] for an address as the app or the control API names
@@ -1186,8 +1211,8 @@ impl ProxyCtx {
     ) -> Result<ForgetPassthroughResponse, String> {
         let address = passthrough_address(&req.address)
             .ok_or_else(|| format!("Invalid address {:?}", req.address))?;
-        let forgotten = self.forget_passthrough_address(&address);
-        Ok(ForgetPassthroughResponse { forgotten, addresses: self.passthrough() })
+        let (forgotten, addresses) = self.forget_passthrough_address(&address);
+        Ok(ForgetPassthroughResponse { forgotten, addresses })
     }
 
     /// Trusts the CA, made first when the engine has never run so there is one to trust. Once
@@ -1215,11 +1240,6 @@ impl ProxyCtx {
         self.other_owner()
     }
 
-    fn passthrough_changed(&self) {
-        let payload = PassthroughChangedPayload { addresses: self.passthrough() };
-        self.events.emit("passthrough_changed", &payload);
-    }
-
     /// The HTTPS connections open now that the decrypt list would decrypt if their clients
     /// reconnected, within `scope`. Not those passed through after a client rejected the CA.
     pub fn reconnectable_tunnels(
@@ -1227,24 +1247,42 @@ impl ProxyCtx {
         scope: &tunnels::TunnelScope,
     ) -> Result<Vec<tunnels::OpenTunnel>, String> {
         let policy = self.settings()?.decrypt_policy();
-        tunnels::reconnectable(&self.tunnels.list(), &policy, &self.passthrough(), scope)
+        self.with_engine(|engine| match engine {
+            Some(engine) => self.reconnectable_in(engine, &policy, scope),
+            None => Ok(Vec::new()),
+        })
     }
 
     /// Closes tunnels so their clients reconnect, decrypted as the list now says: those in
     /// `ids` this run of the engine gave out, or, without ids, those
-    /// [`Self::reconnectable_tunnels`] finds in `scope`. Each ends
-    /// with its flow marked `reconnectRequested`. Returns how many were open.
+    /// [`Self::reconnectable_tunnels`] finds in `scope`. Each ends with its flow marked
+    /// `reconnectRequested`. Returns how many were open. Looked up and closed under the engine's
+    /// lock, so a restart can't come between and have another run's tunnels closed.
     pub fn reconnect_tunnels(
         &self,
         ids: Option<&[String]>,
         scope: &tunnels::TunnelScope,
     ) -> Result<usize, String> {
-        let ids = match ids {
-            Some(ids) => self.tunnels.engine_ids(ids),
-            None => self.reconnectable_tunnels(scope)?.iter().map(|t| t.engine_id).collect(),
+        let policy = match ids {
+            Some(_) => None,
+            None => Some(self.settings()?.decrypt_policy()),
         };
-        let handle = self.handle.lock().map_err(|_| "lock poisoned".to_string())?;
-        Ok(handle.as_ref().map_or(0, |h| h.close_tunnels(&ids)))
+        self.with_engine(|engine| {
+            let Some(engine) = engine else {
+                return Ok(0);
+            };
+            let ids = match (ids, &policy) {
+                (Some(ids), _) => self.tunnels.engine_ids(ids),
+                (None, Some(policy)) => {
+                    let found = self.reconnectable_in(engine, policy, scope)?;
+                    found.iter().map(|t| t.engine_id).collect()
+                }
+                (None, None) => Vec::new(),
+            };
+            #[cfg(test)]
+            tests::pause_between_lookup_and_close();
+            Ok(engine.close_tunnels(&ids))
+        })
     }
 
     /// Flows are being stored.
@@ -4211,6 +4249,128 @@ define_rpc! {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// While set, [`ProxyCtx::reconnect_tunnels`] says when it has looked up what to close and
+    /// waits, up to a time, to be let go, so a test can restart the engine in between.
+    static BETWEEN_LOOKUP_AND_CLOSE: Mutex<
+        Option<(std::sync::mpsc::Sender<()>, std::sync::mpsc::Receiver<()>)>,
+    > = Mutex::new(None);
+
+    pub(super) fn pause_between_lookup_and_close() {
+        let pause = BETWEEN_LOOKUP_AND_CLOSE.lock().unwrap().take();
+        if let Some((reached, go)) = pause {
+            let _ = reached.send(());
+            let _ = go.recv_timeout(Duration::from_secs(10));
+        }
+    }
+
+    /// A CONNECT tunnel through the engine on `port` to `target`, its bytes crossing both ways.
+    async fn open_tunnel(port: u16, target: &str) -> tokio::net::TcpStream {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut tcp = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        let connect = format!("CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n\r\n");
+        tcp.write_all(connect.as_bytes()).await.unwrap();
+        let mut head = Vec::new();
+        while !head.ends_with(b"\r\n\r\n") {
+            head.push(tcp.read_u8().await.unwrap());
+        }
+        assert!(head.starts_with(b"HTTP/1.1 200"), "{}", String::from_utf8_lossy(&head));
+        assert!(still_open(&mut tcp).await, "the tunnel did not relay");
+        tcp
+    }
+
+    /// Whether `tcp` still relays: a ping comes back.
+    async fn still_open(tcp: &mut tokio::net::TcpStream) -> bool {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut echoed = [0u8; 4];
+        tcp.write_all(b"ping").await.is_ok()
+            && tokio::time::timeout(Duration::from_secs(2), tcp.read_exact(&mut echoed))
+                .await
+                .is_ok_and(|r| r.is_ok())
+    }
+
+    async fn spawn_echo() -> u16 {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            loop {
+                let (mut tcp, _) = listener.accept().await.unwrap();
+                tokio::spawn(async move {
+                    let (mut read, mut write) = tcp.split();
+                    let _ = tokio::io::copy(&mut read, &mut write).await;
+                });
+            }
+        });
+        port
+    }
+
+    async fn wait_for_open_tunnels(ctx: &ProxyCtx, n: usize) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while ctx.tunnels.list().len() != n {
+            assert!(std::time::Instant::now() < deadline, "{:?}", ctx.tunnels.list());
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+
+    /// An engine restart between finding what to close and closing it can't close a tunnel of
+    /// the new run, though the new run numbers its tunnels from 1 again: Greptile's "Reconnect
+    /// closes the wrong tunnel" on #835.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_restart_between_lookup_and_close_closes_nothing_of_the_new_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings =
+            ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
+        settings.save(&dir.path().join("settings.json")).unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        ctx.start().unwrap();
+        let echo = spawn_echo().await;
+        let target = format!("localhost:{echo}");
+
+        // Run 1: one tunnel, listed as reconnectable once the list names its host.
+        let mut old = open_tunnel(ctx.port().unwrap(), &target).await;
+        ctx.edit_decrypt_list(&["host:localhost".into()], &[]).unwrap();
+        wait_for_open_tunnels(&ctx, 1).await;
+        let listed = ctx.reconnectable_tunnels(&tunnels::TunnelScope::default()).unwrap();
+        let ids: Vec<String> = listed.iter().map(|t| t.id.clone()).collect();
+        assert_eq!((ids.len(), listed[0].engine_id), (1, 1));
+
+        // Reconnect pauses once it has looked up what to close.
+        let (reached_tx, reached_rx) = std::sync::mpsc::channel();
+        let (go_tx, go_rx) = std::sync::mpsc::channel();
+        *BETWEEN_LOOKUP_AND_CLOSE.lock().unwrap() = Some((reached_tx, go_rx));
+        let reconnecting = {
+            let ctx = ctx.clone();
+            tokio::task::spawn_blocking(move || {
+                ctx.reconnect_tunnels(Some(&ids), &tunnels::TunnelScope::default())
+            })
+        };
+        tokio::task::spawn_blocking(move || reached_rx.recv().unwrap()).await.unwrap();
+
+        // Meanwhile the engine restarts, and the new run's first tunnel is number 1 too. A
+        // restart that has to wait for the reconnect to finish is let go of first.
+        let mut restarting = {
+            let ctx = ctx.clone();
+            tokio::task::spawn_blocking(move || {
+                ctx.stop().unwrap();
+                ctx.edit_decrypt_list(&[], &["host:localhost".into()]).unwrap();
+                ctx.start().unwrap();
+            })
+        };
+        if tokio::time::timeout(Duration::from_secs(1), &mut restarting).await.is_err() {
+            let _ = go_tx.send(());
+        }
+        restarting.await.unwrap();
+        let mut new = open_tunnel(ctx.port().unwrap(), &target).await;
+        wait_for_open_tunnels(&ctx, 1).await;
+        assert_eq!(ctx.tunnels.list()[0].engine_id, 1, "the new run's first tunnel");
+        let _ = go_tx.send(());
+
+        let closed = reconnecting.await.unwrap().unwrap();
+        assert!(still_open(&mut new).await, "the new run's tunnel was closed");
+        assert!(!still_open(&mut old).await, "the old run's tunnel outlived its engine");
+        assert!(closed <= 1, "closed {closed}");
+    }
 
     /// An owner from before the count answers a forwarded save without it.
     #[test]

@@ -134,6 +134,16 @@ impl OpenTunnels {
         run.run
     }
 
+    /// The engine stopped, and its tunnels with it. Its event loop's late changes, and ids it
+    /// gave out, apply to nothing from now on.
+    pub fn stop_run(&self) {
+        let mut run = self.lock();
+        run.run += 1;
+        run.token.clear();
+        run.attribution = None;
+        run.tunnels.clear();
+    }
+
     /// The engine of `run` stopped, and its tunnels with it.
     pub fn end_run(&self, run: u64) {
         let mut current = self.lock();
@@ -155,6 +165,9 @@ impl OpenTunnels {
     /// The engine's numbers for those of `ids` this run gave out. Others are left out.
     pub fn engine_ids(&self, ids: &[String]) -> Vec<u64> {
         let current = self.lock();
+        if current.token.is_empty() {
+            return Vec::new();
+        }
         ids.iter()
             .filter_map(|id| id.strip_prefix(current.token.as_str())?.strip_prefix('.'))
             .filter_map(|n| n.parse().ok())
@@ -329,6 +342,16 @@ mod tests {
         assert!(tunnels.engine_ids(&[id]).is_empty());
         tunnels.end_run(second);
         assert!(tunnels.list().is_empty());
+
+        // Stopped, a run's late events and ids apply to nothing.
+        let third = tunnels.begin_run(None);
+        tunnels.open(third, tunnel(1, "e.com", None, TunnelReason::NotListed), 5);
+        let id = tunnels.list()[0].id.clone();
+        tunnels.stop_run();
+        assert!(tunnels.list().is_empty());
+        tunnels.open(third, tunnel(2, "f.com", None, TunnelReason::NotListed), 6);
+        assert!(tunnels.list().is_empty());
+        assert!(tunnels.engine_ids(&[id, ".1".into()]).is_empty());
     }
 
     #[test]

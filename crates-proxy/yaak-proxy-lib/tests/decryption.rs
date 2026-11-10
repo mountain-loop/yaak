@@ -323,6 +323,13 @@ async fn open_tunnels_are_reconnected_only_when_asked() {
     wait_for_tunnels(&ctx, json!({}), |t| t.len() == 1).await;
     let old = reconnectable(&ctx, json!({})).await[0]["id"].clone();
     ctx.stop().unwrap();
+    // Stopped, nothing is open, at once, whatever its event loop has still to read.
+    assert!(reconnectable(&ctx, json!({})).await.is_empty());
+    assert_eq!(listed().await.unwrap()["stillEncrypted"], 0);
+    assert_eq!(rpc(&ctx, "reconnect_tunnels", json!({"ids": [old]})).await.unwrap()["closed"], 0);
+    assert_eq!(rpc(&ctx, "list_passthrough", json!({})).await.unwrap()["addresses"], json!([]));
+    let forgot = rpc(&ctx, "forget_passthrough", json!({"address": "localhost"})).await.unwrap();
+    assert_eq!(forgot, json!({"forgotten": false, "addresses": []}));
     d.read_to_end(&mut rest).await.unwrap();
     ctx.start().unwrap();
     unlisted().await.unwrap();
