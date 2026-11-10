@@ -24,6 +24,10 @@ ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
 yaak-core = { workspace = true }
 yaak-templates = { path = "../yaak-templates", default-features = false }
 
+[features]
+# Opening databases encrypted with SQLCipher; see `yaak_database::encryption`.
+sqlcipher = ["yaak-database/sqlcipher"]
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 r2d2 = "0.8.10"
 r2d2_sqlite = { version = "0.32" }

@@ -59,3 +59,6 @@ flatpak/node-sources.json
 # Claude Code local settings
 .claude/settings.local.json
 .claude/worktrees/
+
+# Headless screenshots taken while working
+.shots/

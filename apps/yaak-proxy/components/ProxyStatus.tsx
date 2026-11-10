@@ -7,41 +7,37 @@ import {
   type DropdownItem,
   type DropdownRef,
   Icon,
+  LoadingIcon,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtomValue, useSetAtom, useStore } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRpcEvent } from "../hooks/useRpcEvent";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
-import { helperDialogOpenAtom, helperRegisteredAtAtom } from "../lib/atoms";
+import { helperRegisteredAtAtom } from "../lib/atoms";
+import { encryptingPercent } from "../lib/encrypting";
 import { environmentExports } from "../lib/env";
-import { proxyStateAtom, refreshProxyState } from "../lib/store";
-import {
-  helperPollInterval,
-  helperRow,
-  recordingLabel,
-  systemProxySwitch,
-} from "../lib/systemProxy";
+import { proxyStatusOf } from "../lib/proxyStatus";
+import { proxyStateAtom, systemProxyEverOnAtom } from "../lib/store";
+import { helperPollInterval, recordingLabel, systemProxySwitch } from "../lib/systemProxy";
 import { onWindowFocus } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
 
 /**
- * The header's state pill and its menu: recording, the system proxy, the certificate and HTTP/2. The
- * engine runs for as long as the app does, so the pill shows whether flows are being stored. A
- * certificate that is not trusted steps out of the menu beside the pill until it is.
+ * The header's state pill and its menu: the listening address, which copies itself, the state,
+ * Pause or Resume Recording, Override system proxy, and the certificate. The engine runs for as
+ * long as the app does, so the pill shows whether flows are being stored. A certificate that is not trusted steps out of the
+ * menu beside the pill until it is. Everything set once and left alone lives in Settings.
  */
 export function ProxyStatus() {
   const dropdownRef = useRef<DropdownRef>(null);
+  const [copied, setCopied] = useCopied();
   const proxyState = useAtomValue(proxyStateAtom);
   const setup = useProxySetup();
   const execute = useRpcMutation("execute_action");
   const retry = useRpcMutation("take_over");
-  const setAtLaunch = useSetSystemProxyAtLaunch();
-  const setHttpVersion = useSetHttpVersion();
-  const copyEnvironment = useCopyEnvironment();
-  const setHelperDialogOpen = useSetAtom(helperDialogOpenAtom);
   const { caStatus, trust, systemProxy, setSystemProxy } = setup;
   const systemSwitch = useSystemProxySwitch(setup);
 
@@ -50,22 +46,31 @@ export function ProxyStatus() {
   const other = proxyState?.otherOwner ?? null;
   const port = proxyState?.port ?? other?.proxyPort ?? null;
   const untrusted = caStatus.data != null && !caStatus.data.trusted;
+  // The same status the header's tint takes its colour from
+  const status = proxyStatusOf(proxyState);
+  const encrypting = status === "encrypting" ? encryptingPercent(proxyState) : null;
 
   const stateRow =
-    other != null ? (
+    status === "encrypting" ? (
+      <MenuRow
+        icon={<LoadingIcon size="sm" className="text-text-subtle" />}
+        title={`Encrypting stored traffic, ${encrypting}`}
+        description="Traffic captured before this version is being encrypted on disk. Recording starts when it's done."
+      />
+    ) : status === "cli" && other != null ? (
       <MenuRow
         icon={<StateDot state="cli" />}
         title="Running from the CLI"
         description={`Started by yaak proxy start, pid ${other.pid}, since ${timeOf(other.startedAt)}.${other.proxyPort == null ? "" : ` Port ${other.proxyPort}.`}`}
       />
-    ) : running ? (
+    ) : status === "recording" || status === "paused" ? (
       <MenuRow
-        icon={<StateDot state={recording ? "recording" : "paused"} />}
+        icon={<StateDot state={status} />}
         title={recording ? `Recording on port ${port}` : `Paused on port ${port}`}
         description={
           recording
-            ? "Listening on 127.0.0.1, and storing every flow."
-            : "Traffic passes through untouched, and no flows are stored."
+            ? "Every flow is stored as it passes."
+            : "Traffic passes through untouched, and nothing is stored."
         }
       />
     ) : (
@@ -93,9 +98,40 @@ export function ProxyStatus() {
       />
     );
 
+  // Until the helper is approved, every change asks for the password; said where it is felt.
+  const helperNotice =
+    systemProxy.data != null &&
+    systemProxy.data.backend !== "helper" &&
+    systemProxy.data.helper !== "enabled" &&
+    systemProxy.data.helper !== "unavailable";
+
+  const address = port == null ? null : `127.0.0.1:${port}`;
   const items: DropdownItem[] = [
+    {
+      label: <span className="font-mono">{address}</span>,
+      hidden: address == null,
+      keepOpenOnSelect: true,
+      rightSlot: copied ? (
+        <span className="text-xs text-text-subtle">Copied</span>
+      ) : (
+        <Icon icon="copy" size="sm" className="text-text-subtlest" />
+      ),
+      onSelect: () => {
+        if (address == null) return;
+        navigator.clipboard.writeText(address).then(setCopied, console.error);
+      },
+    },
+    { type: "separator", hidden: address == null },
     { type: "content", label: stateRow },
-    { type: "separator", hidden: systemProxy.data?.supported !== true },
+    {
+      label: recordingLabel(recording),
+      icon: recording ? "circle_pause" : "circle_play",
+      hidden: !running,
+      hotKeyAction: "recording_toggle",
+      hotKeyLabelOnly: true,
+      onSelect: () => execute.mutate({ scope: "global", action: "recording_toggle" }),
+    },
+    { type: "separator" },
     {
       type: "content",
       hidden: systemProxy.data?.supported !== true,
@@ -104,9 +140,16 @@ export function ProxyStatus() {
           icon={<Icon icon="wifi" size="sm" color="secondary" />}
           title="Override system proxy"
           description={
-            <span className={classNames(systemSwitch.failed && "text-danger")}>
-              {systemSwitch.description}
-            </span>
+            <>
+              <span className={classNames(systemSwitch.failed && "text-danger")}>
+                {systemSwitch.description}
+              </span>
+              {helperNotice && (
+                <span className="block text-notice">
+                  macOS asks for your password each time until the helper is approved in Settings.
+                </span>
+              )}
+            </>
           }
           action={
             <KeepMenuOpen>
@@ -120,35 +163,6 @@ export function ProxyStatus() {
               />
             </KeepMenuOpen>
           }
-        />
-      ),
-    },
-    {
-      type: "content",
-      hidden: systemProxy.data?.supported !== true,
-      label: (
-        <KeepMenuOpen className="block pl-[2.125rem] pr-1.5 pb-1.5">
-          <Checkbox
-            title={
-              <span className="text-xs text-text-subtle">Override system proxy at launch</span>
-            }
-            checked={proxyState?.systemProxyAtLaunch ?? true}
-            disabled={setAtLaunch.isPending}
-            onChange={(enabled) => setAtLaunch.mutate({ enabled })}
-          />
-        </KeepMenuOpen>
-      ),
-    },
-    {
-      type: "content",
-      hidden: systemProxy.data?.supported !== true,
-      label: systemProxy.data != null && (
-        <HelperMenuRow
-          status={systemProxy.data}
-          onOpenDialog={() => {
-            dropdownRef.current?.close?.();
-            setHelperDialogOpen(true);
-          }}
         />
       ),
     },
@@ -190,69 +204,27 @@ export function ProxyStatus() {
         />
       ),
     },
-    {
-      type: "content",
-      label: (
-        <MenuRow
-          icon={<Icon icon="zap" size="sm" color="secondary" />}
-          title="HTTP/2"
-          description="Lets browsers send many requests at once. Turn off for apps that misbehave on it. Applies to new connections."
-          action={
-            <KeepMenuOpen>
-              <Checkbox
-                title="HTTP/2"
-                hideLabel
-                checked={proxyState?.httpVersion !== "http1Only"}
-                // The owner's engine would not see the change until it restarts.
-                disabled={other != null || setHttpVersion.isPending}
-                onChange={(enabled) =>
-                  setHttpVersion.mutate({ httpVersion: enabled ? "auto" : "http1Only" })
-                }
-              />
-            </KeepMenuOpen>
-          }
-        />
-      ),
-    },
-    { type: "separator" },
-    {
-      label: "Copy Environment for a Terminal",
-      icon: "square_terminal",
-      onSelect: copyEnvironment,
-    },
-    {
-      label: recordingLabel(recording),
-      icon: recording ? "circle_pause" : "circle_play",
-      hidden: !running,
-      hotKeyAction: "recording_toggle",
-      hotKeyLabelOnly: true,
-      onSelect: () => execute.mutate({ scope: "global", action: "recording_toggle" }),
-    },
   ];
 
   return (
     <>
-      {untrusted && (
-        <Pill color="warning" onClick={() => dropdownRef.current?.open()}>
-          <Icon icon="shield_off" size="xs" />
-          Certificate not trusted
-        </Pill>
-      )}
       <Dropdown ref={dropdownRef} items={items}>
-        <Pill color={!running && other == null && proxyState != null ? "warning" : undefined}>
-          {other != null ? (
+        <Pill color={status === "stopped" ? "warning" : undefined}>
+          {status === "encrypting" ? (
+            <>
+              <LoadingIcon size="xs" />
+              <span className="text-text">Encrypting</span>
+              <span className="font-mono text-text-subtle">{encrypting}</span>
+            </>
+          ) : status === "cli" && other != null ? (
             <>
               <StateDot state="cli" />
               <span className="text-text">CLI</span>
-              {other.proxyPort != null && (
-                <span className="font-mono text-text-subtle">:{other.proxyPort}</span>
-              )}
             </>
-          ) : running ? (
+          ) : status === "recording" || status === "paused" ? (
             <>
-              <StateDot state={recording ? "recording" : "paused"} />
+              <StateDot state={status} />
               <span className="text-text">{recording ? "Recording" : "Paused"}</span>
-              {port != null && <span className="font-mono text-text-subtle">:{port}</span>}
             </>
           ) : (
             <>
@@ -263,6 +235,12 @@ export function ProxyStatus() {
           <Icon icon="chevron_down" size="xs" className="text-text-subtlest" />
         </Pill>
       </Dropdown>
+      {untrusted && (
+        <Pill color="warning" onClick={() => dropdownRef.current?.open()}>
+          <Icon icon="shield_off" size="xs" />
+          Certificate not trusted
+        </Pill>
+      )}
     </>
   );
 }
@@ -300,6 +278,12 @@ export function useProxySetup() {
   // The engine turns the system proxy on as it starts, and says so once the prompt is
   // answered, and turns it off as it stops.
   useRpcEvent("proxy_state_changed", () => void systemProxy.refetch());
+  // Setup counts as done once the system proxy has been on, whatever it is now.
+  const [everOn, setEverOn] = useAtom(systemProxyEverOnAtom);
+  const on = systemProxy.data?.enabled === true;
+  useEffect(() => {
+    if (on && !everOn) setEverOn(true);
+  }, [on, everOn, setEverOn]);
   return { caStatus, trust, systemProxy, setSystemProxy };
 }
 
@@ -317,74 +301,6 @@ export function useSystemProxySwitch(setup: ReturnType<typeof useProxySetup>) {
 }
 
 /** The privileged helper: whether it is installed and approved, and which way changes go */
-function HelperMenuRow({
-  status,
-  onOpenDialog,
-}: {
-  status: SystemProxyStatus;
-  onOpenDialog: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const unregister = useRpcMutation("helper_unregister", {
-    onSuccess: (status) =>
-      queryClient.setQueryData<SystemProxyStatus>(["system_proxy_status", {}], status),
-  });
-  const row = helperRow(status.helper, status.backend);
-  const error = unregister.error;
-  return (
-    <MenuRow
-      icon={
-        <Icon
-          icon={status.helper === "enabled" ? "badge_check" : "lock"}
-          size="sm"
-          color={status.helper === "enabled" ? "success" : "secondary"}
-        />
-      }
-      title={row.title}
-      description={
-        error != null ? <span className="text-danger">{error.message}</span> : row.description
-      }
-      action={
-        row.action != null && (
-          <Button
-            size="2xs"
-            variant="border"
-            color={row.action === "unregister" ? "default" : "primary"}
-            isLoading={unregister.isPending}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (row.action === "unregister") unregister.mutate({});
-              else onOpenDialog();
-            }}
-          >
-            {row.action === "install"
-              ? "Install"
-              : row.action === "approve"
-                ? "Approve"
-                : "Unregister"}
-          </Button>
-        )
-      }
-    />
-  );
-}
-
-/** Saves whether the system proxy turns on as the app launches */
-function useSetSystemProxyAtLaunch() {
-  const store = useStore();
-  return useRpcMutation("set_system_proxy_at_launch", {
-    onSettled: () => void refreshProxyState(store),
-  });
-}
-
-/** Saves the HTTP versions offered to clients, which the engine applies to new connections */
-function useSetHttpVersion() {
-  const store = useStore();
-  return useRpcMutation("set_http_version", {
-    onSettled: () => void refreshProxyState(store),
-  });
-}
-
 export function useCopyEnvironment() {
   const proxyState = useAtomValue(proxyStateAtom);
   const caStatus = useRpcQuery("ca_status", {});
@@ -404,6 +320,18 @@ export function useCopyEnvironment() {
     }
   };
 }
+
+/** Whether something was just copied, for a moment, and the call that says it was */
+function useCopied(): [boolean, () => void] {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timeout = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timeout);
+  }, [copied]);
+  return [copied, () => setCopied(true)];
+}
+
 /** Keeps a click on a control inside a menu row from closing the menu, as a row's click does */
 function KeepMenuOpen({ children, className }: { children: ReactNode; className?: string }) {
   return (

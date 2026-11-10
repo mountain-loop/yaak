@@ -17,6 +17,7 @@ use hyper::http::request::Parts;
 use hyper::http::uri::{Authority, PathAndQuery, Scheme};
 use hyper::upgrade::OnUpgrade;
 use hyper::{Method, Request, Response, StatusCode, Uri};
+#[cfg(not(target_os = "macos"))]
 use hyper_util::client::legacy::connect::HttpInfo;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use log::{debug, info, warn};
@@ -25,9 +26,13 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio_rustls::{LazyConfigAcceptor, TlsConnector};
 
-use crate::body::{CaptureBody, Direction};
+use crate::body::{BodyParser, CaptureBody, Direction};
 use crate::connection::serve_tls;
-use crate::tunnel::{Rewind, splice, tunnel};
+use crate::grpc::{self, GrpcParser};
+use crate::messages::{MessageDirection, StreamKind};
+use crate::sse::SseParser;
+use crate::tunnel::{Counted, Rewind, is_own_connection, splice, tunnel};
+use crate::ws::{self, WsFlow};
 use crate::{ClientConn, Engine, ProxyEvent};
 
 pub(crate) type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
@@ -65,6 +70,20 @@ fn error_chain(e: &(dyn Error + 'static)) -> String {
     message
 }
 
+fn header_str<'a>(headers: &'a hyper::HeaderMap, name: &str) -> Option<&'a str> {
+    headers.get(name).and_then(|v| v.to_str().ok())
+}
+
+/// A gRPC call, from its request headers.
+struct GrpcCall {
+    /// gRPC-Web's base64 flavor.
+    text: bool,
+    /// What the client's compressed messages are compressed with.
+    encoding: Option<String>,
+    /// The request body's `Content-Encoding`, which gRPC-Web may use.
+    content_encoding: Option<String>,
+}
+
 /// Per-flow bookkeeping shared by the plain HTTP and the intercepted HTTPS paths.
 struct Flow {
     id: u64,
@@ -74,6 +93,7 @@ struct Flow {
     answered: bool,
     /// Reading the client's upload failed: it reset the stream or closed the connection.
     upload_failed: Arc<AtomicBool>,
+    grpc: Option<GrpcCall>,
 }
 
 impl Flow {
@@ -83,12 +103,13 @@ impl Flow {
         req: &Request<Incoming>,
         url: String,
     ) -> Self {
-        let flow = Self {
+        let mut flow = Self {
             id: engine.next_flow_id(),
             start: Instant::now(),
             engine,
             answered: false,
             upload_failed: Arc::new(AtomicBool::new(false)),
+            grpc: None,
         };
         flow.engine.emit(ProxyEvent::RequestStart {
             id: flow.id,
@@ -118,20 +139,72 @@ impl Flow {
                 value: String::from_utf8_lossy(value.as_bytes()).into_owned(),
             });
         }
+        if let Some((kind, text)) = grpc::detect(header_str(req.headers(), "content-type")) {
+            flow.engine.emit(ProxyEvent::StreamStart { id: flow.id, kind });
+            let encoding = header_str(req.headers(), "grpc-encoding").map(String::from);
+            let content_encoding = header_str(req.headers(), "content-encoding").map(String::from);
+            flow.grpc = Some(GrpcCall { text, encoding, content_encoding });
+        }
         flow
     }
 
     fn capture_request(&self, body: Incoming) -> BoxBody {
+        let parser = self.grpc.as_ref().map(|call| {
+            let limit = self.engine.capture_body_limit();
+            let encoding = call.encoding.as_deref();
+            let parser = GrpcParser::new(MessageDirection::Client, encoding, call.text, limit)
+                .with_content_encoding(call.content_encoding.as_deref());
+            BodyParser::Grpc(parser)
+        });
         CaptureBody::new(body, Direction::Request, self.id, self.start, self.engine.clone())
             .flag_failure(self.upload_failed.clone())
+            .with_parser(parser)
             .boxed()
     }
 
-    fn respond(
-        mut self,
-        resp: Response<Incoming>,
-        remote_addr: Option<SocketAddr>,
-    ) -> Response<BoxBody> {
+    /// How the response's body is read for messages, if it streams them, after recording that
+    /// it does.
+    fn response_parser(&self, resp: &Response<Incoming>) -> Option<BodyParser> {
+        let limit = self.engine.capture_body_limit();
+        let headers = resp.headers();
+        if self.grpc.is_some() {
+            // A call that fails at once answers with its status in the headers, and no body.
+            if let Some(message) = grpc::trailers_from_headers(headers) {
+                self.engine.emit(ProxyEvent::Message { id: self.id, message });
+            }
+            // A gateway's own error page is no gRPC body.
+            let (_, text) = grpc::detect(header_str(headers, "content-type"))?;
+            let encoding = header_str(headers, "grpc-encoding");
+            let parser = GrpcParser::new(MessageDirection::Server, encoding, text, limit)
+                .with_content_encoding(header_str(headers, "content-encoding"));
+            return Some(BodyParser::Grpc(parser));
+        }
+        let content_type = header_str(headers, "content-type").unwrap_or_default();
+        let essence = content_type.split(';').next().unwrap_or_default().trim();
+        if !essence.eq_ignore_ascii_case("text/event-stream") {
+            return None;
+        }
+        self.engine.emit(ProxyEvent::StreamStart { id: self.id, kind: StreamKind::Sse });
+        let encoding = header_str(headers, "content-encoding");
+        Some(BodyParser::Sse(Box::new(SseParser::new(encoding, limit))))
+    }
+
+    /// Records the connection the request goes on: its timings when it was opened for this
+    /// request, and its TLS either way.
+    fn goes_on(&self, conn: &UpstreamConn, reused: bool) {
+        let since = |at: Instant| {
+            (!reused).then(|| at.saturating_duration_since(self.start).as_millis() as u64)
+        };
+        self.engine.emit(ProxyEvent::UpstreamConnection {
+            id: self.id,
+            elapsed_connect_ms: since(conn.tls.connected),
+            elapsed_tls_ms: since(conn.tls.handshaken),
+            tls_version: conn.tls.version.clone(),
+            tls_cipher: conn.tls.cipher.clone(),
+        });
+    }
+
+    fn respond_head(&mut self, resp: &Response<Incoming>, remote_addr: Option<SocketAddr>) {
         self.answered = true;
         self.engine.emit(ProxyEvent::ResponseStart {
             id: self.id,
@@ -147,10 +220,34 @@ impl Flow {
                 value: String::from_utf8_lossy(value.as_bytes()).into_owned(),
             });
         }
+    }
+
+    fn respond(
+        mut self,
+        resp: Response<Incoming>,
+        remote_addr: Option<SocketAddr>,
+    ) -> Response<BoxBody> {
+        self.respond_head(&resp, remote_addr);
+        let parser = self.response_parser(&resp);
         let (parts, body) = resp.into_parts();
         let engine = self.engine.clone();
-        let body = CaptureBody::new(body, Direction::Response, self.id, self.start, engine);
+        let body = CaptureBody::new(body, Direction::Response, self.id, self.start, engine)
+            .with_parser(parser);
         Response::from_parts(parts, body.boxed())
+    }
+
+    /// Answers with a WebSocket's `101`. The flow goes on in the returned [`WsFlow`], which
+    /// ends it, as the `101` has no body to.
+    fn respond_websocket(
+        mut self,
+        resp: Response<Incoming>,
+        remote_addr: Option<SocketAddr>,
+    ) -> (Response<BoxBody>, Arc<WsFlow>) {
+        self.respond_head(&resp, remote_addr);
+        self.engine.emit(ProxyEvent::StreamStart { id: self.id, kind: StreamKind::WebSocket });
+        let ws = Arc::new(WsFlow::new(self.id, self.start, self.engine.clone()));
+        let (parts, body) = resp.into_parts();
+        (Response::from_parts(parts, body.boxed()), ws)
     }
 
     /// Answers the client with `status` and `error` without contacting any server.
@@ -215,35 +312,60 @@ pub(crate) async fn handle_request(
         return Ok(handle_connect(req, client, engine));
     }
 
+    // A request the engine sent that was routed back to it, as iCloud Private Relay does with
+    // port 80 while the system proxy is on: forwarding it again would loop forever. It is the
+    // engine's own copy of a flow already recorded, which gets this answer, so it records none.
+    if carries_via(&req, &engine) {
+        debug!("Refused {} {}: it looped back to Yaak Proxy", req.method(), req.uri());
+        return Ok(Response::builder()
+            .status(StatusCode::LOOP_DETECTED)
+            .header(CONTENT_TYPE, "text/plain; charset=utf-8")
+            .body(text_body("request looped back to Yaak Proxy"))
+            .unwrap());
+    }
+
     // Some clients send a bare path (`POST /api`) as they would to the server itself.
     let from_host = req.uri().authority().is_none();
-    let rejected = if from_host { url_from_host(&mut req, &engine).err() } else { None };
+    let rejected = if from_host { url_from_host(&mut req).err() } else { None };
     let flow = Flow::begin(engine.clone(), client, &req, req.uri().to_string());
     if let Some((status, error)) = rejected {
         return Ok(flow.reject(status, error));
     }
-    if from_host {
-        req.headers_mut().append(VIA, engine.via.clone());
-    }
+    req.headers_mut().append(VIA, engine.via.clone());
 
     let (parts, body) = req.into_parts();
     let outgoing = Request::from_parts(parts, flow.capture_request(body));
     Ok(match engine.http_client.request(outgoing).await {
         Ok(resp) => {
-            let remote_addr = resp.extensions().get::<HttpInfo>().map(|i| i.remote_addr());
+            let remote_addr = plain_remote_addr(&resp);
             flow.respond(resp, remote_addr)
         }
         Err(e) => flow.fail(error_chain(&e)),
     })
 }
 
+/// The address `Engine::http_client` connected to for `resp`.
+fn plain_remote_addr(resp: &Response<Incoming>) -> Option<SocketAddr> {
+    #[cfg(target_os = "macos")]
+    return resp.extensions().get::<crate::nw::RemoteAddr>().map(|a| a.0);
+    #[cfg(not(target_os = "macos"))]
+    resp.extensions().get::<HttpInfo>().map(|i| i.remote_addr())
+}
+
+/// Whether `req` carries this engine's `Via` mark, which it adds to every plain-HTTP request it
+/// forwards.
+fn carries_via(req: &Request<Incoming>, engine: &Engine) -> bool {
+    let via = engine.via.to_str().unwrap_or_default();
+    req.headers()
+        .get_all(VIA)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .any(|v| v.split(',').any(|hop| hop.trim() == via))
+}
+
 /// Gives a bare-path request the `http://` URL its `Host` names. Fails when there is no usable
-/// `Host`, or when the request carries this engine's `Via` mark: then it is one the engine sent
-/// that was routed back to it, and forwarding it again would loop forever.
-fn url_from_host(
-    req: &mut Request<Incoming>,
-    engine: &Engine,
-) -> Result<(), (StatusCode, &'static str)> {
+/// `Host`.
+fn url_from_host(req: &mut Request<Incoming>) -> Result<(), (StatusCode, &'static str)> {
     let Some(host) = req.headers().get(HOST) else {
         return Err((StatusCode::BAD_REQUEST, "no host in request"));
     };
@@ -258,17 +380,6 @@ fn url_from_host(
     }
     *req.uri_mut() =
         Uri::from_parts(parts).map_err(|_| (StatusCode::BAD_REQUEST, "invalid host in request"))?;
-
-    let via = engine.via.to_str().unwrap_or_default();
-    let looped = req
-        .headers()
-        .get_all(VIA)
-        .iter()
-        .filter_map(|v| v.to_str().ok())
-        .any(|v| v.split(',').any(|hop| hop.trim() == via));
-    if looped {
-        return Err((StatusCode::LOOP_DETECTED, "request looped back to Yaak Proxy"));
-    }
     Ok(())
 }
 
@@ -280,6 +391,7 @@ struct Target {
     authority: String,
     /// `host:port` to dial.
     addr: String,
+    port: u16,
 }
 
 fn handle_connect(
@@ -305,6 +417,7 @@ fn handle_connect(
             server_name: host.trim_start_matches('[').trim_end_matches(']').to_string(),
             authority: if port == 443 { host.clone() } else { format!("{host}:{port}") },
             addr: format!("{host}:{port}"),
+            port,
         };
         if let Err(e) = intercept(upgraded, target, client, engine).await {
             debug!("Tunnel to {host}:{port} ended: {}", error_chain(e.as_ref()));
@@ -323,8 +436,13 @@ async fn intercept<S>(
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
+    if !engine.decrypts(&target.server_name, target.port, conn.connection).await {
+        debug!("Tunneling {} undecrypted, as the decrypt list leaves it out", target.addr);
+        return Ok(tunnel_flow(client, &target, conn, &engine).await?);
+    }
+    // The fallback for clients that rejected the engine's certificate.
     if engine.is_passthrough(&target.addr) {
-        return Ok(tunnel(client, &target.addr, &[]).await?);
+        return Ok(tunnel_flow(client, &target, conn, &engine).await?);
     }
 
     let mut buf = vec![0u8; 4096];
@@ -384,6 +502,49 @@ where
         .await
 }
 
+/// Tunnels a CONNECT undecrypted, recorded as a flow of its own with the bytes each way. Not
+/// one of the engine's own connections coming back, which [`tunnel`] refuses.
+async fn tunnel_flow<S>(
+    client: S,
+    target: &Target,
+    conn: ClientConn,
+    engine: &Engine,
+) -> std::io::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    if is_own_connection(&target.addr).await {
+        return tunnel(client, &target.addr, &[]).await;
+    }
+    let id = engine.next_flow_id();
+    let start = Instant::now();
+    engine.emit(ProxyEvent::TunnelStart {
+        id,
+        started_at: SystemTime::now(),
+        authority: target.authority.clone(),
+        connection: conn.connection,
+        client_addr: conn.addr,
+    });
+    let client = Counted::new(client);
+    let (sent, received) = client.counters();
+    let result = tunnel(client, &target.addr, &[]).await;
+    let (sent, received) = (sent.load(Ordering::Relaxed), received.load(Ordering::Relaxed));
+    // A tunnel that carried the server's bytes and then broke ended as connections do; one that
+    // never did failed to reach the server.
+    let error = match &result {
+        Err(e) if received == 0 => Some(error_chain(e)),
+        _ => None,
+    };
+    engine.emit(ProxyEvent::TunnelEnd {
+        id,
+        sent,
+        received,
+        elapsed_ms: start.elapsed().as_millis() as u64,
+        error,
+    });
+    result
+}
+
 fn record_handshake_failure(
     engine: &Engine,
     addr: &str,
@@ -430,9 +591,36 @@ enum Upstream {
 struct UpstreamConn {
     sender: Upstream,
     remote_addr: Option<SocketAddr>,
+    tls: TlsInfo,
+}
+
+/// When a connection to the server was made, and the TLS it negotiated.
+#[derive(Debug, Clone)]
+struct TlsInfo {
+    connected: Instant,
+    handshaken: Instant,
+    version: Option<String>,
+    cipher: Option<String>,
+}
+
+impl TlsInfo {
+    fn of(conn: &rustls::ClientConnection, connected: Instant) -> Self {
+        let version = conn.protocol_version().map(|v| match v {
+            rustls::ProtocolVersion::TLSv1_3 => "TLSv1.3".to_string(),
+            rustls::ProtocolVersion::TLSv1_2 => "TLSv1.2".to_string(),
+            other => format!("{other:?}"),
+        });
+        let cipher = conn.negotiated_cipher_suite().map(|s| format!("{:?}", s.suite()));
+        Self { connected, handshaken: Instant::now(), version, cipher }
+    }
 }
 
 impl UpstreamConn {
+    /// Shared by another request, as an HTTP/2 connection is.
+    fn share(&self, sender: Upstream) -> Self {
+        Self { sender, remote_addr: self.remote_addr, tls: self.tls.clone() }
+    }
+
     fn is_h2(&self) -> bool {
         matches!(self.sender, Upstream::H2(_))
     }
@@ -490,10 +678,7 @@ impl Upstreams {
         conns.retain(|c| !c.is_closed());
         if let Some(i) = conns.iter().position(UpstreamConn::is_ready) {
             let conn = match &conns[i].sender {
-                Upstream::H2(s) => UpstreamConn {
-                    sender: Upstream::H2(s.clone()),
-                    remote_addr: conns[i].remote_addr,
-                },
+                Upstream::H2(s) => conns[i].share(Upstream::H2(s.clone())),
                 Upstream::H1(_) => conns.swap_remove(i),
             };
             return Ok((conn, true));
@@ -504,10 +689,7 @@ impl Upstreams {
         }
         let conn = connect_upstream(engine, &self.target, false).await?;
         match &conn.sender {
-            Upstream::H2(s) => conns.push(UpstreamConn {
-                sender: Upstream::H2(s.clone()),
-                remote_addr: conn.remote_addr,
-            }),
+            Upstream::H2(s) => conns.push(conn.share(Upstream::H2(s.clone()))),
             Upstream::H1(_) => self.h1.store(true, Ordering::Relaxed),
         }
         Ok((conn, false))
@@ -536,10 +718,12 @@ async fn connect_upstream(
     h1_only: bool,
 ) -> Result<UpstreamConn, BoxError> {
     let tcp = TcpStream::connect(&target.addr).await?;
+    let connected = Instant::now();
     let remote_addr = tcp.peer_addr().ok();
     let config = if h1_only { &engine.upstream_tls_h1 } else { &engine.upstream_tls };
     let server_name = ServerName::try_from(target.server_name.clone())?;
     let tls = TlsConnector::from(config.clone()).connect(server_name, tcp).await?;
+    let tls_info = TlsInfo::of(tls.get_ref().1, connected);
     let is_h2 = tls.get_ref().1.alpn_protocol() == Some(b"h2");
     let io = TokioIo::new(tls);
 
@@ -565,7 +749,7 @@ async fn connect_upstream(
         });
         Upstream::H1(sender)
     };
-    Ok(UpstreamConn { sender: upstream, remote_addr })
+    Ok(UpstreamConn { sender: upstream, remote_addr, tls: tls_info })
 }
 
 /// Addresses a request to the server in the protocol of `conn`. It may be addressed for the
@@ -644,6 +828,7 @@ async fn forward_https(
         Ok(taken) => taken,
         Err(e) => return Ok(flow.fail(error_chain(e.as_ref()))),
     };
+    flow.goes_on(&conn, reused);
 
     let (mut parts, body) = req.into_parts();
     if let Err(e) = address(&mut parts, &conn, target, &path, !body.is_end_stream()) {
@@ -667,6 +852,7 @@ async fn forward_https(
             Err(e) => return Ok(flow.fail(error_chain(e.as_ref()))),
         };
         reused = false;
+        flow.goes_on(&conn, reused);
         let (mut parts, body) = unsent.into_parts();
         if let Err(e) = address(&mut parts, &conn, target, &path, !body.is_end_stream()) {
             return Ok(flow.fail(e));
@@ -683,6 +869,19 @@ async fn forward_https(
     {
         let upstream_upgrade = hyper::upgrade::on(&mut resp);
         let addr = target.addr.clone();
+        let websocket = header_str(resp.headers(), UPGRADE.as_str())
+            .is_some_and(|u| u.trim().eq_ignore_ascii_case("websocket"));
+        if websocket && engine.websocket_capture {
+            let deflate = ws::negotiated_deflate(resp.headers());
+            let (resp, ws_flow) = flow.respond_websocket(resp, remote_addr);
+            tokio::spawn(async move {
+                if let Err(e) = ws::relay(client_upgrade, upstream_upgrade, ws_flow, deflate).await
+                {
+                    debug!("WebSocket to {addr} ended: {e}");
+                }
+            });
+            return Ok(resp);
+        }
         tokio::spawn(async move {
             if let Err(e) = splice(client_upgrade, upstream_upgrade).await {
                 debug!("Upgraded tunnel to {addr} ended: {e}");

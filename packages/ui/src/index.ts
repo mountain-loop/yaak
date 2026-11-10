@@ -1,7 +1,8 @@
+export { ACTIONS_BAR_CONTAINER, ActionsBar, PINNED_ACTION } from "./components/ActionsBar";
 export type { BannerProps } from "./components/Banner";
 export { Banner } from "./components/Banner";
 export type { ButtonProps } from "./components/Button";
-export { Button } from "./components/Button";
+export { Button, CONTROL_TOOLTIP_DELAY } from "./components/Button";
 export type { CheckboxProps } from "./components/Checkbox";
 export { Checkbox } from "./components/Checkbox";
 export type { CopyIconButtonProps } from "./components/CopyIconButton";
@@ -15,6 +16,7 @@ export { DropMarker } from "./components/DropMarker";
 export type {
   ContextMenuProps,
   DropdownItem,
+  DropdownItemAction,
   DropdownItemContent,
   DropdownItemDefault,
   DropdownItemSeparator,
@@ -41,7 +43,32 @@ export type {
 } from "./components/EditorHost";
 export { EditorHostProvider, useEditorHost } from "./components/EditorHost";
 export { EmptyStateText } from "./components/EmptyStateText";
-export { ConfirmLargeResponse } from "./components/http/ConfirmLargeResponse";
+export { AutoScroller } from "./components/events/AutoScroller";
+export type {
+  EventStreamColumns,
+  EventStreamViewerProps,
+} from "./components/events/EventStreamViewer";
+export { EventStreamViewer, payloadText } from "./components/events/EventStreamViewer";
+export type { EventDetailAction } from "./components/events/EventViewer";
+export { EventDetailHeader, EventViewer } from "./components/events/EventViewer";
+export { EventViewerRow } from "./components/events/EventViewerRow";
+export type {
+  StreamEvent,
+  StreamEventDirection,
+  StreamPayload,
+  StreamPayloadText,
+  StreamPayloadView,
+} from "./components/events/streamEvents";
+export { eventDeltas, formatEventDelta, formatEventTime } from "./components/events/streamEvents";
+export type { ExternalLinkProps } from "./components/ExternalLink";
+export { ExternalLink } from "./components/ExternalLink";
+export type { PrettyView } from "./components/http/BodyViewModeSwitch";
+export {
+  BodyViewModeSwitch,
+  prettyViewFor,
+  viewModeLabels,
+} from "./components/http/BodyViewModeSwitch";
+export { ConfirmLargeResponse, LARGE_BODY_BYTES } from "./components/http/ConfirmLargeResponse";
 export { FormMultipartEditor } from "./components/http/FormMultipartEditor";
 export { FormUrlencodedEditor } from "./components/http/FormUrlencodedEditor";
 export { HeadersEditor } from "./components/http/HeadersEditor";
@@ -55,7 +82,10 @@ export {
   REQUEST_TAB_PARAMS,
   RequestBodyEditor,
 } from "./components/http/HttpRequestPaneView";
-export type { ExtraPaneTab, HttpResponsePaneViewProps } from "./components/http/HttpResponsePaneView";
+export type {
+  ExtraPaneTab,
+  HttpResponsePaneViewProps,
+} from "./components/http/HttpResponsePaneView";
 export {
   HttpResponsePaneView,
   RESPONSE_TAB_BODY,
@@ -97,15 +127,17 @@ export { PairEditor, PairEditorRow } from "./components/pairs/PairEditor";
 export { ensurePairId } from "./components/pairs/PairEditor.util";
 export { PairOrBulkEditor } from "./components/pairs/PairOrBulkEditor";
 export { PillButton } from "./components/PillButton";
-export type {
-  RadioDropdownItem,
-  RadioDropdownProps,
-} from "./components/RadioDropdown";
+export type { RadioDropdownItem, RadioDropdownProps } from "./components/RadioDropdown";
 export { RadioDropdown } from "./components/RadioDropdown";
+export type { SelectProps } from "./components/Select";
+export { Select } from "./components/Select";
 export type { ErrorBoundaryProps } from "./components/ErrorBoundary";
 export { ErrorBoundary } from "./components/ErrorBoundary";
+export type { FormattableEditor } from "./components/FormatAction";
+export { FormatAction, formatEditor } from "./components/FormatAction";
 export { FormattedError } from "./components/FormattedError";
 export { HeaderSize } from "./components/HeaderSize";
+export { HeaderTint } from "./components/HeaderTint";
 export type { HeadersTableProps } from "./components/HeadersTable";
 export { HeadersTable } from "./components/HeadersTable";
 export { Heading } from "./components/Heading";
@@ -126,8 +158,46 @@ export { Overlay } from "./components/Overlay";
 export type { PlainInputProps } from "./components/PlainInput";
 export { PlainInput } from "./components/PlainInput";
 export { Portal } from "./components/Portal";
+export type { SegmentedControlOption, SegmentedControlProps } from "./components/SegmentedControl";
+export { SegmentedControl } from "./components/SegmentedControl";
 export type { SeparatorAction } from "./components/Separator";
 export { Separator } from "./components/Separator";
+export type { SettingRowBaseProps, SettingSnippetLanguage } from "./components/settings/SettingRow";
+export {
+  SettingCommand,
+  SettingOverrideRow,
+  SettingRow,
+  SettingRowBoolean,
+  SettingRowNumber,
+  SettingRowSelect,
+  SettingRowText,
+  SettingSelectControl,
+  SettingSnippet,
+  SettingsList,
+  SettingsSection,
+  SettingValue,
+} from "./components/settings/SettingRow";
+export type {
+  SettingsDialogProps,
+  SettingsTabDef,
+  SettingsTitlebar,
+} from "./components/settings/SettingsDialog";
+export {
+  SETTINGS_TAB_GENERAL,
+  SETTINGS_TAB_INTERFACE,
+  SETTINGS_TAB_LICENSE,
+  SETTINGS_TAB_THEME,
+  SettingsDialog,
+} from "./components/settings/SettingsDialog";
+export type { SettingsGeneralProps } from "./components/settings/SettingsGeneral";
+export { SettingsGeneral, SettingsUpdatesSection } from "./components/settings/SettingsGeneral";
+export type { SettingsInterfaceProps } from "./components/settings/SettingsInterface";
+export { SettingsInterface } from "./components/settings/SettingsInterface";
+export type { SettingsLicenseProps } from "./components/settings/SettingsLicense";
+export { SettingsLicense } from "./components/settings/SettingsLicense";
+export type { SettingsThemeProps } from "./components/settings/SettingsTheme";
+export { SettingsTheme } from "./components/settings/SettingsTheme";
+export * from "./components/settings/types";
 export type { ResizeHandleEvent } from "./components/ResizeHandle";
 export { ResizeHandle } from "./components/ResizeHandle";
 export { SidebarLayout } from "./components/SidebarLayout";
@@ -219,6 +289,7 @@ export { languageFromContent, languageFromContentType } from "./lib/contentType"
 export { getMimeTypeFromContentType, isJSON, isProbablyTextContentType } from "./lib/mimeType";
 export { textLikelyContainsJsonComments } from "./lib/jsonComments";
 export { validateHttpHeader } from "./lib/validateHttpHeader";
+export { isYaakUrl } from "./lib/yaakUrl";
 export { computeSideForDragMove } from "./lib/dnd";
 export { docFingerprint } from "./lib/docFingerprint";
 export { getNodeText } from "./lib/getNodeText";

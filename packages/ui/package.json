@@ -19,6 +19,7 @@
     "./useToggle": "./src/hooks/useToggle.ts"
   },
   "dependencies": {
+    "date-fns": "^4.1.0",
     "hexy": "^0.4.0",
     "jotai-family": "^1.0.1"
   }

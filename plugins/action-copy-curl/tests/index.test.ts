@@ -456,6 +456,21 @@ describe("exporter-curl", () => {
     ).toEqual([`curl 'https://yaak.app?foo=bar&baz=qux&token='`].join(" \\\n  "));
   });
 
+  test("API key auth disabled", async () => {
+    expect(
+      await convertToCurl({
+        url: "https://yaak.app",
+        authenticationType: "apikey",
+        authentication: {
+          disabled: true,
+          location: "header",
+          key: "X-Header",
+          value: "my-token",
+        },
+      }),
+    ).toEqual([`curl 'https://yaak.app'`].join(" \\\n  "));
+  });
+
   test("Stale body data", async () => {
     expect(
       await convertToCurl({

@@ -6,11 +6,14 @@ export function Table({
   children,
   className,
   scrollable,
+  density = "default",
   style,
 }: {
   children: ReactNode;
   className?: string;
   scrollable?: boolean;
+  /** Compact rows, as dense as the proxy's flow list, for tables of data rather than settings */
+  density?: "default" | "compact";
   style?: React.CSSProperties;
 }) {
   return (
@@ -21,7 +24,10 @@ export function Table({
           "w-full text-sm mb-auto min-w-full max-w-full",
           "border-separate border-spacing-0",
           scrollable && "[&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10",
+          // Overrides the cells' own padding, which outranks theirs as it names the table too
+          density === "compact" && "[&_td]:py-0.5 [&_th]:py-0.5",
         )}
+        data-density={density}
       >
         {children}
       </table>

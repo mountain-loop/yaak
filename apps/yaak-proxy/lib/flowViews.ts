@@ -15,7 +15,7 @@ import {
   type HttpResponseView,
 } from "@yaakapp-internal/ui/httpTypes";
 import { useEffect, useState } from "react";
-import { base64ToBytes, bytesToText, findHeader, mimeEssence } from "./body";
+import { base64ToBytes, bodyAsText, findHeader, mimeEssence } from "./body";
 import { statusReason } from "./statusReason";
 
 /** A captured body as the engine's body RPC returns it, decoded */
@@ -32,7 +32,8 @@ export function flowBodyFromRpc(res: GetFlowBodyResponse): FlowBodyData {
 /** A captured request as the shared request pane shows it, read-only */
 export function flowRequestToView(flow: Flow, body: FlowBodyData | null): HttpRequestView {
   const contentType = findHeader(flow.requestHeaders, "content-type");
-  const text = body == null ? null : bytesToText(body.bytes, body.truncated);
+  // In its declared charset, as the response viewers read text
+  const text = body == null ? null : bodyAsText(body.bytes, body.truncated, contentType);
   const { bodyType, body: bodyView } = requestBodyView(contentType, body, text);
 
   return {
@@ -84,7 +85,18 @@ export function flowResponseToView(
 ): HttpResponseView | null {
   const ended = flow.elapsedMs != null || flow.error != null || flow.cancelled;
   if (flow.status == null && !ended) return null;
+  return responseView(flow, body, ended);
+}
 
+/**
+ * A flow as the shared cookie lists read it, whether or not a response came: the request
+ * half's Cookies tab shows what was sent before anything was received.
+ */
+export function flowCookiesView(flow: Flow): HttpResponseView {
+  return responseView(flow, null, flow.elapsedMs != null || flow.error != null || flow.cancelled);
+}
+
+function responseView(flow: Flow, body: FlowBodyData | null, ended: boolean): HttpResponseView {
   const encoding = findHeader(flow.responseHeaders, "content-encoding")?.trim().toLowerCase();
   const encoded = encoding != null && encoding !== "" && encoding !== "identity";
 
@@ -133,7 +145,10 @@ export function flowBodyLoader({
   return {
     useText: () => {
       const body = useBody();
-      return { ...body, data: mapData(body, (b) => bytesToText(b.bytes, b.truncated)) };
+      return {
+        ...body,
+        data: mapData(body, (b) => bodyAsText(b.bytes, b.truncated, contentType)),
+      };
     },
     useBytes: () => {
       const body = useBody();

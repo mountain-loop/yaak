@@ -7,12 +7,45 @@ use std::time::Instant;
 use bytes::Bytes;
 use hyper::body::{Body, Frame, Incoming, SizeHint};
 
+use crate::grpc::{self, GrpcParser};
+use crate::messages::StreamMessage;
+use crate::sse::SseParser;
 use crate::{Engine, ProxyEvent};
 
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Direction {
     Request,
     Response,
+}
+
+/// Reads a streaming body's messages as the body passes.
+pub(crate) enum BodyParser {
+    Sse(Box<SseParser>),
+    Grpc(GrpcParser),
+}
+
+impl BodyParser {
+    fn feed(&mut self, data: &[u8]) -> Vec<StreamMessage> {
+        match self {
+            Self::Sse(p) => p.feed(data),
+            Self::Grpc(p) => p.feed(data),
+        }
+    }
+
+    fn trailers(&mut self, trailers: &hyper::HeaderMap) -> Option<StreamMessage> {
+        match self {
+            Self::Sse(_) => None,
+            Self::Grpc(_) => grpc::trailers_from_headers(trailers),
+        }
+    }
+
+    /// The body ended: messages held back for what might have followed.
+    fn finish(&mut self) -> Vec<StreamMessage> {
+        match self {
+            Self::Sse(p) => p.finish(),
+            Self::Grpc(p) => p.end().into_iter().collect(),
+        }
+    }
 }
 
 /// Streams a body through untouched, reporting each frame as a chunk event (with data up to
@@ -23,11 +56,14 @@ pub(crate) struct CaptureBody {
     id: u64,
     start: Instant,
     engine: Arc<Engine>,
+    /// The capture limit as the body started, so a change applies to bodies after it.
+    limit: usize,
     captured: usize,
     size: u64,
     finished: bool,
     /// Set when reading the body fails.
     failed: Option<Arc<AtomicBool>>,
+    parser: Option<BodyParser>,
 }
 
 impl CaptureBody {
@@ -43,11 +79,25 @@ impl CaptureBody {
             direction,
             id,
             start,
+            limit: engine.capture_body_limit(),
             engine,
             captured: 0,
             size: 0,
             finished: false,
             failed: None,
+            parser: None,
+        }
+    }
+
+    /// Records the messages `parser` reads from the body, all of it, past the capture limit too.
+    pub(crate) fn with_parser(mut self, parser: Option<BodyParser>) -> Self {
+        self.parser = parser;
+        self
+    }
+
+    fn emit_messages(&self, messages: impl IntoIterator<Item = StreamMessage>) {
+        for message in messages {
+            self.engine.emit(ProxyEvent::Message { id: self.id, message });
         }
     }
 
@@ -69,17 +119,26 @@ impl CaptureBody {
             return;
         }
         self.finished = true;
+        // Before the body's end, so they land while the flow is still open.
+        if let Some(parser) = self.parser.as_mut() {
+            let messages = parser.finish();
+            self.emit_messages(messages);
+        }
         let truncated = self.size > self.captured as u64;
+        let elapsed_ms = self.start.elapsed().as_millis() as u64;
         let event = match self.direction {
             Direction::Request if self.size == 0 => return,
-            Direction::Request => {
-                ProxyEvent::RequestBodyComplete { id: self.id, size: self.size, truncated }
-            }
+            Direction::Request => ProxyEvent::RequestBodyComplete {
+                id: self.id,
+                size: self.size,
+                truncated,
+                elapsed_ms,
+            },
             Direction::Response => ProxyEvent::ResponseBodyComplete {
                 id: self.id,
                 size: self.size,
                 truncated,
-                elapsed_ms: self.start.elapsed().as_millis() as u64,
+                elapsed_ms,
                 error,
                 cancelled,
             },
@@ -101,7 +160,7 @@ impl Body for CaptureBody {
             Poll::Ready(Some(Ok(frame))) => {
                 if let Some(frame_data) = frame.data_ref() {
                     let len = frame_data.len();
-                    let room = self.engine.capture_body_limit.saturating_sub(self.captured);
+                    let room = self.limit.saturating_sub(self.captured);
                     let data = frame_data.slice(..len.min(room));
                     self.captured += data.len();
                     self.size += len as u64;
@@ -110,8 +169,20 @@ impl Body for CaptureBody {
                         Direction::Request => ProxyEvent::RequestBodyChunk { id, len, data },
                         Direction::Response => ProxyEvent::ResponseBodyChunk { id, len, data },
                     });
+                    if let Some(parser) = self.parser.as_mut() {
+                        let messages = parser.feed(frame_data);
+                        self.emit_messages(messages);
+                    }
+                } else if let Some(trailers) = frame.trailers_ref()
+                    && let Some(parser) = self.parser.as_mut()
+                {
+                    let message = parser.trailers(trailers);
+                    self.emit_messages(message);
                 }
-                if self.complete() {
+                // A gRPC call's status comes in trailers after its last byte, so its body is
+                // done only at the stream's end.
+                let grpc = matches!(self.parser, Some(BodyParser::Grpc(_)));
+                if if grpc { self.inner.is_end_stream() } else { self.complete() } {
                     self.finish(None, false);
                 }
             }

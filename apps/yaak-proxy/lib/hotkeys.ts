@@ -80,25 +80,29 @@ export function useHotkeyContextValue(): HotkeyContextValue {
   }, [data]);
 
   useEffect(() => {
+    // Heard before anything focused, and kept from it, so an app hotkey wins over the same chord
+    // bound in an editor, as Cmd+Shift+K deletes a line in the search box's.
     function onKeyDown(e: KeyboardEvent) {
       for (const { action, callback, options } of callbacks) {
         const enable = typeof options.enable === "function" ? options.enable() : options.enable;
         const binding = bindings.get(action);
         if (enable === false || binding == null || !matchesEvent(binding.keys, e)) continue;
         if (!options.allowDefault) e.preventDefault();
+        e.stopPropagation();
         callback(e);
         return;
       }
       for (const binding of bindings.values()) {
         if (!matchesEvent(binding.keys, e)) continue;
         e.preventDefault();
+        e.stopPropagation();
         void rpc("execute_action", binding.invocation);
         return;
       }
     }
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
   }, [bindings]);
 
   return useMemo(

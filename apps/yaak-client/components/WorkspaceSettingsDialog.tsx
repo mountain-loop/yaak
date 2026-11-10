@@ -1,12 +1,20 @@
-import { patchModel, workspaceMetasAtom, workspacesAtom } from "@yaakapp-internal/models";
+import type { WorkspaceMeta } from "@yaakapp-internal/models";
+import {
+  mergeModelsInStore,
+  patchModel,
+  workspaceMetasAtom,
+  workspacesAtom,
+} from "@yaakapp-internal/models";
 import { Banner, HStack, InlineCode, CountBadge } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
+import { useEffect, useState } from "react";
 import { useAuthTab } from "../hooks/useAuthTab";
 import { useHeadersTab } from "../hooks/useHeadersTab";
 import { useInheritedHeaders } from "../hooks/useInheritedHeaders";
 import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
 import { showDialog } from "../lib/dialog";
 import { router } from "../lib/router";
+import { rpc } from "../lib/rpc";
 import { CopyIconButton } from "./CopyIconButton";
 import { Button } from "./core/Button";
 import { PlainInput } from "./core/PlainInput";
@@ -47,6 +55,10 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
   const authTab = useAuthTab(TAB_AUTH, workspace ?? null);
   const headersTab = useHeadersTab(TAB_HEADERS, workspace ?? null);
   const inheritedHeaders = useInheritedHeaders(workspace ?? null);
+  const workspaceMetaError = useEnsureWorkspaceMeta(
+    workspaceId,
+    workspace != null && workspaceMeta == null,
+  );
 
   if (workspace == null) {
     return (
@@ -55,13 +67,6 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
       </Banner>
     );
   }
-
-  if (workspaceMeta == null)
-    return (
-      <Banner color="danger">
-        <InlineCode>WorkspaceMeta</InlineCode> not found for workspace
-      </Banner>
-    );
 
   return (
     <Tabs
@@ -105,15 +110,26 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
       <TabContent value={TAB_SETTINGS} className="overflow-y-auto h-full px-4">
         <SettingsList className="space-y-8 pb-3">
           <SettingsSection title={null}>
-            <SyncToFilesystemSetting
-              layout="settings"
-              value={{ filePath: workspaceMeta.settingSyncDir }}
-              onCreateNewWorkspace={hide}
-              onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
-            />
-            <div className="mt-4">
-              <WorkspaceEncryptionSetting layout="settings" size="xs" />
-            </div>
+            {workspaceMeta != null ? (
+              <>
+                <SyncToFilesystemSetting
+                  layout="settings"
+                  value={{ filePath: workspaceMeta.settingSyncDir }}
+                  onCreateNewWorkspace={hide}
+                  onChange={({ filePath }) =>
+                    patchModel(workspaceMeta, { settingSyncDir: filePath })
+                  }
+                />
+                <div className="mt-4">
+                  <WorkspaceEncryptionSetting layout="settings" size="xs" />
+                </div>
+              </>
+            ) : workspaceMetaError != null ? (
+              <Banner color="danger">
+                Sync and encryption settings are unavailable because{" "}
+                <InlineCode>WorkspaceMeta</InlineCode> could not be loaded: {workspaceMetaError}
+              </Banner>
+            ) : null}
           </SettingsSection>
           <ModelSettingsEditor model={workspace} showSectionTitles />
         </SettingsList>
@@ -175,6 +191,34 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
       </TabContent>
     </Tabs>
   );
+}
+
+/**
+ * The meta row normally reaches the store when the workspace loads, which also creates it if it
+ * is missing. If that load failed (for example on a corrupt row elsewhere in the workspace), the
+ * store never gets it, so ask for it directly. Returns the error if that fails too.
+ */
+function useEnsureWorkspaceMeta(workspaceId: string, missing: boolean): string | null {
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!missing) return;
+    let cancelled = false;
+    setError(null);
+    rpc<WorkspaceMeta>("cmd_get_workspace_meta", { workspaceId }).then(
+      (meta) => {
+        if (!cancelled) mergeModelsInStore("workspace_meta", [meta]);
+      },
+      (err) => {
+        if (!cancelled) setError(String(err));
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, missing]);
+
+  return error;
 }
 
 WorkspaceSettingsDialog.show = (workspaceId: string, tab?: WorkspaceSettingsTab) => {

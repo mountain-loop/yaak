@@ -9,11 +9,11 @@ function node(id: string, children: TreeNode<{ id: string }>[] = []): TreeNode<{
 
 const tree = node("root", [
   node("domains", [
-    node("domain:api.example.com", [
+    node("host:api.example.com", [
       node("path:api.example.com/v1", [node("path:api.example.com/v1/users")]),
     ]),
-    node("domain:cdn.example.com", [node("path:cdn.example.com/app.js")]),
-    node("domain:empty.example.com"),
+    node("host:cdn.example.com", [node("path:cdn.example.com/app.js")]),
+    node("host:empty.example.com"),
   ]),
 ]);
 
@@ -22,44 +22,60 @@ describe("collapsedMap", () => {
     const map = collapsedMap(folderIds(tree), {}, {});
     // Empty ones too: the tree collapses one before the left arrow moves to its parent.
     expect(map).toEqual({
-      "domain:api.example.com": true,
+      "host:api.example.com": true,
       "path:api.example.com/v1": true,
       "path:api.example.com/v1/users": true,
-      "domain:cdn.example.com": true,
+      "host:cdn.example.com": true,
       "path:cdn.example.com/app.js": true,
-      "domain:empty.example.com": true,
+      "host:empty.example.com": true,
     });
     expect(map.root).toBeUndefined();
     expect(map.domains).toBeUndefined();
   });
 
+  test("collapses every app, site and System, and leaves Apps open", () => {
+    const groups = node("root", [
+      node("apps", [node("app:Slack", [node("app:Slack|site:slack.com")])]),
+      node("domains", [node("site:example.com", [node("host:api.example.com")])]),
+      node("system", [node("app:trustd")]),
+    ]);
+    expect(collapsedMap(folderIds(groups), {}, {})).toEqual({
+      "app:Slack": true,
+      "app:Slack|site:slack.com": true,
+      "site:example.com": true,
+      "host:api.example.com": true,
+      system: true,
+      "app:trustd": true,
+    });
+  });
+
   test("opens what the user expanded, and a host seen later starts collapsed", () => {
-    const expanded = { "domain:api.example.com": true };
+    const expanded = { "host:api.example.com": true };
     expect(collapsedMap(folderIds(tree), expanded, {})).toMatchObject({
-      "domain:api.example.com": false,
+      "host:api.example.com": false,
       "path:api.example.com/v1": true,
-      "domain:cdn.example.com": true,
+      "host:cdn.example.com": true,
     });
     const later = node("root", [
-      node("domains", [node("domain:new.example.com", [node("path:new.example.com/x")])]),
+      node("domains", [node("host:new.example.com", [node("path:new.example.com/x")])]),
     ]);
-    expect(collapsedMap(folderIds(later), expanded, {})["domain:new.example.com"]).toBe(true);
+    expect(collapsedMap(folderIds(later), expanded, {})["host:new.example.com"]).toBe(true);
   });
 });
 
 describe("applyCollapsed", () => {
   test("keeps an expanded domain, and forgets it when collapsed again", () => {
     const prev = collapsedMap(folderIds(tree), {}, {});
-    const opened = applyCollapsed(prev, { ...prev, "domain:api.example.com": false }, {}, {});
-    expect(opened.expanded).toEqual({ "domain:api.example.com": true });
+    const opened = applyCollapsed(prev, { ...prev, "host:api.example.com": false }, {}, {});
+    expect(opened.expanded).toEqual({ "host:api.example.com": true });
 
     // Persisted, so the next launch builds the map from it.
     const relaunched = collapsedMap(folderIds(tree), opened.expanded, {});
-    expect(relaunched["domain:api.example.com"]).toBe(false);
+    expect(relaunched["host:api.example.com"]).toBe(false);
 
     const closed = applyCollapsed(
       relaunched,
-      { ...relaunched, "domain:api.example.com": true },
+      { ...relaunched, "host:api.example.com": true },
       opened.expanded,
       {},
     );

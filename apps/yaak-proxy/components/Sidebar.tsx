@@ -1,31 +1,36 @@
-import type { Flow } from "@yaakapp-internal/proxy-lib";
-import type { TreeNode } from "@yaakapp-internal/ui";
-import { selectedIdsFamily, Tree } from "@yaakapp-internal/ui";
-import { atom, useAtomValue } from "jotai";
+import {
+  ContextMenu,
+  CONTROL_TOOLTIP_DELAY,
+  type DropdownItem,
+  Icon,
+  Tooltip,
+  Tree,
+  type TreeProps,
+} from "@yaakapp-internal/ui";
+import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { atomWithStorage } from "jotai/utils";
-import { useCallback } from "react";
-import { SIDEBAR_TREE_ID } from "../lib/atoms";
-import { appKeyOf, appNodeId, sidebarPath } from "../lib/search";
+import { type PointerEvent, type SyntheticEvent, useCallback, useEffect } from "react";
+import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
+import { useRpcMutation } from "../hooks/useRpcMutation";
+import { appliedFilterAtom, SIDEBAR_TREE_ID } from "../lib/atoms";
+import { blockerOf, decryptMenuAction, isDecrypted, listEdit, setDecrypted } from "../lib/decrypt";
+import { revealLabel, revealPath } from "../lib/opener";
 import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
-import { flowsAtom, flowTotalAtom } from "../lib/store";
+import {
+  copyRowsText,
+  filterWithRows,
+  type SidebarItem,
+  SYSTEM_ID,
+  valueRows,
+} from "../lib/sidebarTree";
+import { applyFilter, noteSidebarInput, noteSidebarMenu } from "../lib/navigation";
+import { hideSystemAtom, sidebarTreeAtom } from "../lib/store";
+import { getOsType } from "../lib/tauri";
+import { useShowToast } from "../lib/toast";
 import { AppIcon } from "./AppIcon";
+import { savedSearchDialogAtom } from "./SavedSearchDialog";
 
-/** A node in the sidebar tree: a domain, a path segment, or an app. */
-export type SidebarItem = {
-  id: string;
-  label: string;
-  /** Flows held under this node; for the Domains folder, every flow in the database */
-  count: number;
-  /** An app's path, for its icon */
-  appPath?: string;
-};
-
-const sidebarTreeAtom = atom<TreeNode<SidebarItem>>((get) => {
-  const exchanges = get(flowsAtom);
-  return buildTree(exchanges, get(flowTotalAtom));
-});
-
-/** The domains and paths the user expanded, by node id, kept across launches */
+/** The apps, sites, hosts and paths the user expanded, by node id, kept across launches */
 const expandedAtom = atomWithStorage<Record<string, boolean>>("sidebar_expanded", {}, undefined, {
   getOnInit: true,
 });
@@ -33,7 +38,7 @@ const expandedAtom = atomWithStorage<Record<string, boolean>>("sidebar_expanded"
 /** The other nodes' collapsed flags, for this launch, as before */
 const otherCollapsedAtom = atom<CollapsedMap>({});
 
-/** Domains and paths collapsed until the user expands them, for the tree */
+/** Every app's tree, site, host and path, and System, collapsed until the user expands them */
 const collapsedAtom = atom(
   (get) =>
     collapsedMap(folderIds(get(sidebarTreeAtom)), get(expandedAtom), get(otherCollapsedAtom)),
@@ -46,196 +51,275 @@ const collapsedAtom = atom(
   },
 );
 
-/** The selected sidebar node's name, for the header */
-export const selectedSidebarLabelAtom = atom((get) => {
-  const selectedId = get(selectedIdsFamily(SIDEBAR_TREE_ID))[0];
-  if (selectedId?.startsWith("domain:")) return selectedId.slice("domain:".length);
-  if (selectedId?.startsWith("path:")) return selectedId.slice("path:".length);
-  if (selectedId?.startsWith("app:")) {
-    const apps = get(sidebarTreeAtom).children?.find((c) => c.item.id === "apps");
-    return apps?.children?.find((c) => c.item.id === selectedId)?.item.label ?? "All traffic";
-  }
-  return "All traffic";
-});
-
-const nodeIdsByFlow = new WeakMap<Flow, string[]>();
-
-/**
- * The ids of the nodes a flow sits under, its domain first and then each path segment's, parsed
- * once per flow rather than on every change to the list.
- */
-function nodeIdsOf(ex: Flow): string[] {
-  let ids = nodeIdsByFlow.get(ex);
-  if (ids != null) return ids;
-  // By the rules the database filters by, so a node shows the flows it counts.
-  const path = sidebarPath(ex.url);
-  const schemeless = !ex.url.includes("://");
-  const [hostname = "", ...segments] = schemeless ? [path] : path.split("/");
-  ids = [`domain:${hostname}`];
-  let node = `path:${hostname}`;
-  for (const seg of segments) {
-    node += `/${seg}`;
-    ids.push(node);
-  }
-  nodeIdsByFlow.set(ex, ids);
-  return ids;
-}
-
-const collator = new Intl.Collator();
-
-/**
- * Build a domain → path-segment trie from a flat list of exchanges.
- *
- * Example: Given URLs
- *   GET https://api.example.com/v1/users
- *   GET https://api.example.com/v1/users/123
- *   POST https://api.example.com/v1/orders
- *
- * Produces:
- *   api.example.com
- *     /v1
- *       /users
- *         /123
- *       /orders
- */
-function buildTree(exchanges: Flow[], total: number): TreeNode<SidebarItem> {
-  const root: SidebarItem = { id: "root", label: "All Traffic", count: 0 };
-  const rootNode: TreeNode<SidebarItem> = {
-    item: root,
-    parent: null,
-    depth: 0,
-    children: [],
-    draggable: false,
-  };
-
-  // Intermediate trie structure for building
-  type TrieNode = {
-    id: string;
-    label: string;
-    count: number;
-    children: Map<string, TrieNode>;
-  };
-
-  const domainMap = new Map<string, TrieNode>();
-
-  for (const ex of exchanges) {
-    const ids = nodeIdsOf(ex);
-    let current: TrieNode | undefined;
-    for (const id of ids) {
-      const siblings = current == null ? domainMap : current.children;
-      let node = siblings.get(id);
-      if (node == null) {
-        // The domain, or the path's last segment
-        const label = current == null ? id.slice("domain:".length) : id.slice(id.lastIndexOf("/"));
-        node = { id, label, count: 0, children: new Map() };
-        siblings.set(id, node);
-      }
-      node.count++;
-      current = node;
-    }
-  }
-
-  // Convert trie to TreeNode structure
-  function toTreeNode(
-    trie: TrieNode,
-    parent: TreeNode<SidebarItem>,
-    depth: number,
-  ): TreeNode<SidebarItem> {
-    const node: TreeNode<SidebarItem> = {
-      item: {
-        id: trie.id,
-        label: trie.label,
-        count: trie.count,
-      },
-      parent,
-      depth,
-      children: [],
-      draggable: false,
-    };
-    const sortedChildren = [...trie.children.values()].sort((a, b) =>
-      collator.compare(a.label, b.label),
-    );
-    for (const child of sortedChildren) {
-      node.children?.push(toTreeNode(child, node, depth + 1));
-    }
-    return node;
-  }
-
-  // Add a "Domains" folder between root and domain nodes
-  const domainsFolder: TreeNode<SidebarItem> = {
-    item: { id: "domains", label: "Domains", count: total },
-    parent: rootNode,
-    depth: 1,
-    children: [],
-    draggable: false,
-  };
-
-  const sortedDomains = [...domainMap.values()].sort((a, b) => collator.compare(a.label, b.label));
-  for (const domain of sortedDomains) {
-    domainsFolder.children?.push(toTreeNode(domain, domainsFolder, 2));
-  }
-
-  // The apps flows came from, where the platform can tell; none on others, so no group.
-  const apps = new Map<string, SidebarItem>();
-  for (const ex of exchanges) {
-    const key = appKeyOf(ex);
-    if (key == null) continue;
-    const id = appNodeId(key);
-    const app = apps.get(id);
-    if (app == null) {
-      apps.set(id, { id, label: ex.clientName ?? key, count: 1, appPath: ex.clientPath ?? key });
-    } else {
-      app.count++;
-    }
-  }
-  if (apps.size > 0) {
-    const appsFolder: TreeNode<SidebarItem> = {
-      item: { id: "apps", label: "Apps", count: 0 },
-      parent: rootNode,
-      depth: 1,
-      children: [],
-      draggable: false,
-    };
-    const sortedApps = [...apps.values()].sort((a, b) => collator.compare(a.label, b.label));
-    for (const item of sortedApps) {
-      appsFolder.children?.push({ item, parent: appsFolder, depth: 2, draggable: false });
-    }
-    rootNode.children?.push(appsFolder);
-  }
-
-  rootNode.children?.push(domainsFolder);
-
-  return rootNode;
+function Count({ item }: { item: SidebarItem }) {
+  const text = item.count > 0 ? item.count.toLocaleString() : null;
+  if (text == null && item.kind !== "all") return null;
+  return (
+    <span className="ml-auto pl-2 text-text-subtlest text-2xs tabular-nums shrink-0">
+      {text ?? "0"}
+    </span>
+  );
 }
 
 function ItemInner({ item }: { item: SidebarItem }) {
-  const count = item.count;
+  if (item.kind === "group") {
+    return (
+      <div className="flex items-center gap-2 w-full min-w-0 text-xs text-text-subtlest">
+        <span className="truncate">{item.label}</span>
+        <Count item={item} />
+      </div>
+    );
+  }
   return (
     <div className="flex items-center gap-2 w-full min-w-0">
-      {item.appPath != null && <AppIcon path={item.appPath} />}
-      <span className="truncate">{item.label}</span>
-      {count > 0 && <span className="ml-auto text-text-subtlest text-2xs shrink-0">{count}</span>}
+      {item.kind === "all" && <Icon icon="layers" size="sm" className="text-text-subtle" />}
+      {item.kind === "tunnelled" && <Icon icon="lock" size="sm" className="text-text-subtle" />}
+      {item.kind === "saved" && <Icon icon="bookmark" size="sm" className="text-text-subtle" />}
+      {item.kind === "folder" && <Icon icon="folder" size="sm" className="text-text-subtle" />}
+      {item.appPath != null && <AppIcon path={item.appPath} className="size-[1.125rem]" />}
+      {item.kind === "folder" && item.path != null ? (
+        // Named by its last part; the whole path on hover
+        <Tooltip wrap content={item.path} delay={CONTROL_TOOLTIP_DELAY}>
+          <span className="truncate">{item.label}</span>
+        </Tooltip>
+      ) : (
+        <span className="truncate">{item.label}</span>
+      )}
+      {item.sublabel != null && (
+        <span className="truncate text-xs text-text-subtlest">{item.sublabel}</span>
+      )}
+      {item.decrypt != null && <DecryptedMark item={item} />}
+      <Count item={item} />
     </div>
   );
 }
 
-export function Sidebar() {
-  const tree = useAtomValue(sidebarTreeAtom);
+/** Input in the sidebar itself, not in a row's menu, whose events reach it through its portal */
+function inSidebar(e: SyntheticEvent<HTMLElement>): boolean {
+  return e.target instanceof Node && e.currentTarget.contains(e.target);
+}
 
-  const getItemKey = useCallback((item: SidebarItem) => `${item.id}:${item.count}`, []);
-  const treeId = SIDEBAR_TREE_ID;
+/** A press that opens a context menu: the secondary button, or Control and a click on macOS */
+function opensMenu(e: PointerEvent<HTMLElement>): boolean {
+  return e.button !== 0 || (e.ctrlKey && getOsType() === "macos");
+}
+
+/** The menu's sections that have items, a separator between each */
+function withSeparators(sections: DropdownItem[][]): DropdownItem[] {
+  return sections
+    .filter((s) => s.some((i) => !i.hidden))
+    .flatMap((s, n) => (n === 0 ? s : [{ type: "separator" } as const, ...s]));
+}
+
+/** A row with nothing in its menu: the menu closes as it opens, so the row is not left marked */
+function CloseAtOnce({ onClose }: { onClose: () => void }) {
+  useEffect(() => onClose(), [onClose]);
+  return null;
+}
+
+/** A small open lock on a host, site or app the decrypt list decrypts */
+function DecryptedMark({ item }: { item: SidebarItem }) {
+  const list = useDecryptList();
+  if (item.decrypt == null || !isDecrypted(list, item.decrypt)) return null;
+  return (
+    <Tooltip wrap content="Decrypted" delay={CONTROL_TOOLTIP_DELAY}>
+      <Icon icon="lock_open" size="xs" className="shrink-0 text-text-subtlest" />
+    </Tooltip>
+  );
+}
+
+export function Sidebar() {
+  const store = useStore();
+  const tree = useAtomValue(sidebarTreeAtom);
+  const getItemKey = useCallback(
+    // The label too, as a saved search's changes when it is renamed
+    (item: SidebarItem) => `${item.id}:${item.count}:${item.label}`,
+    [],
+  );
+  const [hideSystem, setHideSystem] = useAtom(hideSystemAtom);
+  const decryptList = useDecryptList();
+  const setDecryptList = useEditDecryptList();
+  const { mutate: saveDecryptList } = setDecryptList;
+  const showToast = useShowToast();
+  const setSavedDialog = useSetAtom(savedSearchDialogAtom);
+  const { mutate: deleteSaved } = useRpcMutation("delete_saved_query", {
+    onError: (err) => showToast({ id: "saved-search", message: err.message, color: "danger" }),
+  });
+
+  // A program's folder, or the program, is shown in Finder, and a folder's path copied.
+  const fail = useCallback(
+    (message: string) => showToast({ id: "sidebar-path", message, color: "danger" }),
+    [showToast],
+  );
+  const pathItems = useCallback(
+    (item: SidebarItem | undefined): DropdownItem[] => {
+      const path = item?.path;
+      if (item == null || path == null) return [];
+      return [
+        {
+          label: revealLabel(getOsType()),
+          leftSlot: <Icon icon="folder_open" />,
+          onSelect: () => void revealPath(path, fail),
+        },
+        {
+          label: "Copy path",
+          leftSlot: <Icon icon="copy" />,
+          hidden: item.kind !== "folder",
+          onSelect: () => {
+            navigator.clipboard.writeText(path).catch((err) => fail(String(err)));
+          },
+        },
+      ];
+    },
+    [fail],
+  );
+
+  // The selected apps, folders, sites, hosts and paths added to the filter, either way, at once,
+  // or their values copied, as a cell's menu in the list does.
+  const filterItems = useCallback(
+    (items: SidebarItem[]): DropdownItem[] => {
+      if (valueRows(items).length === 0) return [];
+      const add = (negated: boolean) =>
+        applyFilter(store, filterWithRows(store.get(appliedFilterAtom), items, negated));
+      return [
+        { label: "Filter by This Value", icon: "filter", onSelect: () => add(false) },
+        { label: "Exclude This Value", icon: "minus_circle", onSelect: () => add(true) },
+        {
+          label: "Copy Value",
+          icon: "copy",
+          onSelect: async () => {
+            try {
+              await navigator.clipboard.writeText(copyRowsText(items));
+              showToast({ message: "Copied value" });
+            } catch (err) {
+              showToast({ message: `Failed to copy value: ${String(err)}`, color: "danger" });
+            }
+          },
+        },
+      ];
+    },
+    [store, showToast],
+  );
+
+  // Filter by the selected rows, Decrypt or Stop Decrypting the selected hosts, sites and apps,
+  // from new connections on, then a program's folder. A saved search is renamed or deleted, and
+  // System is shown in All traffic or left out of it.
+  const getContextMenu = useCallback(
+    (items: SidebarItem[]): DropdownItem[] => {
+      if (items.length === 1 && items[0]?.id === SYSTEM_ID) {
+        return [
+          {
+            label: "Show in All Traffic",
+            leftSlot: hideSystem ? (
+              <span aria-hidden className="inline-block w-4 h-4" />
+            ) : (
+              <Icon icon="check" size="sm" />
+            ),
+            onSelect: () => setHideSystem(!hideSystem),
+          },
+        ];
+      }
+      const paths = items.length === 1 ? pathItems(items[0]) : [];
+      const saved = items.flatMap((i) => (i.savedId == null ? [] : [{ ...i, id: i.savedId }]));
+      if (saved.length > 0) {
+        const [first] = saved;
+        return [
+          {
+            label: "Rename",
+            leftSlot: <Icon icon="pencil" />,
+            hidden: saved.length > 1 || first == null,
+            onSelect: () => {
+              if (first != null)
+                setSavedDialog({ mode: "rename", id: first.id, name: first.label });
+            },
+          },
+          {
+            label: "Delete",
+            color: "danger",
+            leftSlot: <Icon icon="trash" />,
+            onSelect: () => {
+              for (const s of saved) deleteSaved({ id: s.id });
+            },
+          },
+        ];
+      }
+      const subjects = items.flatMap((i) => (i.decrypt == null ? [] : [i.decrypt]));
+      const action = decryptMenuAction(decryptList, subjects);
+      const decrypt: DropdownItem[] =
+        action == null
+          ? []
+          : [
+              {
+                label: action.label,
+                icon: action.on ? "lock_open" : "lock",
+                onSelect: () => {
+                  const blocked = action.on ? blockerOf(decryptList, subjects) : null;
+                  if (blocked != null) {
+                    showToast({
+                      id: "decrypt-blocked",
+                      color: "notice",
+                      message: `Excluded by ${blocked}`,
+                    });
+                    return;
+                  }
+                  // Only what this changes, applied to the list as it is then, so a second change
+                  // made before this one lands keeps it.
+                  const next = setDecrypted(decryptList, subjects, action.on);
+                  saveDecryptList(listEdit(decryptList, next));
+                },
+              },
+            ];
+      return withSeparators([filterItems(items), decrypt, paths]);
+    },
+    [
+      decryptList,
+      saveDecryptList,
+      showToast,
+      setSavedDialog,
+      deleteSaved,
+      pathItems,
+      filterItems,
+      hideSystem,
+      setHideSystem,
+    ],
+  );
+  const renderContextMenu = useCallback<NonNullable<TreeProps<SidebarItem>["renderContextMenu"]>>(
+    ({ items, position, onClose }) =>
+      items.length === 0 ? (
+        <CloseAtOnce onClose={onClose} />
+      ) : (
+        <ContextMenu items={items as DropdownItem[]} triggerPosition={position} onClose={onClose} />
+      ),
+    [],
+  );
 
   return (
     // The tree scrolls itself, in a row of bounded height, so its virtualizer mounts only the rows
-    // in view rather than every domain and path.
-    <aside className="x-theme-sidebar bg-surface h-full w-full min-w-0 grid grid-rows-[minmax(0,1fr)] border-r border-border-subtle">
+    // in view rather than every site, host and path.
+    // A click or key here marks the selection change it makes as the person's, so it writes the
+    // search; the tree's own upkeep does not. Opening a row's menu selects it too, but leaves the
+    // search as it is, for the menu's Filter by This Value to add to, and the rows as it says.
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- only notes input the tree handles
+    <aside
+      onPointerDownCapture={(e) => {
+        if (!inSidebar(e)) return;
+        if (opensMenu(e)) noteSidebarMenu();
+        else noteSidebarInput();
+      }}
+      onKeyDownCapture={(e) => {
+        if (inSidebar(e)) noteSidebarInput();
+      }}
+      className="x-theme-sidebar bg-surface h-full w-full min-w-0 grid grid-rows-[minmax(0,1fr)] border-r border-border-subtle"
+    >
       <Tree
-        treeId={treeId}
+        treeId={SIDEBAR_TREE_ID}
         collapsedAtom={collapsedAtom}
         className="px-2 pt-2 pb-10"
         root={tree}
         getItemKey={getItemKey}
         ItemInner={ItemInner}
+        getContextMenu={getContextMenu}
+        renderContextMenu={renderContextMenu}
       />
     </aside>
   );

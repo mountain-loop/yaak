@@ -191,6 +191,12 @@ mod imp {
         response.into_result()
     }
 
+    /// What the helper has done to the system proxy: whether it will restore it, and at which
+    /// port.
+    pub fn status() -> Result<Status, String> {
+        request(&Request::Get)
+    }
+
     /// Points the system proxy at `port`, or puts back what was there, owned by this process.
     pub fn set(enabled: bool, port: u16) -> Result<(), String> {
         let owner_pid = std::process::id() as i32;
@@ -199,7 +205,7 @@ mod imp {
 }
 
 #[cfg(target_os = "macos")]
-pub use imp::{diagnose, register, set, state, unregister};
+pub use imp::{diagnose, register, set, state, status, unregister};
 
 #[cfg(not(target_os = "macos"))]
 pub fn state() -> HelperState {

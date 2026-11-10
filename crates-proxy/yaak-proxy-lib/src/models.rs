@@ -16,13 +16,18 @@ pub struct ProxyHeader {
     pub value: String,
 }
 
-/// One proxied request and its response. The bodies are in `blobs.sqlite`, not the row.
+/// One proxied request and its response. The bodies are in `blobs.sqlite`, not the row; a
+/// stream's are its messages, and read back from them (`bodies::from_messages`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "flows")]
 pub struct Flow {
     pub id: String,
+    /// The flow's short handle, `#1429`: its rowid, which grows as flows are written and is kept
+    /// across updates. Zero when read without it.
+    #[ts(type = "number")]
+    pub number: i64,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub started_at: NaiveDateTime,
@@ -44,14 +49,28 @@ pub struct Flow {
     /// Bytes of the response body on the wire, captured or not.
     #[ts(type = "number")]
     pub response_size: i64,
-    /// Only the first `capture_body_limit` bytes of the body are stored.
+    /// Only the first `capture_body_limit` bytes of the body are stored. For a body that is a
+    /// stream's messages, a message was cut at the limit.
     pub request_truncated: bool,
-    /// Only the first `capture_body_limit` bytes of the body are stored.
+    /// Only the first `capture_body_limit` bytes of the body are stored. For a body that is a
+    /// stream's messages, a message was cut at the limit.
     pub response_truncated: bool,
     /// Milliseconds from `started_at` to the response headers.
     pub elapsed_headers_ms: Option<i32>,
     /// Milliseconds from `started_at` to the end of the response.
     pub elapsed_ms: Option<i32>,
+    /// Milliseconds from `started_at` to the TCP connection to the server, and to the end of
+    /// its TLS handshake. Only for intercepted HTTPS on a connection opened for this flow.
+    pub elapsed_connect_ms: Option<i32>,
+    pub elapsed_tls_ms: Option<i32>,
+    /// Milliseconds from `started_at` to the request body being sent whole. None without one.
+    pub elapsed_request_ms: Option<i32>,
+    /// The client's end of its connection: `127.0.0.1:54321`.
+    pub client_addr: Option<String>,
+    /// The TLS negotiated with the server for intercepted HTTPS: `TLSv1.3`.
+    pub upstream_tls_version: Option<String>,
+    /// `TLS13_AES_128_GCM_SHA256`.
+    pub upstream_tls_cipher: Option<String>,
     pub error: Option<String>,
     /// The client gave up before the response ended, by resetting its HTTP/2 stream or closing
     /// the connection. Not an error.
@@ -66,6 +85,77 @@ pub struct Flow {
     pub client_bundle_id: Option<String>,
     /// Its app bundle's path, or its executable's outside an app.
     pub client_path: Option<String>,
+    /// The working directory of a process outside an app, whose folder names it: `node` in
+    /// `fieldwork`.
+    pub client_cwd: Option<String>,
+    /// The flow carries a stream of messages, listed with `list_messages`. It is written as the
+    /// stream opens and again as messages land; it is open until `elapsedMs`, `error` or
+    /// `cancelled` is set.
+    pub stream_kind: Option<StreamKind>,
+    /// Messages recorded so far.
+    #[ts(type = "number")]
+    pub message_count: i64,
+    /// A gRPC call's service, from its path: `package.Service`.
+    pub grpc_service: Option<String>,
+    /// A gRPC call's method, from its path.
+    pub grpc_method: Option<String>,
+    /// A gRPC call's status, from its trailers. Not 0 is a failed call.
+    pub grpc_status: Option<i32>,
+    /// A gRPC call's `grpc-message`, decoded.
+    pub grpc_message: Option<String>,
+    /// A GraphQL request's operation, from its body or URL: `GetUser`, `GetUser +2` for a
+    /// batch, empty for an anonymous one. None when the request is not GraphQL.
+    pub graphql_operation: Option<String>,
+    /// An HTTPS connection passed through undecrypted, as the decrypt list leaves it out or its
+    /// client rejected the proxy's certificate: method `CONNECT`, its URL the host, its sizes
+    /// the bytes each way, and no headers or bodies. Open until `elapsedMs` or `error` is set.
+    pub tunnelled: bool,
+    /// An agent read the flow through the control API: its detail, a body or its messages.
+    /// Never written by an upsert, which keeps what is stored.
+    pub agent_read: bool,
+}
+
+/// The streaming protocol a flow carries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum StreamKind {
+    Websocket,
+    Sse,
+    Grpc,
+    GrpcWeb,
+}
+
+impl StreamKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Websocket => "websocket",
+            Self::Sse => "sse",
+            Self::Grpc => "grpc",
+            Self::GrpcWeb => "grpc_web",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        [Self::Websocket, Self::Sse, Self::Grpc, Self::GrpcWeb]
+            .into_iter()
+            .find(|k| k.as_str() == s)
+    }
+
+    pub fn is_grpc(self) -> bool {
+        matches!(self, Self::Grpc | Self::GrpcWeb)
+    }
+}
+
+impl From<yaak_proxy::StreamKind> for StreamKind {
+    fn from(kind: yaak_proxy::StreamKind) -> Self {
+        match kind {
+            yaak_proxy::StreamKind::WebSocket => Self::Websocket,
+            yaak_proxy::StreamKind::Sse => Self::Sse,
+            yaak_proxy::StreamKind::Grpc => Self::Grpc,
+            yaak_proxy::StreamKind::GrpcWeb => Self::GrpcWeb,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -110,6 +200,21 @@ pub fn find_header<'a>(headers: &'a [ProxyHeader], name: &str) -> Option<&'a str
 pub struct ModelPayload {
     pub model: Flow,
     pub change: ModelChangeEvent,
+    /// Whether the flow belongs in the list of the search the app shows, decided as the event
+    /// is sent. None while no search is shown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub search: Option<SearchMatch>,
+}
+
+/// A written flow, matched against the search the app shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct SearchMatch {
+    /// The search's key, as the app gave it with the search.
+    pub key: String,
+    pub matches: bool,
 }
 
 impl UpsertModelInfo for Flow {
@@ -164,6 +269,21 @@ impl UpsertModelInfo for Flow {
             (ClientName, self.client_name.into()),
             (ClientBundleId, self.client_bundle_id.into()),
             (ClientPath, self.client_path.into()),
+            (ClientCwd, self.client_cwd.into()),
+            (FlowIden::StreamKind, self.stream_kind.map(|k| k.as_str()).into()),
+            (MessageCount, self.message_count.into()),
+            (GrpcService, self.grpc_service.into()),
+            (GrpcMethod, self.grpc_method.into()),
+            (GrpcStatus, self.grpc_status.into()),
+            (GrpcMessage, self.grpc_message.into()),
+            (GraphqlOperation, self.graphql_operation.into()),
+            (Tunnelled, self.tunnelled.into()),
+            (ElapsedConnectMs, self.elapsed_connect_ms.into()),
+            (ElapsedTlsMs, self.elapsed_tls_ms.into()),
+            (ElapsedRequestMs, self.elapsed_request_ms.into()),
+            (ClientAddr, self.client_addr.into()),
+            (UpstreamTlsVersion, self.upstream_tls_version.into()),
+            (UpstreamTlsCipher, self.upstream_tls_cipher.into()),
         ])
     }
 
@@ -193,6 +313,21 @@ impl UpsertModelInfo for Flow {
             FlowIden::ClientName,
             FlowIden::ClientBundleId,
             FlowIden::ClientPath,
+            FlowIden::ClientCwd,
+            FlowIden::StreamKind,
+            FlowIden::MessageCount,
+            FlowIden::GrpcService,
+            FlowIden::GrpcMethod,
+            FlowIden::GrpcStatus,
+            FlowIden::GrpcMessage,
+            FlowIden::GraphqlOperation,
+            FlowIden::Tunnelled,
+            FlowIden::ElapsedConnectMs,
+            FlowIden::ElapsedTlsMs,
+            FlowIden::ElapsedRequestMs,
+            FlowIden::ClientAddr,
+            FlowIden::UpstreamTlsVersion,
+            FlowIden::UpstreamTlsCipher,
         ]
     }
 
@@ -204,6 +339,7 @@ impl UpsertModelInfo for Flow {
         let response_headers: String = r.get("response_headers")?;
         Ok(Self {
             id: r.get("id")?,
+            number: added_column(r, "rowid")?.unwrap_or_default(),
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
             started_at: r.get("started_at")?,
@@ -222,6 +358,12 @@ impl UpsertModelInfo for Flow {
             response_truncated: r.get("response_truncated")?,
             elapsed_headers_ms: r.get("elapsed_headers_ms")?,
             elapsed_ms: r.get("elapsed_ms")?,
+            elapsed_connect_ms: added_column(r, "elapsed_connect_ms")?,
+            elapsed_tls_ms: added_column(r, "elapsed_tls_ms")?,
+            elapsed_request_ms: added_column(r, "elapsed_request_ms")?,
+            client_addr: added_column(r, "client_addr")?,
+            upstream_tls_version: added_column(r, "upstream_tls_version")?,
+            upstream_tls_cipher: added_column(r, "upstream_tls_cipher")?,
             error: r.get("error")?,
             cancelled: added_column(r, "cancelled")?.unwrap_or_default(),
             saved_request_id: added_column(r, "saved_request_id")?,
@@ -229,6 +371,17 @@ impl UpsertModelInfo for Flow {
             client_name: added_column(r, "client_name")?,
             client_bundle_id: added_column(r, "client_bundle_id")?,
             client_path: added_column(r, "client_path")?,
+            client_cwd: added_column(r, "client_cwd")?,
+            stream_kind: added_column::<String>(r, "stream_kind")?
+                .and_then(|k| StreamKind::parse(&k)),
+            message_count: added_column(r, "message_count")?.unwrap_or_default(),
+            grpc_service: added_column(r, "grpc_service")?,
+            grpc_method: added_column(r, "grpc_method")?,
+            grpc_status: added_column(r, "grpc_status")?,
+            grpc_message: added_column(r, "grpc_message")?,
+            graphql_operation: added_column(r, "graphql_operation")?,
+            tunnelled: added_column(r, "tunnelled")?.unwrap_or_default(),
+            agent_read: added_column(r, "agent_read")?.unwrap_or_default(),
         })
     }
 }

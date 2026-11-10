@@ -6,7 +6,9 @@ import {
   bodyFileName,
   bodyImageType,
   bytesToText,
+  emptyBodyText,
   flowBodyQueryOptions,
+  viewerBody,
   viewerText,
 } from "./body";
 import { rpc } from "./rpc";
@@ -223,5 +225,21 @@ describe("flowBodyQueryOptions", () => {
     expect(Array.from(body.bytes)).toEqual([0x78, 0x9c, 0x01]);
     expect(body.decodeError).toBe("Failed to decode Deflate body: deflate decompression error");
     client.clear();
+  });
+});
+
+describe("a body that isn't there", () => {
+  test("a WebSocket's note reaches the viewer, which points at its messages", () => {
+    const note = "A WebSocket has no body after its 101 response. Its frames are its messages.";
+    const body = viewerBody({ data: "", truncated: false, storedSize: 0, note });
+    expect(body.note).toBe(note);
+    expect(emptyBodyText("response", body.note)).toBe("No body. See Messages.");
+  });
+
+  test("any other empty body says so as before", () => {
+    const body = viewerBody({ data: "", truncated: false, storedSize: 0 });
+    expect(body.note).toBeNull();
+    expect(emptyBodyText("response", body.note)).toBe("Empty");
+    expect(emptyBodyText("request", body.note)).toBe("No request body");
   });
 });

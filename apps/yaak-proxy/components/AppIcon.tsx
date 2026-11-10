@@ -24,8 +24,8 @@ function loadIcon(path: string): Promise<string | null> {
   return promise;
 }
 
-/** An app's icon, read once per path for the whole session */
-export function AppIcon({ path, className }: { path: string; className?: string }) {
+/** An app's icon, read once per path for the whole session; `className` sets its size */
+export function AppIcon({ path, className = "size-4" }: { path: string; className?: string }) {
   const [url, setUrl] = useState(() => icons.get(path));
   useEffect(() => {
     if (icons.has(path)) {
@@ -42,8 +42,8 @@ export function AppIcon({ path, className }: { path: string; className?: string 
   }, [path]);
 
   return url == null ? (
-    <span aria-hidden className={classNames(className, "inline-block w-4 h-4 shrink-0")} />
+    <span aria-hidden className={classNames(className, "inline-block shrink-0")} />
   ) : (
-    <img alt="" src={url} className={classNames(className, "w-4 h-4 shrink-0")} />
+    <img alt="" src={url} className={classNames(className, "shrink-0")} />
   );
 }

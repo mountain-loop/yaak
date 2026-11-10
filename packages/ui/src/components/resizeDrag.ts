@@ -93,17 +93,18 @@ export function createHandleDrag({
   };
 }
 
-export function splitGridTemplate(vertical: boolean, ratio: number): string {
+/** The split's grid: the two panes by `ratio`, and between them `gutter` pixels for the handle */
+export function splitGridTemplate(vertical: boolean, ratio: number, gutter = 0): string {
   return vertical
     ? `
             ' left' minmax(0,${1 - ratio}fr)
-            ' drag' 0
+            ' drag' ${gutter}px
             ' right' minmax(0,${ratio}fr)
             / 1fr
           `
     : `
             ' left drag right' minmax(0,1fr)
-            / ${1 - ratio}fr    0                 ${ratio}fr
+            / ${1 - ratio}fr    ${gutter}px                 ${ratio}fr
           `;
 }
 

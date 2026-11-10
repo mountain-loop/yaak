@@ -19,6 +19,7 @@ import {
 
 const flow: Flow = {
   id: "fl_1",
+  number: 1,
   createdAt: "2026-11-04T22:10:00Z",
   updatedAt: "2026-11-04T22:10:01Z",
   startedAt: "2026-11-04T22:10:00Z",
@@ -50,6 +51,22 @@ const flow: Flow = {
   clientName: null,
   clientBundleId: null,
   clientPath: null,
+  clientCwd: null,
+  streamKind: null,
+  messageCount: 0,
+  grpcService: null,
+  grpcMethod: null,
+  grpcStatus: null,
+  grpcMessage: null,
+  graphqlOperation: null,
+  tunnelled: false,
+  agentRead: false,
+  clientAddr: null,
+  elapsedConnectMs: null,
+  elapsedTlsMs: null,
+  elapsedRequestMs: null,
+  upstreamTlsVersion: null,
+  upstreamTlsCipher: null,
 };
 
 function bytes(text: string): FlowBodyData {

@@ -1,0 +1,17 @@
+{
+  "name": "yaak-query",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "yaak_query_bg.wasm",
+    "yaak_query.js",
+    "yaak_query_bg.js",
+    "yaak_query.d.ts"
+  ],
+  "main": "yaak_query.js",
+  "types": "yaak_query.d.ts",
+  "sideEffects": [
+    "./yaak_query.js",
+    "./snippets/*"
+  ]
+}

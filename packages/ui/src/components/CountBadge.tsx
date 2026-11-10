@@ -24,6 +24,7 @@ export function CountBadge({ count, count2, className, color, showZero }: Props)
         color === "secondary" && "text-secondary",
         color === "success" && "text-success",
         color === "notice" && "text-notice",
+        color === "info" && "text-info",
         color === "warning" && "text-warning",
         color === "danger" && "text-danger",
       )}

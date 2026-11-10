@@ -6,11 +6,13 @@ import type {
 } from "@yaakapp-internal/proxy-lib";
 import {
   Banner,
+  CONTROL_TOOLTIP_DELAY,
   Dialog,
   DialogFooter,
   HttpMethodTagRaw,
   LoadingIcon,
   PlainInput,
+  Tooltip,
 } from "@yaakapp-internal/ui";
 import { unnamedRequestName } from "@yaakapp-internal/ui/resolvedModelName";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -181,13 +183,16 @@ function SaveForm({
           </div>
           <div className="flex flex-wrap gap-1.5 mt-2">
             {p.droppedHeaders.map((h) => (
-              <span
+              <Tooltip
                 key={h.name}
-                title={`${h.name}: ${h.value}\n${reasonLabel(h.reason)}`}
-                className="font-mono text-xs leading-[22px] px-1.5 rounded-sm border border-border-subtle text-text-subtle line-through decoration-text-subtlest"
+                wrap
+                content={`${h.name}: ${h.value}\n${reasonLabel(h.reason)}`}
+                delay={CONTROL_TOOLTIP_DELAY}
               >
-                {h.name}
-              </span>
+                <span className="font-mono text-xs leading-[22px] px-1.5 rounded-sm border border-border-subtle text-text-subtle line-through decoration-text-subtlest">
+                  {h.name}
+                </span>
+              </Tooltip>
             ))}
           </div>
         </div>

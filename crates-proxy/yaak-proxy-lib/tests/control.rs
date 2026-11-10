@@ -20,7 +20,7 @@ use yaak_proxy_lib::flows::{BodyEncoding, FlowFilter};
 use yaak_proxy_lib::models::{Flow, FlowBody};
 use yaak_proxy_lib::save::SaveFlowRequest;
 use yaak_proxy_lib::settings::ProxySettings;
-use yaak_proxy_lib::{ProxyCtx, ProxyState};
+use yaak_proxy_lib::{MasterKeySource, ProxyCtx, ProxyState};
 use yaak_rpc::RpcEventEmitter;
 
 async fn route(_req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
@@ -44,12 +44,18 @@ async fn spawn_upstream() -> SocketAddr {
     addr
 }
 
+/// The keychain every context and reader here shares, as the app and the CLI share one.
+fn keys() -> MasterKeySource {
+    static KEYS: std::sync::OnceLock<MasterKeySource> = std::sync::OnceLock::new();
+    KEYS.get_or_init(MasterKeySource::memory).clone()
+}
+
 /// A context over `dir` whose engine picks a free port, saving into Yaak's data in `client`.
 fn ctx(dir: &Path, client: &Path) -> ProxyCtx {
     let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
     settings.save(&dir.join("settings.json")).unwrap();
     let (events, _rx) = RpcEventEmitter::new();
-    ProxyCtx::new(dir, events).unwrap().with_client_data_dir(client)
+    ProxyCtx::new(dir, events, keys()).unwrap().with_client_data_dir(client)
 }
 
 /// Sends one POST through the engine and waits for its flow.
@@ -72,7 +78,7 @@ async fn capture_flow(ctx: &ProxyCtx) -> Flow {
 
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+        let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
         if let Some(flow) = flows.into_iter().find(|f| f.url == url) {
             return flow;
         }
@@ -117,7 +123,8 @@ async fn round_trip() {
     let wrong = http.get(&url).bearer_auth("not-the-token").send().await.unwrap();
     assert_eq!(wrong.status(), 401);
 
-    let ProxyConnection::Live(client) = ProxyConnection::connect(dir.path()).unwrap() else {
+    let ProxyConnection::Live(client) = ProxyConnection::connect(dir.path(), &keys()).unwrap()
+    else {
         panic!("expected the live owner");
     };
     let status = client.status().await.unwrap();
@@ -137,14 +144,18 @@ async fn round_trip() {
     assert_eq!(flows.iter().map(|f| &f.id).collect::<Vec<_>>(), vec![&flow.id]);
     let following = FlowFilter { after: Some(flow.id.clone()), ..Default::default() };
     assert!(client.flows(&following).await.unwrap().is_empty());
-    let filter = FlowFilter { status: Some("4xx".into()), ..Default::default() };
+    let filter = FlowFilter::search("@status:4xx");
     assert!(client.flows(&filter).await.unwrap().is_empty());
-    let search = FlowFilter { q: Some("CHARGES post 2xx".into()), ..Default::default() };
+    let search = FlowFilter::search("CHARGES post @status:2xx");
     assert_eq!(client.flows(&search).await.unwrap().len(), 1);
-    let search = FlowFilter { q: Some("charges get".into()), ..Default::default() };
+    let search = FlowFilter::search("charges @method:get");
     assert!(client.flows(&search).await.unwrap().is_empty());
+    // Listing is not reading; an agent reading the flow marks it.
+    let read = FlowFilter::search("@is:read");
+    assert!(client.flows(&read).await.unwrap().is_empty());
 
     let detail = client.flow(&flow.id, 8).await.unwrap();
+    assert_eq!(client.flows(&read).await.unwrap().len(), 1);
     assert_eq!(detail.flow.method, "POST");
     let request_body = detail.request_body.unwrap();
     assert_eq!((request_body.data.as_str(), request_body.truncated), (r#"{"amount"#, true));
@@ -268,7 +279,7 @@ async fn offline_reads_proxy_db() {
         flow
     };
 
-    let connection = ProxyConnection::connect(dir.path()).unwrap();
+    let connection = ProxyConnection::connect(dir.path(), &keys()).unwrap();
     assert!(matches!(connection, ProxyConnection::Offline(_)));
     let flows = connection.flows(&FlowFilter::default()).await.unwrap();
     assert_eq!(flows.iter().map(|f| &f.id).collect::<Vec<_>>(), vec![&flow.id]);
@@ -276,11 +287,11 @@ async fn offline_reads_proxy_db() {
     assert_eq!(detail.response_body.unwrap().data, r#"{"id":"ch_1","amount":42}"#);
     let body = connection.body(&flow.id, FlowBody::Request).await.unwrap();
     assert_eq!(body.data, br#"{"amount":42}"#);
-    let posts = FlowFilter { method: Some("post".into()), ..Default::default() };
+    let posts = FlowFilter::search("@method:post");
     assert_eq!(connection.har(&posts).await.unwrap().log.entries.len(), 1);
 
     let empty = tempfile::tempdir().unwrap();
-    let err = ProxyConnection::connect(empty.path()).err().unwrap();
+    let err = ProxyConnection::connect(empty.path(), &keys()).err().unwrap();
     assert!(err.starts_with("No captured traffic yet"), "{err}");
 }
 
@@ -365,7 +376,7 @@ async fn save_writes_the_request_into_yaak() {
     assert!(source.contains("sync"), "{source}");
 
     // The flow remembers what it was saved as.
-    let flow = yaak_proxy_lib::flows::get(&ctx.db, &flow.id).unwrap();
+    let flow = yaak_proxy_lib::flows::get(&ctx.db().unwrap(), &flow.id).unwrap();
     assert_eq!(flow.saved_request_id, Some(saved.request.id));
 
     // Without a name, through the control API as the CLI saves, it stays unnamed, as Yaak
@@ -564,7 +575,8 @@ async fn the_save_dialog_reads_workspaces_previews_and_saves() {
         (workspace.id.as_str(), Some(folder.id.as_str()))
     );
     let stored = ctx
-        .db
+        .db()
+        .unwrap()
         .with_conn(|db| db.find_one::<Flow>(yaak_proxy_lib::models::FlowIden::Id, &flow.id))
         .unwrap();
     assert_eq!(stored.saved_request_id.as_deref(), Some(request_id));
@@ -594,7 +606,7 @@ async fn export_har_writes_the_flows_asked_for() {
     assert_eq!(read(&selected)["log"]["entries"].as_array().unwrap().len(), 1);
 
     let searched = dir.path().join("searched.har");
-    let filter = json!({ "q": "charges", "limit": 1 });
+    let filter = json!({ "query": "charges", "limit": 1 });
     let written =
         rpc(&ctx, "export_har", json!({ "path": searched, "filter": filter })).await.unwrap();
     // The whole search, not the page the list had loaded.
@@ -605,7 +617,7 @@ async fn export_har_writes_the_flows_asked_for() {
 
     let none = dir.path().join("none.har");
     let written =
-        rpc(&ctx, "export_har", json!({ "path": none, "filter": { "q": "nothing-matches" } }))
+        rpc(&ctx, "export_har", json!({ "path": none, "filter": { "query": "nothing-matches" } }))
             .await
             .unwrap();
     assert_eq!(written, 0);
@@ -636,7 +648,7 @@ async fn flows_name_the_app_that_sent_them() {
 
     let deadline = Instant::now() + Duration::from_secs(5);
     let flow = loop {
-        let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+        let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
         if let Some(flow) = flows.into_iter().find(|f| f.url == url) {
             break flow;
         }
@@ -649,8 +661,8 @@ async fn flows_name_the_app_that_sent_them() {
     assert_eq!(flow.client_path.as_deref(), Some("/usr/bin/curl"));
 
     // The search and the sidebar's Apps group find it by its path.
-    let filter = FlowFilter { app: Some(vec!["/usr/bin/curl".into()]), ..Default::default() };
-    assert_eq!(yaak_proxy_lib::flows::list(&ctx.db, &filter).unwrap().len(), 1);
+    let filter = FlowFilter::search("@app:/usr/bin/curl");
+    assert_eq!(yaak_proxy_lib::flows::list(&ctx.db().unwrap(), &filter).unwrap().len(), 1);
 }
 
 /// Sends one GET through the engine, without waiting for a flow.
@@ -682,9 +694,12 @@ async fn pausing_stores_no_flows_and_resuming_stores_them_again() {
     assert_eq!((state["state"].as_str(), &state["recording"]), (Some("running"), &json!(false)));
     let paused = send_through(&ctx, "/while-paused").await;
     tokio::time::sleep(Duration::from_millis(300)).await;
-    let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+    let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
     assert!(flows.iter().all(|f| f.url != paused), "a flow was stored while paused");
-    assert!(ctx.blobs.connect().list_body_ids().unwrap().is_empty(), "a body was stored");
+    assert!(
+        ctx.blobs().unwrap().connect().list_body_ids().unwrap().is_empty(),
+        "a body was stored"
+    );
 
     // Resumed through the control API, as the CLI would.
     let status = client.set_recording(true).await.unwrap();
@@ -760,4 +775,113 @@ async fn another_app_owning_the_engine_is_not_taken_over() {
     assert!(other.port().is_some());
     assert_eq!(app.port(), None);
     other.stop().unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_decrypt_list_is_read_and_replaced_over_the_control_api() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let ctx = ctx(dir.path(), client_dir.path());
+    let _server = ControlServer::start(ctx.clone()).unwrap();
+    let info = control::read(dir.path()).unwrap();
+    let http = reqwest::Client::builder().no_proxy().build().unwrap();
+    let url = format!("{}/decrypt", info.base_url());
+
+    assert_eq!(http.get(&url).send().await.unwrap().status(), 401);
+    let list: Value =
+        http.get(&url).bearer_auth(&info.token).send().await.unwrap().json().await.unwrap();
+    assert!(list["entries"].as_array().unwrap().iter().all(|e| e["builtIn"] == true));
+
+    let put = http
+        .put(&url)
+        .bearer_auth(&info.token)
+        .json(&json!({"entries": ["*", "!host:*.bank.example"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(put.status(), 200);
+    let list: Value = put.json().await.unwrap();
+    assert_eq!(
+        list["entries"],
+        json!([
+            {"entry": "*", "builtIn": false},
+            {"entry": "!host:*.bank.example", "builtIn": false},
+        ]),
+        "every built-in exclusion left out is removed"
+    );
+    let read: Value =
+        http.get(&url).bearer_auth(&info.token).send().await.unwrap().json().await.unwrap();
+    assert_eq!(read, list);
+
+    let bad = http
+        .put(&url)
+        .bearer_auth(&info.token)
+        .json(&json!({"entries": ["app:"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad.status(), 400);
+}
+
+/// While the CLI owns the engine, the app's change to the decrypt list goes to the CLI, whose
+/// engine decrypts the next connection by it.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_decrypt_list_reaches_the_cli_that_owns_the_engine() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let cli = ctx(dir.path(), client_dir.path()).with_owner(Owner::Cli);
+    let _server = ControlServer::start(cli.clone()).unwrap();
+    cli.start().unwrap();
+    let app = ctx(dir.path(), client_dir.path());
+
+    let list = rpc(&app, "set_decrypt_list", json!({"entries": ["*"]})).await.unwrap();
+    assert_eq!(list["entries"][0], json!({"entry": "*", "builtIn": false}));
+
+    // Decrypted, the request is a flow of its own: a 502, as nothing listens there.
+    let ca = std::fs::read(dir.path().join("ca/ca.pem")).unwrap();
+    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
+    let client = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all(format!("http://127.0.0.1:{}", cli.port().unwrap())).unwrap())
+        .add_root_certificate(reqwest::Certificate::from_pem(&ca).unwrap())
+        .build()
+        .unwrap();
+    let url = format!("https://localhost:{closed}/forwarded");
+    assert_eq!(client.get(&url).send().await.unwrap().status(), 502);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let flows = cli.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
+        if let Some(flow) = flows.iter().find(|f| f.url == url) {
+            assert!(!flow.tunnelled);
+            break;
+        }
+        assert!(Instant::now() < deadline, "no decrypted flow for {url}");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_decrypt_list_is_edited_over_the_control_api() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let ctx = ctx(dir.path(), client_dir.path());
+    let _server = ControlServer::start(ctx.clone()).unwrap();
+    let info = control::read(dir.path()).unwrap();
+    let http = reqwest::Client::builder().no_proxy().build().unwrap();
+    let url = format!("{}/decrypt", info.base_url());
+
+    for add in ["a.com", "b.com"] {
+        let resp =
+            http.patch(&url).bearer_auth(&info.token).json(&json!({"add": [add]})).send().await;
+        assert_eq!(resp.unwrap().status(), 200);
+    }
+    let resp = http
+        .patch(&url)
+        .bearer_auth(&info.token)
+        .json(&json!({"remove": ["host:a.com"]}))
+        .send()
+        .await
+        .unwrap();
+    let list: Value = resp.json().await.unwrap();
+    assert_eq!(list["entries"][0], json!({"entry": "host:b.com", "builtIn": false}));
+    assert_eq!(list["entries"][1]["builtIn"], true);
 }

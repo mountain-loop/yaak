@@ -1,9 +1,11 @@
 import type { Extension } from "@codemirror/state";
 import { useQuery } from "@tanstack/react-query";
+import classNames from "classnames";
 import type { ReactNode } from "react";
 import { Children, useCallback, useMemo, useState } from "react";
 import { type TextFilterApi, useTextFilter } from "../../hooks/useTextFilter";
 import { docFingerprint } from "../../lib/docFingerprint";
+import { ACTIONS_BAR_CONTAINER, ActionsBar } from "../ActionsBar";
 import type { CodeEditorProps } from "../editor/CodeEditor";
 import { jsonBreadcrumbExtension } from "../editor/json/breadcrumbExtension";
 import type { JsonPathSegment } from "../editor/json/jsonPath";
@@ -20,6 +22,13 @@ export interface TextViewerProps {
   pretty?: boolean;
   className?: string;
   footerActions?: ReactNode;
+  /** Last of the actions and kept while filtering, like a view-mode switch */
+  pinnedActions?: ReactNode;
+  /**
+   * Draws the actions in an `ActionsBar` over the viewer rather than in the editor's own row.
+   * Only the proxy's body tabs set it for now; once every site has moved it goes away
+   */
+  ownActionsBar?: boolean;
   extensions?: Extension[];
   /** Pretty-prints the text when `pretty` is set */
   formatText?: (text: string, language: CodeEditorProps["language"]) => Promise<string>;
@@ -42,6 +51,8 @@ export function TextViewer({
   pretty,
   className,
   footerActions,
+  pinnedActions,
+  ownActionsBar = false,
   extensions,
   formatText,
   filterText,
@@ -121,8 +132,9 @@ export function TextViewer({
 
   const actions = useMemo<ReactNode[]>(() => {
     const nodes: ReactNode[] = isSearching ? [] : Children.toArray(footerActions);
+    const pinned = Children.toArray(pinnedActions);
 
-    if (!canFilter) return nodes;
+    if (!canFilter) return [...nodes, ...pinned];
 
     if (isSearching) {
       nodes.push(
@@ -173,10 +185,11 @@ export function TextViewer({
       );
     }
 
-    return nodes;
+    return [...nodes, ...pinned];
   }, [
     canFilter,
     footerActions,
+    pinnedActions,
     filter,
     filterResult.isPending,
     filterResult.isFetching,
@@ -221,16 +234,19 @@ export function TextViewer({
   }
 
   return (
-    <div className="relative h-full w-full">
+    <div
+      className={classNames("h-full w-full", ownActionsBar ? ACTIONS_BAR_CONTAINER : "relative")}
+    >
       {renderEditor({
         readOnly: true,
         className,
         defaultValue: body,
         language,
-        actions,
+        actions: ownActionsBar ? undefined : actions,
         extensions: extraExtensions,
         stateKey,
       })}
+      {ownActionsBar && actions.length > 0 && <ActionsBar>{actions}</ActionsBar>}
       {showBreadcrumbs && (
         <div className="absolute top-0 right-3 max-w-[70%] pointer-events-none">
           <ResponseBreadcrumbBar

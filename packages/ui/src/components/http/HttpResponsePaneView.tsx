@@ -43,8 +43,12 @@ export interface HttpResponsePaneViewProps {
   className?: string;
   /** Shown before there's a response */
   emptyState: ReactNode;
-  viewMode: ResponseViewMode;
-  onViewModeChange: (viewMode: ResponseViewMode) => void;
+  viewMode?: ResponseViewMode;
+  /**
+   * Offers the raw view in the Response tab's menu. Left out where the body tab has a view-mode
+   * switch of its own, as the proxy's does
+   */
+  onViewModeChange?: (viewMode: ResponseViewMode) => void;
   /** Where the tab order and the active tab are remembered */
   tabsStorageKey?: string;
   /** Remembers the active tab per request or flow */
@@ -69,6 +73,22 @@ export interface HttpResponsePaneViewProps {
   infoRows?: ReactElement[];
   /** The copy button for a body held back for its size */
   renderCopyButton?: (getText: () => Promise<string | null>) => ReactNode;
+  /**
+   * The request is shown apart, as the proxy's card shows it beside the response: no Request
+   * tab, and Headers and Cookies hold the response's alone
+   */
+  requestShownApart?: boolean;
+  /** Drawn inside a card the app draws, without a card of its own */
+  bare?: boolean;
+  /**
+   * The tab to open on for a key with no tab of its own; with it, a tab chosen under one key
+   * doesn't carry to the next
+   */
+  defaultTab?: string;
+  /** The tab to show over any remembered, while this response offers it */
+  activeTab?: string;
+  /** A tab was chosen */
+  onTabChange?: (tab: string) => void;
 }
 
 /** Yaak's response pane: a status line over Response, Request, Headers and Cookies tabs */
@@ -79,7 +99,7 @@ export function HttpResponsePaneView({
   style,
   className,
   emptyState,
-  viewMode,
+  viewMode = "pretty",
   onViewModeChange,
   tabsStorageKey = "http_response_tabs",
   activeTabKey,
@@ -95,6 +115,11 @@ export function HttpResponsePaneView({
   renderBodyViewer,
   infoRows,
   renderCopyButton,
+  requestShownApart = false,
+  bare = false,
+  defaultTab,
+  activeTab,
+  onTabChange,
 }: HttpResponsePaneViewProps) {
   const { ErrorBoundary } = useEditorHost();
   const mimeType =
@@ -138,44 +163,51 @@ export function HttpResponsePaneView({
         : []),
     ];
 
+    const headerCount = response?.headers.length ?? 0;
     return [
-      {
-        value: RESPONSE_TAB_BODY,
-        options: {
-          value: viewMode,
-          onChange: (v) => onViewModeChange(v === "raw" ? "raw" : "pretty"),
-          items: [
-            { label: "Response", value: "pretty" },
-            ...(mimeType?.startsWith("image")
-              ? []
-              : [{ label: "Response (Raw)", shortLabel: "Raw", value: "raw" }]),
-          ],
-          itemsAfter: itemsAfter.length > 0 ? itemsAfter : undefined,
-        },
-      },
-      {
-        value: RESPONSE_TAB_REQUEST,
-        label: "Request",
-        rightSlot: (response?.requestContentLength ?? 0) > 0 ? <CountBadge count={true} /> : null,
-      },
+      onViewModeChange == null && itemsAfter.length === 0
+        ? { value: RESPONSE_TAB_BODY, label: "Response" }
+        : {
+            value: RESPONSE_TAB_BODY,
+            options: {
+              value: viewMode,
+              onChange: (v: string | null) => onViewModeChange?.(v === "raw" ? "raw" : "pretty"),
+              items: [
+                { label: "Response", value: "pretty" },
+                ...(onViewModeChange == null || mimeType?.startsWith("image")
+                  ? []
+                  : [{ label: "Response (Raw)", shortLabel: "Raw", value: "raw" }]),
+              ],
+              itemsAfter: itemsAfter.length > 0 ? itemsAfter : undefined,
+            },
+          },
+      ...(requestShownApart
+        ? []
+        : [
+            {
+              value: RESPONSE_TAB_REQUEST,
+              label: "Request",
+              rightSlot:
+                (response?.requestContentLength ?? 0) > 0 ? <CountBadge count={true} /> : null,
+            },
+          ]),
       {
         value: RESPONSE_TAB_HEADERS,
         label: "Headers",
-        rightSlot: (
-          <CountBadge
-            count={response?.requestHeaders.length ?? 0}
-            count2={response?.headers.length ?? 0}
-            showZero
-          />
+        rightSlot: requestShownApart ? (
+          <CountBadge count={headerCount} />
+        ) : (
+          <CountBadge count={response?.requestHeaders.length ?? 0} count2={headerCount} showZero />
         ),
       },
       {
         value: RESPONSE_TAB_COOKIES,
         label: "Cookies",
-        rightSlot:
-          cookieCounts.sent > 0 || cookieCounts.received > 0 ? (
-            <CountBadge count={cookieCounts.sent} count2={cookieCounts.received} showZero />
-          ) : null,
+        rightSlot: requestShownApart ? (
+          <CountBadge count={cookieCounts.received} />
+        ) : cookieCounts.sent > 0 || cookieCounts.received > 0 ? (
+          <CountBadge count={cookieCounts.sent} count2={cookieCounts.received} showZero />
+        ) : null,
       },
       ...(extraTabs?.map((t) => t.tab) ?? []),
     ];
@@ -187,6 +219,7 @@ export function HttpResponsePaneView({
     onCopyBody,
     onSaveBody,
     onViewModeChange,
+    requestShownApart,
     response,
     viewMode,
   ]);
@@ -197,9 +230,8 @@ export function HttpResponsePaneView({
       className={classNames(
         className,
         "x-theme-responsePane",
-        "max-h-full h-full",
-        "bg-surface rounded-md border border-border-subtle overflow-hidden",
-        "relative",
+        "max-h-full h-full overflow-hidden relative",
+        !bare && "bg-surface rounded-md border border-border-subtle",
       )}
     >
       {response == null ? (
@@ -234,6 +266,10 @@ export function HttpResponsePaneView({
               tabListClassName="mt-0.5 -mb-1.5"
               storageKey={tabsStorageKey}
               activeTabKey={activeTabKey}
+              defaultValue={defaultTab}
+              value={activeTab}
+              keyedDefault={defaultTab != null}
+              onChangeValue={onTabChange}
             >
               <TabContent value={RESPONSE_TAB_BODY} ErrorBoundary={ErrorBoundary}>
                 <ErrorBoundary name="Http Response Viewer">
@@ -259,6 +295,7 @@ export function HttpResponsePaneView({
                   </Suspense>
                 </ErrorBoundary>
               </TabContent>
+              {!requestShownApart && (
               <TabContent value={RESPONSE_TAB_REQUEST} ErrorBoundary={ErrorBoundary}>
                 <ConfirmLargeResponse
                   contentLength={response.requestContentLength}
@@ -277,11 +314,19 @@ export function HttpResponsePaneView({
                   )}
                 </ConfirmLargeResponse>
               </TabContent>
+              )}
               <TabContent value={RESPONSE_TAB_HEADERS} ErrorBoundary={ErrorBoundary}>
-                <ResponseHeaders response={response} infoRows={infoRows} />
+                <ResponseHeaders
+                  response={response}
+                  infoRows={infoRows}
+                  responseOnly={requestShownApart}
+                />
               </TabContent>
               <TabContent value={RESPONSE_TAB_COOKIES} ErrorBoundary={ErrorBoundary}>
-                <ResponseCookies response={response} />
+                <ResponseCookies
+                  response={response}
+                  side={requestShownApart ? "received" : undefined}
+                />
               </TabContent>
               {extraTabs?.map(({ tab, content }) => (
                 <TabContent key={tab.value} value={tab.value} ErrorBoundary={ErrorBoundary}>

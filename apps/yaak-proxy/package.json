@@ -9,6 +9,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
     "@tanstack/react-query": "^5.105.0",
     "@tanstack/react-virtual": "^3.14.24",
     "@tauri-apps/api": "^2.12.4",
@@ -23,6 +24,7 @@
     "motion": "^14.8.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "tldts": "^7.4.19",
     "vkbeautify": "^0.99.3"
   },
   "devDependencies": {
@@ -34,6 +36,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "typescript": "^5.8.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@^1.4.0",
+    "vite-plugin-wasm": "^3.5.0",
     "vite-plus": "^1.4.0"
   }
 }

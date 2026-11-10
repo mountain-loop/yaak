@@ -106,6 +106,18 @@ export interface HttpRequestPaneViewProps {
 
   /** Tabs only the app has, after the shared ones */
   extraTabs?: ExtraPaneTab[];
+
+  /** Replaces the URL bar, as the proxy's card shows a captured request's method and URL */
+  urlLine?: ReactNode;
+  /**
+   * The tab to open on for a request with no tab of its own; with it, a tab chosen for one
+   * request doesn't carry to the next
+   */
+  defaultTab?: string;
+  /** The tab to show over any remembered, while this request offers it */
+  activeTab?: string;
+  /** A tab was chosen */
+  onTabChange?: (tab: string) => void;
 }
 
 type HeadersEditorInherited = { name: string; value: string; enabled?: boolean; id?: string }[];
@@ -153,6 +165,10 @@ export function HttpRequestPaneView({
   authTabs,
   authContent,
   extraTabs,
+  urlLine,
+  defaultTab,
+  activeTab,
+  onTabChange,
 }: HttpRequestPaneViewProps) {
   const { ErrorBoundary } = useEditorHost();
   const readOnly = !editable;
@@ -168,6 +184,7 @@ export function HttpRequestPaneView({
       : 0;
   }
 
+  const headerCount = request.headers.filter((h) => h.name && h.enabled !== false).length;
   const tabs = useMemo<TabItem[]>(
     () => [
       bodyTab ?? {
@@ -184,11 +201,7 @@ export function HttpRequestPaneView({
         {
           value: REQUEST_TAB_HEADERS,
           label: "Headers",
-          rightSlot: (
-            <CountBadge
-              count={request.headers.filter((h) => h.name && h.enabled !== false).length}
-            />
-          ),
+          rightSlot: <CountBadge count={headerCount} />,
         },
       ]),
       ...(authTabs ??
@@ -206,13 +219,13 @@ export function HttpRequestPaneView({
       authTabs,
       bodyTab,
       extraTabs,
+      headerCount,
       headersTabs,
       numParams,
       paramPairs.length,
       request.auth,
       request.bodyType,
       request.contentType,
-      request.headers,
     ],
   );
 
@@ -235,6 +248,7 @@ export function HttpRequestPaneView({
       style={style}
       className={classNames(className, "h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1")}
     >
+      {urlLine ?? (
       <UrlBar
         stateKey={`url.${request.id}`}
         key={urlBarKey}
@@ -264,6 +278,7 @@ export function HttpRequestPaneView({
         forceUpdateKey={urlForceUpdateKey ?? forceUpdateKey}
         isLoading={isSending}
       />
+      )}
       <Tabs
         ref={tabsRef}
         label="Request"
@@ -271,6 +286,10 @@ export function HttpRequestPaneView({
         tabListClassName="mt-1 -mb-1.5"
         storageKey={tabsStorageKey}
         activeTabKey={request.id}
+        defaultValue={defaultTab}
+        value={activeTab}
+        keyedDefault={defaultTab != null}
+        onChangeValue={onTabChange}
       >
         <TabContent value={REQUEST_TAB_AUTH} ErrorBoundary={ErrorBoundary}>
           {authContent ?? (request.auth != null && <AuthDisplay auth={request.auth} />)}

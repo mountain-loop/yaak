@@ -1,6 +1,15 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { extractSseValueAtPath, type ServerSentEvent } from "@yaakapp-internal/sse";
-import { HStack, Icon, InlineCode, SplitLayout, VStack, IconTooltip } from "@yaakapp-internal/ui";
+import {
+  EventStreamViewer as SharedEventStreamViewer,
+  HStack,
+  Icon,
+  InlineCode,
+  SplitLayout,
+  type StreamEvent,
+  VStack,
+  IconTooltip,
+} from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { CSSProperties, ReactNode } from "react";
 import { Fragment, useMemo, useState } from "react";
@@ -20,8 +29,7 @@ import type { DropdownItem } from "../core/Dropdown";
 import { Dropdown } from "../core/Dropdown";
 import type { EditorProps } from "../core/Editor/Editor";
 import { Editor } from "../core/Editor/LazyEditor";
-import { EventDetailHeader, EventViewer } from "../core/EventViewer";
-import { EventViewerRow } from "../core/EventViewerRow";
+import { EventDetailHeader } from "../core/EventViewer";
 import { IconButton } from "../core/IconButton";
 import { Input } from "../core/Input";
 import { Select } from "../core/Select";
@@ -62,6 +70,7 @@ function ActualEventStreamViewer({ response }: Props) {
   });
   const summarySettings = useSseSummaryResultKeyPath({ response });
   const events = useResponseBodyEventSource(response);
+  const streamEvents = useMemo(() => (events.data ?? []).map(toStreamEvent), [events.data]);
   const summary = useResponseBodySseSummary(response, summarySettings.resultKeyPath);
   const showExtractedText = summarySettings.resultKeyPath != null;
   const showResultKeyPathWarning =
@@ -105,10 +114,7 @@ function ActualEventStreamViewer({ response }: Props) {
         ),
       },
     ],
-    [
-      applyToDetailsSetting,
-      filterEventPreviewsSetting,
-    ],
+    [applyToDetailsSetting, filterEventPreviewsSetting],
   );
 
   return (
@@ -175,30 +181,21 @@ function ActualEventStreamViewer({ response }: Props) {
         resizeHandleClassName="hover:bg-surface-highlight active:bg-surface-highlight"
         firstSlot={({ style }) => (
           <div style={style} className="min-h-0">
-            <EventViewer
-              events={events.data ?? []}
-              getEventKey={(_, index) => String(index)}
+            <SharedEventStreamViewer
+              events={streamEvents}
               error={events.error ? String(events.error) : null}
               splitLayoutStorageKey="sse_events"
               defaultRatio={0.4}
-              renderRow={({ event, index, isActive, onClick }) => (
-                <EventViewerRow
-                  isActive={isActive}
-                  onClick={onClick}
-                  icon={<Icon color="info" title="Server Message" icon="arrow_big_down_dash" />}
-                  content={
-                    <HStack space={2} className="items-center">
-                      <EventLabels event={event} index={index} isActive={isActive} />
-                      <span className="truncate text-xs">
-                        {getEventPreview(event, summarySettings.resultKeyPath, filterEventPreviews)}
-                      </span>
-                    </HStack>
-                  }
-                />
-              )}
+              getPreview={(event) =>
+                getEventPreview(
+                  sseEventOf(events.data, event),
+                  summarySettings.resultKeyPath,
+                  filterEventPreviews,
+                )
+              }
               renderDetail={({ event, index, onClose }) => (
                 <EventDetail
-                  event={event}
+                  event={sseEventOf(events.data, event)}
                   index={index}
                   applyJsonPath={applyToDetails}
                   resultKeyPath={summarySettings.resultKeyPath}
@@ -310,6 +307,23 @@ function SseSummaryFooter({
       </div>
     </div>
   );
+}
+
+/** An SSE event as the shared viewer lists it: received, with its id (or place) and type */
+function toStreamEvent(event: ServerSentEvent, index: number): StreamEvent {
+  return {
+    key: String(index),
+    direction: "received",
+    kind: event.eventType || null,
+    labels: [String(event.id ?? index), ...(event.eventType ? [event.eventType] : [])],
+    timestamp: null,
+    size: null,
+    preview: event.data,
+  };
+}
+
+function sseEventOf(events: ServerSentEvent[] | undefined, event: StreamEvent): ServerSentEvent {
+  return events?.[Number(event.key)] ?? { data: "", eventType: "", id: null, retry: null };
 }
 
 function getEventPreview(

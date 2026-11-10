@@ -1,84 +1,109 @@
-import type { Flow, FlowFilter } from "@yaakapp-internal/proxy-lib";
+import type { Flow } from "@yaakapp-internal/proxy-lib";
+import { getDomain } from "tldts";
 
-/**
- * A search over every flow in the database: the search box's terms and the sidebar's selection,
- * as `list_flows` takes them.
- */
-export type FlowQuery = Pick<FlowFilter, "q" | "under" | "app">;
-
-/** The sidebar node for all of an app's flows */
-export function appNodeId(key: string): string {
-  return `app:${key}`;
+/** The folder a program outside an app ran in */
+export function folderOf(flow: Pick<Flow, "clientBundleId" | "clientCwd">): string | null {
+  if (flow.clientBundleId != null) return null;
+  return folderName(flow.clientCwd);
 }
 
-/** What groups an app's flows: its bundle id, or its path for a process outside an app */
+/** The last part of a path: `fieldwork` of `/src/fieldwork/` */
+function folderName(path: string | null): string | null {
+  if (path == null) return null;
+  const name =
+    path
+      .replace(/[/\\]+$/, "")
+      .split(/[/\\]/)
+      .pop() ?? "";
+  return name === "" ? null : name;
+}
+
+/** Runtimes that run anyone's code, so six rows of `node` say nothing without their folder */
+const GENERIC_RUNTIMES = new Set(["node", "python", "bun", "deno", "ruby", "java", "cargo"]);
+
+/** A program outside an app that runs other code: `node`, `python3.12`, `java` */
+export function isGenericRuntime(flow: Pick<Flow, "clientBundleId" | "clientName">): boolean {
+  if (flow.clientBundleId != null || flow.clientName == null) return false;
+  const name = flow.clientName.toLowerCase().replace(/\.exe$/, "");
+  return GENERIC_RUNTIMES.has(name.replace(/[\d.]+$/, ""));
+}
+
+/**
+ * The folder that names a generic runtime's row, `node` in `fieldwork`; null for anything
+ * else, whose folders are rows under it
+ */
+export function runtimeFolderOf(
+  flow: Pick<Flow, "clientBundleId" | "clientName" | "clientCwd">,
+): string | null {
+  return isGenericRuntime(flow) ? folderOf(flow) : null;
+}
+
+/**
+ * What `@app` names a flow's app by, and what the sidebar groups its apps by: an app's name, a
+ * program's name, or for a generic runtime the folder it ran in. Null when unknown.
+ */
 export function appKeyOf(flow: Flow): string | null {
-  return flow.clientBundleId ?? flow.clientPath;
+  return runtimeFolderOf(flow) ?? flow.clientName ?? flow.clientBundleId ?? flow.clientPath;
 }
+
+const SYSTEM_DIRS = ["/System/", "/usr/libexec/", "/usr/sbin/", "/sbin/", "/Library/Apple/"];
+const SYSTEM_PROGRAMS = new Set([
+  "akd",
+  "apsd",
+  "cloudd",
+  "mDNSResponder",
+  "nsurlsessiond",
+  "ocspd",
+  "softwareupdated",
+  "trustd",
+]);
 
 /**
- * The sidebar's selection as a query: hosts and paths under `under`, apps under `app`. Null when
- * the selection holds every flow.
+ * A flow from one of macOS's own daemons: a process outside an app bundle whose executable is
+ * under `/System`, `/usr/libexec` and the like, or one of a few daemons by name, but not WebKit's
+ * helpers, which send apps' traffic. `is_system` in `crates-proxy/yaak-proxy-lib`, which
+ * `@is:system` searches by, follows the same rules.
  */
-export function selectionQuery(selectedIds: string[]): FlowQuery | null {
-  const under: string[] = [];
-  const app: string[] = [];
-  for (const id of selectedIds) {
-    if (id === "root" || id === "domains" || id === "apps") return null;
-    if (id.startsWith("domain:")) under.push(id.slice("domain:".length));
-    else if (id.startsWith("path:")) under.push(id.slice("path:".length));
-    else if (id.startsWith("app:")) app.push(id.slice("app:".length));
-  }
-  if (under.length === 0 && app.length === 0) return null;
-  return {
-    ...(under.length > 0 ? { under } : {}),
-    ...(app.length > 0 ? { app } : {}),
-  };
+export function isSystemFlow(flow: Pick<Flow, "clientBundleId" | "clientPath">): boolean {
+  const path = flow.clientPath;
+  if (path == null || flow.clientBundleId != null) return false;
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  if (name.startsWith("com.apple.WebKit.")) return false;
+  return SYSTEM_DIRS.some((dir) => path.startsWith(dir)) || SYSTEM_PROGRAMS.has(name);
 }
+
+/** A host without its port, keeping an IPv6 address's brackets */
+export function hostnameOf(host: string): string {
+  if (host.startsWith("[")) {
+    const end = host.indexOf("]");
+    return end === -1 ? host : host.slice(0, end + 1);
+  }
+  const colon = host.lastIndexOf(":");
+  return colon === -1 ? host : host.slice(0, colon);
+}
+
+const sites = new Map<string, string>();
 
 /**
- * Whether `flow` is one `query` covers, as `list_flows` decides it in SQL, so new traffic joins a
- * search as it arrives. Every term must match the URL, the method, the status or the content type.
+ * The site a host belongs to, its registrable domain by the public suffix list: `github.com` for
+ * `api.github.com`, `example.co.uk` for `www.example.co.uk`. An address or a name with no public
+ * suffix, such as `localhost`, is its own site.
  */
-export function matchesQuery(flow: Flow, query: FlowQuery): boolean {
-  for (const term of (query.q ?? "").toLowerCase().split(/\s+/)) {
-    if (term === "") continue;
-    const matched =
-      flow.url.toLowerCase().includes(term) ||
-      flow.method.toLowerCase() === term ||
-      (flow.contentType?.toLowerCase().includes(term) ?? false) ||
-      matchesStatus(flow.status, term);
-    if (!matched) return false;
+export function siteOf(host: string): string {
+  let site = sites.get(host);
+  if (site == null) {
+    const name = hostnameOf(host);
+    site = getDomain(name, { allowPrivateDomains: true }) ?? name;
+    sites.set(host, site);
   }
-  if (query.under != null && !query.under.some((node) => isUnder(flow.url, node))) return false;
-  if (query.app != null) {
-    const key = appKeyOf(flow);
-    if (key == null || !query.app.includes(key)) return false;
-  }
-  return true;
-}
-
-/** `404` exactly, `40` as the start of one, or a class such as `4xx` */
-function matchesStatus(status: number | null, term: string): boolean {
-  if (status == null) return false;
-  const klass = /^([1-9])xx$/.exec(term);
-  if (klass != null) return Math.trunc(status / 100) === Number(klass[1]);
-  if (!/^\d{1,3}$/.test(term)) return false;
-  return term.length === 3 ? status === Number(term) : String(status).startsWith(term);
-}
-
-/** The URL is the host or path `node` names, or something below it, by the sidebar's rules */
-function isUnder(url: string, node: string): boolean {
-  const path = sidebarPath(url);
-  const want = normalizeNode(node);
-  return path === want || path.startsWith(`${want}/`);
+  return site;
 }
 
 /**
  * Where the sidebar places a URL: its host, lowercased and without its scheme's default port,
  * then its path's non-empty segments, joined by `/`, as in `api.stripe.com/v1/charges`. A URL
  * without a scheme is a host of its own. `sidebar_path` in `crates-proxy/yaak-proxy-lib`, which
- * the database filters by, follows the same rules.
+ * `@host` searches by, follows the same rules.
  */
 export function sidebarPath(url: string): string {
   const schemeEnd = url.indexOf("://");
@@ -99,18 +124,4 @@ export function sidebarPath(url: string): string {
   const path = authorityEnd === -1 ? "" : (rest.slice(authorityEnd).split(/[?#]/)[0] ?? "");
   const segments = path.split("/").filter((s) => s !== "");
   return [host, ...segments].join("/");
-}
-
-/** A sidebar node as `sidebarPath` writes it, its host lowercased */
-function normalizeNode(node: string): string {
-  const slash = node.indexOf("/");
-  return slash === -1
-    ? node.toLowerCase()
-    : `${node.slice(0, slash).toLowerCase()}${node.slice(slash)}`;
-}
-
-/** The search box's text as terms for `list_flows`, or null when it has none */
-export function searchTerms(text: string): string | null {
-  const q = text.trim().replace(/\s+/g, " ");
-  return q === "" ? null : q;
 }

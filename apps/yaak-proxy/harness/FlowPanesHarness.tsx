@@ -1,24 +1,18 @@
-import {
-  HttpRequestPaneView,
-  HttpResponsePaneView,
-  type HttpBodyResult,
-  type ResponseViewMode,
-} from "@yaakapp-internal/ui";
-import { useMemo, useState } from "react";
-import { ProxyEditorHost } from "../components/ProxyEditorHost";
-import { findHeader } from "../lib/body";
-import {
-  type FlowBodyData,
-  flowBodyFromRpc,
-  flowBodyLoader,
-  flowRequestToView,
-  flowResponseToView,
-} from "../lib/flowViews";
+import { useSetAtom, useStore } from "jotai";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { AddColumnDialog } from "../components/AddColumnDialog";
+import { FlowDetail } from "../components/FlowDetail";
+import { FlowList } from "../components/FlowList";
+import { browserTabMemory, learnedTabKey, flowShape } from "../lib/defaultTab";
+import { goToPlace } from "../lib/navigation";
+import { flowWindowAtom } from "../lib/store";
 import { type FlowFixture, fixtures } from "./fixtures";
 
 /**
- * Dev only: renders captured flows through the shared request and response panes, read-only,
- * side by side, the way the proxy's detail view will. Open `/harness.html?flow=0&theme=dark`.
+ * Dev only: captured flows in the detail card, over fixtures. Open
+ * `/harness.html?flow=0&theme=dark`; `&list` puts the flow list beside the card (its halves
+ * stacked), `&below` puts it above (side by side), and `&tab=info` opens the response half on a
+ * tab, as though it were chosen by hand for flows of that shape.
  */
 export function FlowPanesHarness() {
   const params = new URLSearchParams(location.search);
@@ -27,87 +21,81 @@ export function FlowPanesHarness() {
   if (fixture == null) return null;
 
   return (
-    <ProxyEditorHost formatText={formatLocally}>
-      <div className="h-full w-full grid grid-rows-[auto_minmax(0,1fr)] gap-2 p-2 bg-surface">
-        <div className="flex gap-2 text-sm">
-          {fixtures.map((f, i) => (
-            <button
-              key={f.flow.id}
-              type="button"
-              className={i === index ? "text-text" : "text-text-subtle"}
-              onClick={() => setIndex(i)}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <FlowPanes key={fixture.flow.id} fixture={fixture} />
+    <div className="h-full w-full grid grid-rows-[auto_minmax(0,1fr)] gap-2 p-2 bg-surface">
+      <div className="flex gap-2 text-sm">
+        {fixtures.map((f, i) => (
+          <button
+            key={f.flow.id}
+            type="button"
+            className={i === index ? "text-text" : "text-text-subtle"}
+            onClick={() => setIndex(i)}
+          >
+            {f.label}
+          </button>
+        ))}
       </div>
-    </ProxyEditorHost>
-  );
-}
-
-function FlowPanes({ fixture }: { fixture: FlowFixture }) {
-  const { flow } = fixture;
-  const [viewMode, setViewMode] = useState<ResponseViewMode>("pretty");
-  const requestBody = useMemo(() => flowBodyFromRpc(fixture.requestBody), [fixture]);
-  const responseBody = useMemo(() => flowBodyFromRpc(fixture.responseBody), [fixture]);
-  const request = useMemo(() => flowRequestToView(flow, requestBody), [flow, requestBody]);
-  const response = useMemo(() => flowResponseToView(flow, responseBody), [flow, responseBody]);
-
-  const requestLoader = useMemo(
-    () =>
-      flowBodyLoader({
-        useBody: () => loaded(requestBody),
-        contentType: findHeader(flow.requestHeaders, "content-type"),
-      }),
-    [requestBody, flow],
-  );
-  const responseLoader = useMemo(
-    () =>
-      flowBodyLoader({
-        useBody: () => loaded(responseBody),
-        contentType: findHeader(flow.responseHeaders, "content-type"),
-      }),
-    [responseBody, flow],
-  );
-
-  return (
-    <div className="grid grid-cols-2 gap-2 min-h-0">
-      <div className="min-h-0 px-2">
-        <HttpRequestPaneView
-          request={request}
-          fullHeight
-          forceUpdateKey={flow.updatedAt}
-          tabsStorageKey="flow_request_tabs"
-          bodyLoader={requestLoader}
-        />
-      </div>
-      <HttpResponsePaneView
-        response={response}
-        body={responseLoader}
-        requestBody={requestLoader}
-        emptyState={<div className="p-3 text-text-subtle">Waiting for a response</div>}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        tabsStorageKey="flow_response_tabs"
-        activeTabKey={flow.id}
-        onCopyAsCurl={() => undefined}
-      />
+      <FixtureCard key={fixture.flow.id} fixture={fixture} />
+      <AddColumnDialog />
     </div>
   );
 }
 
-function loaded(data: FlowBodyData): HttpBodyResult<FlowBodyData | null> {
-  return { data, isLoading: false, error: null };
-}
+function FixtureCard({ fixture }: { fixture: FlowFixture }) {
+  const params = new URLSearchParams(location.search);
+  const store = useStore();
+  const setWindow = useSetAtom(flowWindowAtom);
+  const [ready, setReady] = useState(false);
+  useLayoutEffect(() => {
+    const flows = fixtures.map((f, i) => ({ ...f.flow, number: 1401 + i }));
+    const tab = params.get("tab");
+    if (tab != null) {
+      browserTabMemory()?.setItem(learnedTabKey("response", flowShape(fixture.flow)), tab);
+    }
+    setWindow({ flows, hasOlder: false, total: flows.length });
+    const shown = flows.find((f) => f.id === fixture.flow.id) ?? fixture.flow;
+    goToPlace(store, "update", { selection: [shown.id], flow: shown });
+    setReady(true);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- once per fixture
+  }, [fixture]);
 
-/** The engine formats JSON over RPC, which a page outside the app can't reach */
-async function formatLocally(text: string, language: unknown): Promise<string> {
-  if (language !== "json") return text;
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2);
-  } catch {
-    return text;
+  // `&arrive=3`: that many new flows, one a second, as traffic would bring them
+  useEffect(() => {
+    const count = Number(params.get("arrive") ?? 0);
+    let added = 0;
+    const timer = setInterval(() => {
+      if (added >= count) return clearInterval(timer);
+      added++;
+      const source = fixtures[added % fixtures.length]?.flow;
+      if (source == null) return;
+      const flow = {
+        ...source,
+        // The fixture's id first, so the backend finds its bodies, as `manyFlows` does
+        id: `${source.id}~arrived_${added}`,
+        number: 1500 + added,
+        startedAt: new Date().toISOString().slice(0, 23),
+      };
+      setWindow((w) => ({ ...w, flows: [...w.flows, flow], total: w.total + 1 }));
+    }, 1000);
+    return () => clearInterval(timer);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- once per fixture
+  }, [fixture]);
+  if (!ready) return null;
+
+  if (params.has("list")) {
+    return (
+      <div className="h-full min-h-0 grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <FlowList className="min-h-0" />
+        <FlowDetail sideBySide />
+      </div>
+    );
   }
+  if (params.has("below")) {
+    return (
+      <div className="h-full min-h-0 grid grid-rows-[minmax(0,0.45fr)_minmax(0,0.55fr)]">
+        <FlowList className="min-h-0" />
+        <FlowDetail sideBySide={false} />
+      </div>
+    );
+  }
+  return <FlowDetail sideBySide={false} />;
 }

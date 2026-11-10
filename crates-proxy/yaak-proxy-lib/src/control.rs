@@ -4,12 +4,17 @@
 //! time: a file whose process is gone, or whose port no longer answers, is stale and replaced.
 
 use crate::ca::{self, CaStatus};
-use crate::flows::{self, FlowFilter};
+use crate::flows::{self, BodyPreview, FlowFilter};
+use crate::grpc::{self, DecodedGrpcMessage};
 use crate::har;
 use crate::macos::SystemProxyStatus;
+use crate::messages::{self, FlowMessage, MessageKind};
 use crate::models::{FlowBody, find_header};
 use crate::save::SaveFlowRequest;
-use crate::{ProxyCtx, ProxyState, bodies};
+use crate::{
+    AddGrpcSchemaRequest, EditDecryptListRequest, ListMessagesResponse, ProxyCtx, ProxyState,
+    ReflectGrpcHostRequest, bodies,
+};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use http_body_util::{BodyExt, Full, Limited};
@@ -28,7 +33,6 @@ use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use ts_rs::TS;
-use yaak_proxy::CaStore;
 
 pub const CONTROL_FILE: &str = "control.json";
 const LOCK_FILE: &str = "control.lock";
@@ -207,10 +211,14 @@ pub struct ControlStatus {
     pub configured_port: u16,
     /// Flows are stored. Paused, traffic still passes through, unrecorded.
     pub recording: bool,
+    /// Flows stored; zero while they are locked.
     pub flow_count: usize,
     pub ca: CaStatus,
     /// `None` when it could not be read.
     pub system_proxy: Option<SystemProxyStatus>,
+    /// Why captured traffic cannot be read, while it cannot.
+    #[serde(default)]
+    pub locked: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -229,6 +237,13 @@ pub struct RecordingRequest {
     pub enabled: bool,
 }
 
+/// `PUT /decrypt`: every entry of the decrypt list, in order. A built-in exclusion left out is
+/// removed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecryptRequest {
+    pub entries: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearResponse {
     /// How many flows were deleted.
@@ -240,8 +255,29 @@ pub struct ErrorBody {
     pub error: String,
 }
 
+/// `GET /flows/{id}/messages/{seq}`: a message with its payload, and a gRPC message decoded.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageDetail {
+    pub message: FlowMessage,
+    pub payload: BodyPreview,
+    /// A gRPC message as JSON, with its schema or without one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decoded: Option<DecodedGrpcMessage>,
+    /// Why a gRPC message could not be decoded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decode_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemovedResponse {
+    pub removed: bool,
+}
+
 /// Raw body headers: whether the body is cut short, at the capture limit or on the wire.
 pub const TRUNCATED_HEADER: &str = "x-yaak-truncated";
+/// Raw body headers: what to know about a body beyond its bytes, as that a WebSocket has none.
+pub const NOTE_HEADER: &str = "x-yaak-note";
 
 // -- Server --
 
@@ -432,7 +468,18 @@ impl ApiError {
 
 impl From<String> for ApiError {
     fn from(message: String) -> Self {
+        // Locked, said through a call that returns its reason as text.
+        if message.starts_with(crate::LOCKED) {
+            return Self::new(StatusCode::SERVICE_UNAVAILABLE, message);
+        }
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, message)
+    }
+}
+
+/// Captured traffic is locked for now: unavailable, not missing or broken.
+impl From<crate::Locked> for ApiError {
+    fn from(locked: crate::Locked) -> Self {
+        Self::new(StatusCode::SERVICE_UNAVAILABLE, locked.to_string())
     }
 }
 
@@ -487,9 +534,18 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
             ctx.set_recording(body.enabled);
             json(&status(ctx).await?)
         }
+        (&Method::GET, ["decrypt"]) => json(&ctx.decrypt_list()?),
+        (&Method::PATCH, ["decrypt"]) => {
+            let body: EditDecryptListRequest = read_json(req).await?;
+            json(&ctx.edit_decrypt_list(&body.add, &body.remove).map_err(bad_request)?)
+        }
+        (&Method::PUT, ["decrypt"]) => {
+            let body: DecryptRequest = read_json(req).await?;
+            json(&ctx.set_decrypt_list(&body.entries).map_err(bad_request)?)
+        }
         (&Method::GET, ["flows"]) => {
             let filter = FlowFilter::from_query(&query).map_err(bad_request)?;
-            json(&flows::list(&ctx.db, &filter)?)
+            json(&flows::list(&ctx.db()?, &filter)?)
         }
         (&Method::POST, ["flows", "clear"]) => {
             let ctx = ctx.clone();
@@ -498,11 +554,58 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
         (&Method::GET, ["flows", id]) => {
             found(ctx, id)?;
             let limit = body_limit(&query)?;
-            json(&flows::detail(&ctx.db, &ctx.blobs, id, limit).await?)
+            let detail = flows::detail(&ctx.db()?, &ctx.blobs()?, id, limit).await?;
+            ctx.note_agent_read(id);
+            json(&detail)
         }
         (&Method::GET, ["flows", id, "request-body"]) => raw_body(ctx, id, FlowBody::Request).await,
         (&Method::GET, ["flows", id, "response-body"]) => {
             raw_body(ctx, id, FlowBody::Response).await
+        }
+        (&Method::GET, ["flows", id, "messages"]) => {
+            found(ctx, id)?;
+            let (after_seq, limit) = message_page(&query)?;
+            let messages = messages::list(&ctx.db()?, id, after_seq, limit)?;
+            let total = messages::count(&ctx.db()?, id)?;
+            ctx.note_agent_read(id);
+            json(&ListMessagesResponse { messages, total })
+        }
+        (&Method::GET, ["flows", id, "messages", seq]) => {
+            let flow = flows::find(&ctx.db()?, id)
+                .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("No flow {id}")))?;
+            let seq: i64 = seq.parse().map_err(|_| bad_request(format!("Invalid seq {seq:?}")))?;
+            let message = messages::find(&ctx.db()?, id, seq)?.ok_or_else(|| {
+                ApiError::new(StatusCode::NOT_FOUND, format!("No message {seq} in flow {id}"))
+            })?;
+            let payload = messages::payload(&ctx.db()?, &ctx.blobs()?, &message)?;
+            let (decoded, decode_error) = if message.kind == MessageKind::GrpcMessage {
+                match grpc::decode(&ctx.db()?, &ctx.blobs()?, &ctx.grpc, &flow, seq, false).await {
+                    Ok(decoded) => (Some(decoded), None),
+                    Err(e) => (None, Some(e)),
+                }
+            } else {
+                (None, None)
+            };
+            let payload = BodyPreview::new(&payload, message.truncated);
+            ctx.note_agent_read(id);
+            json(&MessageDetail { message, payload, decoded, decode_error })
+        }
+        (&Method::GET, ["grpc-schemas"]) => json(&grpc::list(&ctx.db()?)?),
+        (&Method::POST, ["grpc-schemas"]) => {
+            let body: AddGrpcSchemaRequest = read_json(req).await?;
+            let db = ctx.db()?;
+            let added = grpc::add(&db, &ctx.grpc, &body.host_pattern, &body.proto_paths);
+            json(&added.await.map_err(bad_request)?)
+        }
+        (&Method::POST, ["grpc-schemas", "reflect"]) => {
+            let body: ReflectGrpcHostRequest = read_json(req).await?;
+            let (host, plaintext) = grpc::reflection_host(&body.host);
+            let db = ctx.db()?;
+            let reflected = grpc::reflect(&db, &ctx.grpc, &host, plaintext).await;
+            json(&reflected.map_err(bad_request)?)
+        }
+        (&Method::DELETE, ["grpc-schemas", id]) => {
+            json(&RemovedResponse { removed: grpc::remove(&ctx.db()?, &ctx.grpc, id)? })
         }
         (&Method::POST, ["flows", id, "save"]) => {
             found(ctx, id)?;
@@ -512,17 +615,23 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
         }
         (&Method::GET, ["har"]) => {
             let filter = FlowFilter::from_query(&query).map_err(bad_request)?;
-            let flows = flows::list(&ctx.db, &filter)?;
-            json(&har::export(&ctx.blobs, &flows, ctx.capture_body_limit()?).await?)
+            let flows = flows::list(&ctx.db()?, &filter)?;
+            json(&har::export(&ctx.db()?, &ctx.blobs()?, &flows, ctx.capture_body_limit()?).await?)
         }
         (&Method::GET, ["ca"]) => {
-            let ca = CaStore::load_or_create(&ctx.ca_dir())
-                .map_err(|e| format!("Failed to load proxy CA: {e}"))?;
+            // Off the runtime's few workers: it may wait for the keychain or a conversion.
+            let ca = {
+                let ctx = ctx.clone();
+                blocking(move || ctx.load_ca()).await?
+            };
             Ok(response(StatusCode::OK, "application/x-pem-file", ca.pem().to_string()))
         }
         (&Method::POST, ["ca", "trust"]) => {
-            let ca = CaStore::load_or_create(&ctx.ca_dir())
-                .map_err(|e| format!("Failed to load proxy CA: {e}"))?;
+            // Off the runtime's few workers: it may wait for the keychain or a conversion.
+            let ca = {
+                let ctx = ctx.clone();
+                blocking(move || ctx.load_ca()).await?
+            };
             ca::trust(ca.cert_path()).await.map_err(bad_request)?;
             ctx.forget_passthrough();
             json(&ca::status(ca.cert_path()).await?)
@@ -558,28 +667,60 @@ async fn status(ctx: &ProxyCtx) -> Result<ControlStatus, ApiError> {
         proxy_port,
         configured_port: ctx.settings()?.port,
         recording: ctx.recording(),
-        flow_count: flows::count(&ctx.db)?,
+        // Answered while locked too, saying so.
+        flow_count: match ctx.db() {
+            Ok(db) => flows::count(&db)?,
+            Err(_) => 0,
+        },
         ca,
         system_proxy,
+        locked: ctx.locked().map(|lock| lock.message),
     })
 }
 
 fn found(ctx: &ProxyCtx, id: &str) -> Result<(), ApiError> {
-    match flows::find(&ctx.db, id) {
+    match flows::find(&ctx.db()?, id) {
         Some(_) => Ok(()),
         None => Err(ApiError::new(StatusCode::NOT_FOUND, format!("No flow {id}"))),
     }
 }
 
 async fn raw_body(ctx: &ProxyCtx, id: &str, which: FlowBody) -> Result<ControlResponse, ApiError> {
-    let flow = flows::find(&ctx.db, id)
+    let flow = flows::find(&ctx.db()?, id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("No flow {id}")))?;
-    let body = bodies::read_body(&ctx.blobs, &flow, which, ctx.capture_body_limit()?).await?;
+    let body =
+        bodies::read_body(&ctx.db()?, &ctx.blobs()?, &flow, which, ctx.capture_body_limit()?)
+            .await?;
+    ctx.note_agent_read(id);
     let content_type =
         find_header(flow.headers(which), "content-type").unwrap_or("application/octet-stream");
     let mut resp = response(StatusCode::OK, content_type, body.data);
     resp.headers_mut().insert(TRUNCATED_HEADER, body.truncated.to_string().parse().unwrap());
+    if let Some(note) = body.note.as_deref().and_then(|n| n.parse().ok()) {
+        resp.headers_mut().insert(NOTE_HEADER, note);
+    }
     Ok(resp)
+}
+
+/// `after` (a seq) and `limit` from a messages query.
+fn message_page(query: &str) -> Result<(Option<i64>, Option<usize>), ApiError> {
+    let (mut after, mut limit) = (None, None);
+    for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
+        match key.as_ref() {
+            "after" => {
+                after = Some(
+                    value.parse().map_err(|_| bad_request(format!("Invalid after {value:?}")))?,
+                )
+            }
+            "limit" => {
+                limit = Some(
+                    value.parse().map_err(|_| bad_request(format!("Invalid limit {value:?}")))?,
+                )
+            }
+            _ => {}
+        }
+    }
+    Ok((after, limit))
 }
 
 fn body_limit(query: &str) -> Result<usize, ApiError> {

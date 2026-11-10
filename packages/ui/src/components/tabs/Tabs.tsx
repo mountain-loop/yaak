@@ -75,6 +75,11 @@ export interface TabsProps {
   label: string;
   /** Default tab value. If not provided, defaults to first tab. */
   defaultValue?: string;
+  /**
+   * The tab shown, over the one stored or last chosen, while it is offered. Choosing another
+   * still calls `onChangeValue`, for the owner to pass it back.
+   */
+  value?: string;
   /** Called when active tab changes */
   onChangeValue?: (value: string) => void;
   tabs: TabItem[];
@@ -89,11 +94,17 @@ export interface TabsProps {
   activeTabKey?: string;
   /** Where the order and active tab under `storageKey` are kept */
   useStoredValue?: UseStoredValue;
+  /**
+   * A key with no stored tab opens on `defaultValue`, not on the tab last chosen under another
+   * key, and a stored tab no longer offered falls back the same way
+   */
+  keyedDefault?: boolean;
 }
 
 export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
   {
     defaultValue,
+    value: controlledValue,
     onChangeValue: onChangeValueProp,
     label,
     children,
@@ -105,6 +116,7 @@ export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
     storageKey,
     activeTabKey,
     useStoredValue: useStoredValueProp,
+    keyedDefault = false,
   }: TabsProps,
   forwardedRef: Ref<TabsRef>,
 ) {
@@ -131,8 +143,17 @@ export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
 
   // Get the active tab value - prefer storage (if activeTabKey), then defaultValue, then first tab
   const storedActiveTab = activeTabKey ? storage?.activeTabs?.[activeTabKey] : undefined;
-  const [internalValue, setInternalValue] = useState<string | undefined>(undefined);
-  const value = storedActiveTab ?? internalValue ?? defaultValue ?? originalTabs[0]?.value;
+  const [internal, setInternal] = useState<{ key?: string; value: string } | undefined>(undefined);
+  const internalValue =
+    keyedDefault && internal?.key !== activeTabKey ? undefined : internal?.value;
+  const offered = (v: string | undefined) =>
+    v != null && (!keyedDefault || originalTabs.some((t) => t.value === v));
+  const controlled = originalTabs.some((t) => t.value === controlledValue)
+    ? controlledValue
+    : undefined;
+  const value =
+    [controlled, storedActiveTab, internalValue, defaultValue].find(offered) ??
+    originalTabs[0]?.value;
 
   // Helper to normalize storage (handle migration from old format)
   const normalizeStorage = useCallback(
@@ -144,7 +165,7 @@ export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
   // Handle tab change - update internal state, storage if we have a key, and call prop callback
   const onChangeValue = useCallback(
     async (newValue: string) => {
-      setInternalValue(newValue);
+      setInternal({ key: activeTabKey, value: newValue });
       if (storageKey && activeTabKey) {
         await setStorage((s) => {
           const normalized = normalizeStorage(s);

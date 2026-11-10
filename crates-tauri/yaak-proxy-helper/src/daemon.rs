@@ -478,6 +478,39 @@ mod tests {
         daemon.ns.proxies().iter().all(|s| s.http.points_at(port) && s.https.points_at(port))
     }
 
+    /// Proxyman turns its override on over the app's, so the app has the helper forget its
+    /// snapshot, then off, putting back what it found: the app's. Quitting must still turn
+    /// it off, whether or not the app took it over again in between.
+    #[test]
+    fn quitting_after_another_app_restores_ours_turns_it_off() {
+        for adopt in [true, false] {
+            let dir = tempfile::tempdir().unwrap();
+            let daemon = daemon(dir.path());
+            daemon.handle(&set(true, 9090)).into_result().unwrap();
+
+            let found = daemon.ns.proxies();
+            for s in &found {
+                daemon.ns.set_proxy(&s.name, setting(true, HOST, 9091), setting(true, HOST, 9091));
+            }
+            // Nothing points at 9090, so turning off there only forgets.
+            let status = daemon.handle(&set(false, 9090)).into_result().unwrap();
+            assert!(!status.active);
+            assert!(all_point_at(&daemon, 9091), "Proxyman's settings left alone");
+
+            for s in &found {
+                daemon.ns.set_proxy(&s.name, s.http.clone(), s.https.clone());
+            }
+            assert!(all_point_at(&daemon, 9090));
+            if adopt {
+                let status = daemon.handle(&set(true, 9090)).into_result().unwrap();
+                assert!(status.active && status.port == Some(9090));
+            }
+
+            daemon.handle(&set(false, 9090)).into_result().unwrap();
+            assert!(daemon.ns.proxies().iter().all(|s| !s.points_at(9090)), "adopt {adopt}");
+        }
+    }
+
     #[test]
     fn set_then_off_restores_exactly() {
         let dir = tempfile::tempdir().unwrap();
