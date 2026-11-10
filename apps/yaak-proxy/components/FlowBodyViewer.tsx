@@ -225,7 +225,14 @@ export function FlowBodyViewer({ flow, which, form, hideCutNote = false }: Props
     viewer = (
       <div className={classNames(ACTIONS_BAR_CONTAINER, "h-full w-full")}>
         {viewer}
-        <ActionsBar>{modeSwitch}</ActionsBar>
+        <ActionsBar
+          className={classNames(
+            // Beside the form's own bulk-view toggle in the corner, until that joins the bar
+            prettyView === "form" && pretty && "bottom-0! right-[calc(var(--height-sm)+0.25rem)]!",
+          )}
+        >
+          {modeSwitch}
+        </ActionsBar>
       </div>
     );
   }
@@ -239,7 +246,7 @@ export function FlowBodyViewer({ flow, which, form, hideCutNote = false }: Props
           {decodeError}. Showing the body as it was on the wire.
         </Banner>
       )}
-      {truncated && (
+      {truncated && !hideCutNote && (
         <Banner color="notice" className="text-sm mb-2">
           {wireTruncated || decodeError != null
             ? `Showing the first ${formatSize(storedSize)} of ${formatSize(wireSize)}, the capture limit. The app received all of it.`
