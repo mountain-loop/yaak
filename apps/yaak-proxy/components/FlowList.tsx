@@ -1044,6 +1044,16 @@ function encryptedCell({ column, flow, span, selected }: CellProps): ReactElemen
         </Truncated>
       );
     }
+    case "type":
+      // A tunnel that failed to reach the server keeps the failure look, across Type and Size
+      if (flow.error == null) return <span className={cell} />;
+      return (
+        <Tooltip wrap content={flow.error} delay={CONTROL_TOOLTIP_DELAY}>
+          <span className={classNames(cell, "text-danger text-xs", span && "col-span-2")}>
+            {flow.error}
+          </span>
+        </Tooltip>
+      );
     case "size":
       return (
         <span className={classNames(quiet, "text-right")}>

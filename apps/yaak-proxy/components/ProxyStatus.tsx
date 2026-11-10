@@ -13,7 +13,7 @@ import classNames from "classnames";
 import { useAtom, useAtomValue } from "jotai";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { useEffect, useRef, useState } from "react";
-import { useDecrypt, useTrustCertificate } from "../hooks/useDecrypt";
+import { canTrustHere, useDecrypt, useTrustCertificate } from "../hooks/useDecrypt";
 import { useDecryptList } from "../hooks/useDecryptList";
 import { useRpcEvent } from "../hooks/useRpcEvent";
 import { useRpcMutation } from "../hooks/useRpcMutation";
@@ -51,7 +51,12 @@ export function ProxyStatus() {
   const port = proxyState?.port ?? other?.proxyPort ?? null;
   const decryptList = useDecryptList();
   // Something is listed to decrypt but the certificate isn't trusted, so it can't be.
-  const broken = caStatus.data != null && !caStatus.data.trusted && decryptsAnything(decryptList);
+  // Only where the app can trust it itself: elsewhere the status always reads untrusted.
+  const broken =
+    canTrustHere() &&
+    caStatus.data != null &&
+    !caStatus.data.trusted &&
+    decryptsAnything(decryptList);
   // The same status the header's tint takes its colour from
   const status = proxyStatusOf(proxyState);
   const encrypting = status === "encrypting" ? encryptingPercent(proxyState) : null;

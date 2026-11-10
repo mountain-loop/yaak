@@ -324,6 +324,16 @@ async function answer(cmd: string, payload: unknown): Promise<unknown> {
     }
     case "reconnect_tunnels":
       return { closed: 1 };
+    case "list_reconnectable_tunnels":
+      return Array.from({ length: Number(params.get("still") ?? 3) }, (_, i) => ({
+        id: `harness_${i}`,
+        host: "www.google.com",
+        port: 443,
+        appName: "Dia",
+        appBundleId: null,
+        flowId: null,
+        reason: "not_listed",
+      }));
     case "system_proxy_status":
       return {
         enabled: !params.has("firstrun"),

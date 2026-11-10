@@ -340,7 +340,8 @@ export function buildSidebarTree(
     parent.item.count++;
     addPlace(app, place.appRows, flow.tunnelled);
   }
-  if (encrypted > 0 && encrypted < flows.length) {
+  // Once something is decrypted: a refused handshake isn't, so it doesn't count
+  if (encrypted > 0 && flows.some((f) => !f.tunnelled && f.tlsRejected == null)) {
     for (const g of [apps, domains, system]) markEncrypted(g);
   }
   for (const site of domains.children.values()) domains.item.count += site.children.size;

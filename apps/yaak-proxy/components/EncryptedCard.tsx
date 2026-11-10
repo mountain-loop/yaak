@@ -1,5 +1,6 @@
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
-import type { Flow } from "@yaakapp-internal/proxy-lib";
+import { useQueryClient } from "@tanstack/react-query";
+import type { Flow, PassthroughResponse } from "@yaakapp-internal/proxy-lib";
 import {
   Button,
   Dropdown,
@@ -59,7 +60,13 @@ export function EncryptedCard({ flow }: { flow: Flow }) {
   const showToast = useShowToast();
   const fail = (err: Error) =>
     showToast({ id: "encrypted-card", color: "danger", message: err.message });
-  const forget = useRpcMutation("forget_passthrough", { onError: fail });
+  const queryClient = useQueryClient();
+  // Read from the answer too: an engine the CLI owns tells this app nothing of the change.
+  const forget = useRpcMutation("forget_passthrough", {
+    onError: fail,
+    onSuccess: ({ addresses }) =>
+      queryClient.setQueryData<PassthroughResponse>(["list_passthrough", {}], { addresses }),
+  });
   const reconnect = useRpcMutation("reconnect_tunnels", { onError: fail });
   const connection = connectionOf(flow);
   const [busy, setBusy] = useState<string | null>(null);

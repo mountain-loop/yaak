@@ -3,7 +3,13 @@ import type { CaStatus, PassthroughResponse } from "@yaakapp-internal/proxy-lib"
 import { Button } from "@yaakapp-internal/ui";
 import { useCallback } from "react";
 import { inverseEdit } from "../lib/decrypt";
-import { applyChoice, choiceToast, type DecryptChoice, type ListEdit } from "../lib/decryptChoice";
+import {
+  applyChoice,
+  choiceToast,
+  type DecryptChoice,
+  type ListEdit,
+  reconnectEntries,
+} from "../lib/decryptChoice";
 import { rpc } from "../lib/rpc";
 import { getOsType } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
@@ -30,10 +36,18 @@ export function useTrusting(): boolean {
 /** Asks macOS to trust the certificate, the status read from its answer */
 export function useTrustCertificate() {
   const queryClient = useQueryClient();
+  const showToast = useShowToast();
   return useRpcMutation("ca_trust", {
     mutationKey: TRUST_KEY,
     onSuccess: ({ trusted, installed, certPath }) =>
       queryClient.setQueryData<CaStatus>(CA_KEY, { trusted, installed, certPath }),
+    // A cancelled prompt isn't an error, and says nothing; a failure says why.
+    onError: (err) =>
+      showToast({
+        id: "decrypt",
+        color: "danger",
+        message: `Certificate not trusted: ${err.message}`,
+      }),
   });
 }
 
@@ -110,7 +124,10 @@ export function useDecrypt() {
         });
         return false;
       }
-      const toast = choiceToast(choice, result.stillEncrypted);
+      // Counted within what Reconnect closes, not every open connection the list now decrypts
+      const scoped =
+        result.stillEncrypted > 0 ? await countReconnectable(reconnectEntries(choice.edit)) : 0;
+      const toast = choiceToast(choice, scoped);
       showToast({
         id: "decrypt",
         message: (
@@ -154,6 +171,19 @@ export function useDecrypt() {
   );
 
   return { apply, trusting };
+}
+
+/** Open tunnels the entries name that the list now decrypts, each counted once */
+async function countReconnectable(entries: string[]): Promise<number> {
+  const ids = new Set<string>();
+  for (const entry of entries) {
+    try {
+      for (const t of await rpc("list_reconnectable_tunnels", { entry })) ids.add(t.id);
+    } catch (err) {
+      console.warn("Failed to list reconnectable tunnels", err);
+    }
+  }
+  return ids.size;
 }
 
 /**

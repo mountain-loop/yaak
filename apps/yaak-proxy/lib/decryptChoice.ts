@@ -48,6 +48,17 @@ export async function applyChoice(deps: ChoiceDeps, edit: ListEdit): Promise<Cho
   return { status: "applied", stillEncrypted: saved.stillEncrypted };
 }
 
+/**
+ * The entries whose open connections a change can make decryptable, which Reconnect closes and
+ * the toast counts: those it added, and exclusions it took off
+ */
+export function reconnectEntries(edit: ListEdit): string[] {
+  return [
+    ...edit.add.filter((e) => !e.trim().startsWith("!")),
+    ...edit.remove.filter((e) => e.trim().startsWith("!")),
+  ];
+}
+
 /** The toast after a choice was applied */
 export interface ChoiceToast {
   message: string;
@@ -67,10 +78,7 @@ export function choiceToast(choice: DecryptChoice, stillEncrypted: number): Choi
   if (stillEncrypted <= 0)
     return { message: choice.message, sub: choice.sub ?? null, reconnect: [] };
   const n = stillEncrypted.toLocaleString();
-  const reconnect = [
-    ...choice.edit.add.filter((e) => !e.trim().startsWith("!")),
-    ...choice.edit.remove.filter((e) => e.trim().startsWith("!")),
-  ];
+  const reconnect = reconnectEntries(choice.edit);
   return {
     message: choice.message,
     sub: `${n} open ${stillEncrypted === 1 ? "connection stays" : "connections stay"} encrypted`,

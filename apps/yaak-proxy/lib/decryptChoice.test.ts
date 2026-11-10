@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { applyChoice, type ChoiceDeps, choiceToast } from "./decryptChoice";
+import { applyChoice, type ChoiceDeps, choiceToast, reconnectEntries } from "./decryptChoice";
 
 function deps(over: Partial<ChoiceDeps> = {}) {
   const calls: string[] = [];
@@ -115,5 +115,13 @@ describe("the toast after a choice", () => {
   test("Reconnect for an exclusion taken off names the exclusion, as the engine reads it", () => {
     const stopExcluding = { edit: { add: [], remove: ["!host:*.chase.com"] }, message: "x" };
     expect(choiceToast(stopExcluding, 1).reconnect).toEqual(["!host:*.chase.com"]);
+  });
+});
+
+describe("what Reconnect covers", () => {
+  test("the entries a change added, and the exclusions it took off, never what it stopped", () => {
+    expect(
+      reconnectEntries({ add: ["host:a.com", "!app:Dia"], remove: ["!host:*.b.com", "app:Slack"] }),
+    ).toEqual(["host:a.com", "!host:*.b.com"]);
   });
 });
