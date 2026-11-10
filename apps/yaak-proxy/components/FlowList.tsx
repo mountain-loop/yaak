@@ -39,7 +39,7 @@ import {
 } from "../lib/columns";
 import { useExportShownHar, useFlowActions } from "../lib/flowActions";
 import { compareFlows } from "../lib/flowWindow";
-import { countNewFlows } from "../lib/follow";
+import { countNewFlows, isAtEnd, resumesFollowing } from "../lib/follow";
 import { asOneTerm } from "../lib/query";
 import { folderOf } from "../lib/search";
 import {
@@ -122,6 +122,8 @@ export function FlowList({ style, className }: Props) {
   const lastScrollTop = useRef(0);
   // The list's vertical scrollbar, which the header leaves room for so the two scroll as far
   const [scrollbarWidth, setScrollbarWidth] = useState(0);
+  // The list's visible height, so a resize that leaves it at its end follows again
+  const [viewportHeight, setViewportHeight] = useState(0);
   const ignoreScroll = useRef(false);
   const [following, setFollowing] = useAtom(followAtom);
   const [heldAt, setHeldAt] = useState<string | null>(null);
@@ -189,6 +191,18 @@ export function FlowList({ style, className }: Props) {
     if (sorted && following) setFollowing(false);
   }, [sorted, following, setFollowing]);
 
+  // A held list follows again once it is at its end, not only when scrolled there: a sidebar row,
+  // search or resize can leave it there with no scroll to make, as one that fits its viewport
+  // always is, and its flows would otherwise count as new while all are on screen. Not on a
+  // change of `following` itself, so selecting a row at the end still holds.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el == null) return;
+    if (!resumesFollowing({ following: latest.current.following, sorted, el })) return;
+    setFollowing(true);
+    setHeldAt(null);
+  }, [flows, sorted, viewportHeight, setFollowing]);
+
   useLayoutEffect(() => {
     if (following && !sorted) setScrollTop(Number.MAX_SAFE_INTEGER);
   }, [following, sorted, flows, paused, setScrollTop]);
@@ -229,7 +243,10 @@ export function FlowList({ style, className }: Props) {
   useEffect(() => {
     const el = scrollRef.current;
     if (el == null) return;
-    const measure = () => setScrollbarWidth(el.offsetWidth - el.clientWidth);
+    const measure = () => {
+      setScrollbarWidth(el.offsetWidth - el.clientWidth);
+      setViewportHeight(el.clientHeight);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
@@ -249,9 +266,8 @@ export function FlowList({ style, className }: Props) {
       return;
     }
     if (!moved) return;
-    const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 2;
     const sortedNow = latest.current.sort.length > 0;
-    if (atEnd && !sortedNow) {
+    if (isAtEnd(el) && !sortedNow) {
       setFollowing(true);
       setHeldAt(null);
     } else {

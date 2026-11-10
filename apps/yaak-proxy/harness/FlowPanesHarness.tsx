@@ -1,5 +1,5 @@
 import { useSetAtom } from "jotai";
-import { useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { AddColumnDialog } from "../components/AddColumnDialog";
 import { FlowDetail } from "../components/FlowDetail";
 import { FlowList } from "../components/FlowList";
@@ -54,6 +54,27 @@ function FixtureCard({ fixture }: { fixture: FlowFixture }) {
     setWindow({ flows, hasOlder: false, total: flows.length });
     setSelected(flows.find((f) => f.id === fixture.flow.id) ?? fixture.flow);
     setReady(true);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- once per fixture
+  }, [fixture]);
+
+  // `&arrive=3`: that many new flows, one a second, as traffic would bring them
+  useEffect(() => {
+    const count = Number(params.get("arrive") ?? 0);
+    let added = 0;
+    const timer = setInterval(() => {
+      if (added >= count) return clearInterval(timer);
+      added++;
+      const source = fixtures[added % fixtures.length]?.flow;
+      if (source == null) return;
+      const flow = {
+        ...source,
+        id: `fl_arrived_${added}`,
+        number: 1500 + added,
+        startedAt: new Date().toISOString().slice(0, 23),
+      };
+      setWindow((w) => ({ ...w, flows: [...w.flows, flow], total: w.total + 1 }));
+    }, 1000);
+    return () => clearInterval(timer);
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- once per fixture
   }, [fixture]);
   if (!ready) return null;
