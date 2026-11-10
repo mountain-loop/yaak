@@ -1,4 +1,4 @@
-import type { FlowSortKey, SortColumn } from "@yaakapp-internal/proxy-lib";
+import type { FlowSortKey } from "@yaakapp-internal/proxy-lib";
 import {
   ContextMenu,
   Dropdown,
@@ -17,6 +17,7 @@ import {
   type ColumnDef,
   type ColumnId,
   type ColumnPrefs,
+  type CustomColumnId,
   canHide,
   hideOtherColumns,
   isCustomColumn,
@@ -38,7 +39,7 @@ interface Props {
   prefs: ColumnPrefs;
   sort: FlowSortKey[];
   /** A click on a label, or with `add`, an Option-click */
-  onSort: (column: SortColumn, add: boolean) => void;
+  onSort: (column: ColumnId, add: boolean) => void;
   /** Sets the sort from the menus; empty goes back to arrival order */
   onSetSort: (sort: FlowSortKey[]) => void;
   onResetSort: () => void;
@@ -67,6 +68,12 @@ export const FlowListHeader = memo(function FlowListHeader({
   // Widths when a drag began, so each move sets the width from where it started.
   const startWidth = useRef(0);
 
+  // Taking out the sort's only key goes back to arrival order, as Reset Sort does
+  const removeColumn = (id: CustomColumnId) => {
+    if (sort.length > 0 && sort.every((k) => k.column === id)) onResetSort();
+    setPrefs((p) => removeCustomColumn(p, id));
+  };
+
   const pickerItems: DropdownItem[] = [
     {
       type: "content",
@@ -92,7 +99,7 @@ export const FlowListHeader = memo(function FlowListHeader({
                   label: "Remove Column",
                   icon: "trash" as const,
                   color: "danger" as const,
-                  onSelect: () => setPrefs((p) => removeCustomColumn(p, c.id as `field:${string}`)),
+                  onSelect: () => removeColumn(c.id as CustomColumnId),
                 },
               ],
             }
@@ -106,22 +113,13 @@ export const FlowListHeader = memo(function FlowListHeader({
   ];
 
   const columnItems = (c: ColumnDef): DropdownItem[] => {
-    const column = c.sortable ? (c.id as SortColumn) : null;
-    const sortBy = (descending: boolean) => {
-      if (column != null) setSort([{ column, descending }]);
-    };
-    const addTo = (descending: boolean) => {
-      if (column != null) setSort(addSortKey(sort, column, descending));
-    };
+    const sortBy = (descending: boolean) => setSort([{ column: c.id, descending }]);
+    const addTo = (descending: boolean) => setSort(addSortKey(sort, c.id, descending));
     return [
-      ...(column == null
-        ? []
-        : ([
-            { label: "Sort Ascending", onSelect: () => sortBy(false) },
-            { label: "Sort Descending", onSelect: () => sortBy(true) },
-            { label: "Add to Sort Ascending", onSelect: () => addTo(false) },
-            { label: "Add to Sort Descending", onSelect: () => addTo(true) },
-          ] satisfies DropdownItem[])),
+      { label: "Sort Ascending", onSelect: () => sortBy(false) },
+      { label: "Sort Descending", onSelect: () => sortBy(true) },
+      { label: "Add to Sort Ascending", onSelect: () => addTo(false) },
+      { label: "Add to Sort Descending", onSelect: () => addTo(true) },
       { label: "Clear Sorting", disabled: sort.length === 0, onSelect: onResetSort },
       { type: "separator" },
       {
@@ -139,7 +137,7 @@ export const FlowListHeader = memo(function FlowListHeader({
             {
               label: "Remove Column",
               color: "danger" as const,
-              onSelect: () => setPrefs((p) => removeCustomColumn(p, c.id as `field:${string}`)),
+              onSelect: () => removeColumn(c.id as CustomColumnId),
             },
           ]
         : []),
@@ -213,19 +211,15 @@ export const FlowListHeader = memo(function FlowListHeader({
               data-column={c.id}
               className="relative h-full flex items-center min-w-0 px-1.5"
             >
-              {c.sortable ? (
-                <button
-                  type="button"
-                  onClick={(e) => onSort(c.id as SortColumn, e.altKey)}
-                  // No tooltip: the header sits under the search field, and a tooltip here covered it
-                  aria-label={`Sort by ${c.label}`}
-                  className={classNames(labelClass, "hover:text-text-subtle")}
-                >
-                  {label}
-                </button>
-              ) : (
-                <span className={labelClass}>{label}</span>
-              )}
+              <button
+                type="button"
+                onClick={(e) => onSort(c.id, e.altKey)}
+                // No tooltip: the header sits under the search field, and a tooltip here covered it
+                aria-label={`Sort by ${c.label}`}
+                className={classNames(labelClass, "hover:text-text-subtle")}
+              >
+                {label}
+              </button>
               {/* On the column's right edge, the boundary with the next, resizing this one */}
               <ResizeHandle
                 side="right"

@@ -1,13 +1,17 @@
 import type { Flow, FlowSortKey } from "@yaakapp-internal/proxy-lib";
 import { describe, expect, test } from "vite-plus/test";
+import customSortFixture from "../../../crates-proxy/yaak-proxy-lib/tests/fixtures/custom_column_sort.json";
 import {
   addCustomColumn,
   addSortKey,
   cellFilterTerm,
   type ColumnPrefs,
   customPath,
+  customPathProblem,
   customValue,
   defaultColumnPrefs,
+  fieldReference,
+  fieldReferenceChanges,
   gridTemplate,
   gridWidth,
   hideOtherColumns,
@@ -154,6 +158,19 @@ describe("column preferences", () => {
     expect(prefs).toEqual(defaultColumnPrefs);
   });
 
+  test("a custom column's sort persists with it and goes when it does", () => {
+    let prefs = addCustomColumn(defaultColumnPrefs, "header.x-cache");
+    const sort: FlowSortKey[] = [
+      { column: "field:header.x-cache", descending: true },
+      { column: "status", descending: false },
+    ];
+    prefs = { ...prefs, sort };
+    expect(parseColumnPrefs(JSON.parse(JSON.stringify(prefs))).sort).toEqual(sort);
+    // A key for a column that is no longer there is dropped
+    expect(parseColumnPrefs({ ...prefs, custom: [] }).sort).toEqual([sort[1]]);
+    expect(removeCustomColumn(prefs, "field:header.x-cache").sort).toEqual([sort[1]]);
+  });
+
   test("Operation shows itself once, unless the person set it", () => {
     const grpc = flow(1, { grpcService: "pkg.Greeter", grpcMethod: "SayHello" });
     const anonymous = flow(2, { graphqlOperation: "" });
@@ -191,6 +208,33 @@ describe("sorting", () => {
       ...one("host", true),
     ]);
     expect(addSortKey([], "time", true)).toEqual(one("time", true));
+  });
+
+  test("a custom column sorts on click and Option-click as the others do", () => {
+    const cache = "field:header.x-cache";
+    expect(nextSort([], cache)).toEqual(one(cache, false));
+    expect(nextSort(one(cache, false), cache)).toEqual(one(cache, true));
+    expect(toggleSortKey(one("status", true), cache)).toEqual([
+      ...one("status", true),
+      ...one(cache, false),
+    ]);
+  });
+
+  // Flows and the order each sort lists them in, shared with
+  // `a_custom_column_sorts_by_its_value_and_pages` in the lib's `flows.rs`, which checks the
+  // database lists them in the same order.
+  test("a custom column sorts as the database does", () => {
+    const fixture = customSortFixture as {
+      flows: Partial<Flow>[];
+      sorts: { sort: FlowSortKey[]; order: number[] }[];
+    };
+    const flows = fixture.flows.map((f, i) => flow(i, f));
+    for (const { sort, order } of fixture.sorts) {
+      expect(
+        sortFlows(flows, sort).map((f) => f.number),
+        JSON.stringify(sort),
+      ).toEqual(order);
+    }
   });
 
   // The same flows and orders as `a_sort_on_several_columns_pages_in_its_order` in the lib's
@@ -259,6 +303,33 @@ describe("values", () => {
     expect(customPath("header.")).toBeNull();
     expect(customPath("header.a b")).toBeNull();
     expect(customPath("query.filter[status]")).toBeNull();
+  });
+
+  test("says tersely why what was typed names no column", () => {
+    expect(customPathProblem("")).toBeNull();
+    expect(customPathProblem("@")).toBeNull();
+    expect(customPathProblem("@req.header.user-agent")).toBeNull();
+    expect(customPathProblem("@hea")).toBe("Incomplete");
+    expect(customPathProblem("@res.header")).toBe("Incomplete");
+    expect(customPathProblem("@header.")).toBe("Missing name");
+    expect(customPathProblem("@query.a b")).toBe("Invalid name");
+    expect(customPathProblem("@host")).toBe("Unknown field");
+  });
+
+  test("keeps the Add Column field a reference to a field", () => {
+    expect(fieldReference("")).toBe("");
+    expect(fieldReference("@")).toBe("@");
+    expect(fieldReference("h")).toBe("@h");
+    expect(fieldReference("header.x-cache")).toBe("@header.x-cache");
+    expect(fieldReference("@req.header.user-agent:")).toBe("@req.header.user-agent");
+    expect(fieldReference(" @@Header.X-Cache: ")).toBe("@Header.X-Cache");
+    expect(fieldReference(":")).toBe("");
+    expect(fieldReference("@:")).toBe("@");
+    expect(fieldReferenceChanges("@header.x")).toEqual([]);
+    expect(fieldReferenceChanges("query.page:")).toEqual([
+      { from: 0, to: 0, insert: "@" },
+      { from: 10, to: 11, insert: "" },
+    ]);
   });
 
   test("a custom column shows the first value, the response's header before the request's", () => {

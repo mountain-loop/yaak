@@ -21,8 +21,6 @@ export interface ColumnDef {
   align: "left" | "right";
   /** Shown until the person hides it */
   defaultVisible: boolean;
-  /** Sorted by in the database; custom columns are not */
-  sortable: boolean;
   /** The header or query parameter a custom column shows: `header.x-request-id` */
   path?: string;
 }
@@ -34,7 +32,7 @@ const builtin = (
   minWidth: number,
   align: "left" | "right",
   defaultVisible: boolean,
-): ColumnDef => ({ id, label, width, minWidth, align, defaultVisible, sortable: true });
+): ColumnDef => ({ id, label, width, minWidth, align, defaultVisible });
 
 export const COLUMNS: ColumnDef[] = [
   builtin("number", "#", 46, 30, "left", true),
@@ -72,6 +70,45 @@ export function customPath(typed: string): string | null {
   return map + key.toLowerCase();
 }
 
+/** Why what was typed names no custom column, in a few words; null when it does or is empty */
+export function customPathProblem(typed: string): string | null {
+  if (customPath(typed) != null) return null;
+  const path = typed.trim().replace(/^@/, "").replace(/:$/, "").trim().toLowerCase();
+  if (path === "") return null;
+  const map = CUSTOM_MAPS.find((m) => path.startsWith(m));
+  if (map != null) return path === map ? "Missing name" : "Invalid name";
+  // On the way to a map: `@hea`, `@req.header`
+  if (CUSTOM_MAPS.some((m) => m.startsWith(path))) return "Incomplete";
+  return "Unknown field";
+}
+
+/**
+ * The edits that turn what the Add Column field holds into a reference to a field, `@` and its
+ * path: an `@` in front when it lacks one, and no colon or space after, as a pasted
+ * `@header.x-cache:` or a typed `header.x-cache` has. A lone `@` stays, to complete from.
+ */
+export function fieldReferenceChanges(
+  text: string,
+): { from: number; to: number; insert: string }[] {
+  const lead = /^[\s@]*/.exec(text)?.[0].length ?? 0;
+  const trail = /[\s:]*$/.exec(text.slice(lead))?.[0].length ?? 0;
+  const end = text.length - trail;
+  const at = end > lead || text.includes("@") ? "@" : "";
+  const changes = [];
+  if (text.slice(0, lead) !== at) changes.push({ from: 0, to: lead, insert: at });
+  if (trail > 0) changes.push({ from: end, to: text.length, insert: "" });
+  return changes;
+}
+
+/** What the Add Column field shows for `text`, `fieldReferenceChanges` made */
+export function fieldReference(text: string): string {
+  let result = text;
+  for (const { from, to, insert } of [...fieldReferenceChanges(text)].reverse()) {
+    result = result.slice(0, from) + insert + result.slice(to);
+  }
+  return result;
+}
+
 export function customColumnId(path: string): CustomColumnId {
   return `field:${path}`;
 }
@@ -89,7 +126,6 @@ function customDef(id: CustomColumnId): ColumnDef {
     minWidth: 40,
     align: "left",
     defaultVisible: true,
-    sortable: false,
     path,
   };
 }
@@ -198,10 +234,13 @@ export function addCustomColumn(prefs: ColumnPrefs, path: string): ColumnPrefs {
   return { ...prefs, custom, visible: { ...prefs.visible, [id]: true } };
 }
 
+/** Takes the column out, and out of the sort */
 export function removeCustomColumn(prefs: ColumnPrefs, id: CustomColumnId): ColumnPrefs {
   const { [id]: _v, ...visible } = prefs.visible;
   const { [id]: _w, ...widths } = prefs.widths;
-  return { ...prefs, custom: prefs.custom.filter((c) => c !== id), visible, widths };
+  const custom = prefs.custom.filter((c) => c !== id);
+  const sort = prefs.sort.filter((k) => k.column !== id);
+  return { ...prefs, custom, visible, widths, sort };
 }
 
 export function resizeColumn(prefs: ColumnPrefs, id: ColumnId, width: number): ColumnPrefs {
@@ -254,9 +293,11 @@ export function parseColumnPrefs(value: unknown): ColumnPrefs {
       if (key == null || typeof key !== "object") continue;
       const { column, descending } = key as Record<string, unknown>;
       if (typeof column !== "string" || typeof descending !== "boolean") continue;
-      const def = DEFS.get(column as ColumnId);
-      if (def == null || prefs.sort.some((k) => k.column === column)) continue;
-      prefs.sort.push({ column: def.id as SortColumn, descending });
+      // A built-in column, or one the person added that is still there
+      const id = column as ColumnId;
+      const known = isCustomColumn(id) ? prefs.custom.includes(id) : DEFS.has(id);
+      if (!known || prefs.sort.some((k) => k.column === id)) continue;
+      prefs.sort.push({ column: id, descending });
     }
   }
   return prefs;
@@ -265,7 +306,7 @@ export function parseColumnPrefs(value: unknown): ColumnPrefs {
 // -- Sorting --
 
 /** Numbers sort largest first on the first click, names from A */
-export function firstDirection(column: SortColumn): boolean {
+export function firstDirection(column: ColumnId): boolean {
   switch (column) {
     case "number":
     case "status":
@@ -283,7 +324,7 @@ export function firstDirection(column: SortColumn): boolean {
  * A click on a column's label: sort by it alone, reverse the sort it has alone, then, from the
  * reversed sort, go back to the order flows arrive in
  */
-export function nextSort(sort: FlowSortKey[], column: SortColumn): FlowSortKey[] {
+export function nextSort(sort: FlowSortKey[], column: ColumnId): FlowSortKey[] {
   const first = firstDirection(column);
   const only = sort.length === 1 ? sort[0] : null;
   if (only?.column !== column) return [{ column, descending: first }];
@@ -295,7 +336,7 @@ export function nextSort(sort: FlowSortKey[], column: SortColumn): FlowSortKey[]
  * An Option-click on a column's label: adds it as the last key, ascending; again reverses it, and
  * a third time takes it out
  */
-export function toggleSortKey(sort: FlowSortKey[], column: SortColumn): FlowSortKey[] {
+export function toggleSortKey(sort: FlowSortKey[], column: ColumnId): FlowSortKey[] {
   const key = sort.find((k) => k.column === column);
   if (key == null) return [...sort, { column, descending: false }];
   if (!key.descending)
@@ -306,7 +347,7 @@ export function toggleSortKey(sort: FlowSortKey[], column: SortColumn): FlowSort
 /** Adds `column` as a key in `descending` order: the last key, or in its place if it is one */
 export function addSortKey(
   sort: FlowSortKey[],
-  column: SortColumn,
+  column: ColumnId,
   descending: boolean,
 ): FlowSortKey[] {
   if (sort.some((k) => k.column === column)) {
@@ -328,10 +369,12 @@ function emptyNumber(n: number | null | undefined): number {
 }
 
 /**
- * The value `column` sorts `flow` by, as `SortColumn::sql` in the lib's `flows.rs` makes it in
- * the database, so a flow placed here lands where a page read from there would have it
+ * The value `column` sorts `flow` by, as `SortBy::sql` in the lib's `flows.rs` makes it in the
+ * database, so a flow placed here lands where a page read from there would have it. A custom
+ * column's is the value it shows, as text.
  */
-export function columnSortKey(flow: Flow, column: SortColumn): string | number {
+export function columnSortKey(flow: Flow, column: ColumnId): string | number {
+  if (isCustomColumn(column)) return noCase(customValue(flow, column.slice("field:".length)));
   switch (column) {
     case "number":
       return flow.number;

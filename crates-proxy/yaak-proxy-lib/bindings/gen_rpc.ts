@@ -195,7 +195,7 @@ cursor?: Array<SortValue>, };
 /**
  * One key of a sort.
  */
-export type FlowSortKey = { column: SortColumn, descending: boolean, };
+export type FlowSortKey = { column: SortColumn | `field:${string}`, descending: boolean, };
 
 export type FlowsClearedPayload = Record<string, never>;
 

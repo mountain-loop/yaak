@@ -1,4 +1,6 @@
-import { Compartment, type Extension } from "@codemirror/state";
+import { startCompletion } from "@codemirror/autocomplete";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import { EditorView, ViewPlugin } from "@codemirror/view";
 import type { Schema } from "@yaakapp-internal/query";
 import {
   Dialog,
@@ -11,7 +13,12 @@ import { queryFilter } from "@yaakapp-internal/ui/editor";
 import { atom, useAtom, useSetAtom } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRpcQuery } from "../hooks/useRpcQuery";
-import { addCustomColumn, customPath } from "../lib/columns";
+import {
+  addCustomColumn,
+  customPath,
+  customPathProblem,
+  fieldReferenceChanges,
+} from "../lib/columns";
 import { loadSeenValues } from "../lib/searchBox";
 import { columnPrefsAtom } from "../lib/store";
 
@@ -20,9 +27,31 @@ export const addColumnDialogAtom = atom(false);
 
 const FORM_ID = "add-column";
 
+/** Keeps the field a reference to a field, `@header.x-cache`, whatever was typed or pasted */
+const asFieldReference = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged) return tr;
+  const changes = fieldReferenceChanges(tr.newDoc.toString());
+  return changes.length === 0 ? tr : [tr, { changes, sequential: true }];
+});
+
+/** Opens completion on the fields while the field is focused and empty */
+const completeWhenEmpty = [
+  ViewPlugin.define((view) => {
+    if (view.hasFocus && view.state.doc.length === 0) {
+      queueMicrotask(() => startCompletion(view));
+    }
+    return {};
+  }),
+  EditorView.updateListener.of((update) => {
+    if (update.focusChanged && update.view.hasFocus && update.state.doc.length === 0) {
+      startCompletion(update.view);
+    }
+  }),
+];
+
 /**
- * Adds a column for a header or query parameter, named by its field as the search names it,
- * `header.x-request-id` or `query.page`, completed as the search box completes it
+ * Adds a column for a header or query parameter, named by a reference to its field as the search
+ * names it, `@header.x-request-id` or `@query.page`, completed from the fields and the names seen
  */
 export function AddColumnDialog() {
   const [open, setOpen] = useAtom(addColumnDialogAtom);
@@ -41,13 +70,17 @@ function AddColumnForm({ onClose }: { onClose: () => void }) {
   const filter = useMemo<Extension>(() => {
     if (schema == null) return [];
     const maps: Schema = { ...schema, fields: schema.fields.filter((f) => f.map) };
-    return queryFilter({ schema: maps, loadValues: loadSeenValues });
+    return [
+      queryFilter({ schema: maps, loadValues: loadSeenValues, fieldsOnly: true }),
+      completeWhenEmpty,
+    ];
   }, [schema]);
-  const extensions = useMemo(() => [compartment.current.of(filter)], [filter]);
+  const extensions = useMemo(() => [asFieldReference, compartment.current.of(filter)], [filter]);
   useEffect(() => {
     handleRef.current?.dispatch({ effects: compartment.current.reconfigure(filter) });
   }, [filter]);
   const path = customPath(text);
+  const problem = customPathProblem(text);
 
   const submit = () => {
     if (path == null) return;
@@ -77,6 +110,7 @@ function AddColumnForm({ onClose }: { onClose: () => void }) {
           placeholder="@header.x-request-id"
           defaultValue=""
           onChange={setText}
+          validate={problem == null}
           extensions={extensions}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.defaultPrevented) {
@@ -85,6 +119,7 @@ function AddColumnForm({ onClose }: { onClose: () => void }) {
             }
           }}
         />
+        <div className="h-5 pt-1 text-xs text-danger">{problem}</div>
       </form>
       <DialogFooter
         actions={[

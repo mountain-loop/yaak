@@ -1,4 +1,5 @@
-import type { Flow, GetProxyStateResponse } from "@yaakapp-internal/proxy-lib";
+import type { Flow, FlowSortKey, GetProxyStateResponse } from "@yaakapp-internal/proxy-lib";
+import { sortFlows } from "../lib/columns";
 import { appIconPng, fixtures } from "./fixtures";
 
 /**
@@ -91,10 +92,14 @@ function answer(cmd: string, payload: unknown): unknown {
       return { actions: [] };
     case "list_flows": {
       const many = Number(new URLSearchParams(location.search).get("many") ?? 0);
-      const flows = (many > 0 ? manyFlows(many) : fixtures.map((f) => f.flow))
-        .map((f, i) => ({ ...f, number: 1401 + i }))
-        .reverse();
-      return { flows, total: flows.length, matching: null };
+      const all = (many > 0 ? manyFlows(many) : fixtures.map((f) => f.flow)).map((f, i) => ({
+        ...f,
+        number: 1401 + i,
+      }));
+      // In a sort's order, as the database lists it, all in one page
+      const sort = (req.sort ?? []) as FlowSortKey[];
+      const flows = sort.length > 0 ? sortFlows(all, sort) : all.reverse();
+      return { flows, total: flows.length, matching: null, cursor: null };
     }
     case "list_seen":
       return { hosts: [], apps: [] };
@@ -179,6 +184,14 @@ function manyFlows(count: number): Flow[] {
       responseSize: pending ? 0 : base.responseSize,
       elapsedMs: pending ? null : base.elapsedMs,
       clientCwd: base.clientBundleId == null ? (folders[i % folders.length] ?? null) : null,
+      // A cache header with a few values and some without, for a column of it to sort
+      responseHeaders:
+        i % 5 === 4
+          ? base.responseHeaders
+          : [
+              ...base.responseHeaders,
+              { name: "X-Cache", value: ["HIT", "miss", "Hit", "EXPIRED"][i % 4] ?? "" },
+            ],
     };
   });
 }

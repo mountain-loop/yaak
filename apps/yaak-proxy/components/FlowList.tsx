@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
-import type { Flow, FlowSortKey, SortColumn } from "@yaakapp-internal/proxy-lib";
+import type { Flow, FlowSortKey } from "@yaakapp-internal/proxy-lib";
 import {
   ContextMenu,
   CONTROL_TOOLTIP_DELAY,
@@ -365,7 +365,7 @@ export function FlowList({ style, className }: Props) {
   // A click sorts by the column alone; a third goes back to arrival order, following as Reset
   // Sort does. Option-click adds the column to the sort, reverses it, then takes it out.
   const handleSort = useCallback(
-    (column: SortColumn, add: boolean) => {
+    (column: ColumnId, add: boolean) => {
       const current = latest.current.sort;
       const next = add ? toggleSortKey(current, column) : nextSort(current, column);
       if (next.length === 0) {

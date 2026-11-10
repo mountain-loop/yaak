@@ -7,7 +7,7 @@ import type { DecorationSet, ViewUpdate } from "@codemirror/view";
 import { Decoration, EditorView, ViewPlugin } from "@codemirror/view";
 import type { Tag } from "@lezer/highlight";
 import { tags as t } from "@lezer/highlight";
-import type { Schema, TokenKind } from "@yaakapp-internal/query";
+import type { Completion as QueryCompletion, Schema, TokenKind } from "@yaakapp-internal/query";
 import { queryCompletions, queryTokens } from "@yaakapp-internal/query";
 
 /** A term the search cannot run, to underline: `from` and `to` count UTF-16 units */
@@ -36,6 +36,11 @@ export interface QueryFilterOptions {
   moreCompletions?: (typed: string) => Completion[];
   /** The terms of a query the search cannot run, underlined as typing settles */
   problems?: (text: string) => Promise<QueryProblem[]>;
+  /**
+   * Completes a reference to a field, `@header.x-request-id`, rather than a term: no colon
+   * after the field and no values, so choosing a field ends it, as a map's key does
+   */
+  fieldsOnly?: boolean;
 }
 
 const tokenTags: Record<TokenKind, Tag | null> = {
@@ -116,7 +121,26 @@ function infoOf(info: string | null, example: string | null): Completion["info"]
   };
 }
 
-function completionSource({ schema, values, loadValues, moreCompletions }: QueryFilterOptions) {
+/**
+ * The engine's completions as references to fields: fields alone, inserted without the colon a
+ * term's value follows, opening again only after a map, for its key
+ */
+export function fieldReferences(items: QueryCompletion[]): QueryCompletion[] {
+  return items
+    .filter((item) => item.kind === "field")
+    .map((item) => {
+      const insert = item.insert.replace(/:$/, "");
+      return { ...item, insert, reopen: insert.endsWith(".") };
+    });
+}
+
+function completionSource({
+  schema,
+  values,
+  loadValues,
+  moreCompletions,
+  fieldsOnly,
+}: QueryFilterOptions) {
   return async (ctx: CompletionContext): Promise<CompletionResult | null> => {
     const text = ctx.state.doc.toString();
     let known = values ?? {};
@@ -126,8 +150,9 @@ function completionSource({ schema, values, loadValues, moreCompletions }: Query
       if (ctx.aborted) return null;
     }
     const result = queryCompletions(text, ctx.pos, schema, known);
+    const items = fieldsOnly ? fieldReferences(result?.items ?? []) : (result?.items ?? []);
 
-    const options: Completion[] = (result?.items ?? []).map((item) => ({
+    const options: Completion[] = items.map((item) => ({
       label: item.label,
       // Not a CodeMirror type: it names the kind for `onlyFields` below, and draws no icon
       type: item.kind === "field" ? "field" : "value",

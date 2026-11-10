@@ -98,12 +98,133 @@ pub enum SortColumn {
 }
 
 /// One key of a sort.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct FlowSortKey {
-    pub column: SortColumn,
+    #[ts(type = "SortColumn | `field:${string}`")]
+    pub column: SortBy,
     pub descending: bool,
+}
+
+/// What a sort key sorts by: a column the list has built in, or a column the person added for
+/// a header or query parameter, written `field:header.x-cache` as the app names the column.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SortBy {
+    Column(SortColumn),
+    Field(FieldPath),
+}
+
+impl From<SortColumn> for SortBy {
+    fn from(column: SortColumn) -> Self {
+        Self::Column(column)
+    }
+}
+
+const FIELD_PREFIX: &str = "field:";
+
+impl Serialize for SortBy {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Column(column) => column.serialize(serializer),
+            Self::Field(field) => serializer.serialize_str(&format!("{FIELD_PREFIX}{field}")),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for SortBy {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::{Error, IntoDeserializer};
+        let text = String::deserialize(deserializer)?;
+        if let Some(path) = text.strip_prefix(FIELD_PREFIX) {
+            return FieldPath::parse(path)
+                .map(Self::Field)
+                .ok_or_else(|| D::Error::custom(format!("Invalid sort field {path:?}")));
+        }
+        let column: serde::de::value::StrDeserializer<'_, D::Error> =
+            text.as_str().into_deserializer();
+        SortColumn::deserialize(column).map(Self::Column)
+    }
+}
+
+/// The map a custom column's field is under, as the query language names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldMap {
+    /// `header.`: the response's header, or the request's when the response has none.
+    Header,
+    RequestHeader,
+    ResponseHeader,
+    Query,
+}
+
+impl FieldMap {
+    // `req.header.` and `res.header.` before `header.`, which neither starts with, all the same
+    const ALL: [Self; 4] = [
+        Self::RequestHeader,
+        Self::ResponseHeader,
+        Self::Header,
+        Self::Query,
+    ];
+
+    fn prefix(self) -> &'static str {
+        match self {
+            Self::Header => "header.",
+            Self::RequestHeader => "req.header.",
+            Self::ResponseHeader => "res.header.",
+            Self::Query => "query.",
+        }
+    }
+}
+
+/// A custom column's field: a header or query parameter by name, `header.x-cache`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldPath {
+    map: FieldMap,
+    /// Lowercased: names compare without regard to case
+    name: String,
+}
+
+impl FieldPath {
+    /// The field `path` names, by the rule the app's `customPath` in `lib/columns.ts` keeps for
+    /// a custom column: a map, then a name of the characters the query language takes in a
+    /// field path, so the column's value makes a term a search can run.
+    pub fn parse(path: &str) -> Option<Self> {
+        let lower = path.to_ascii_lowercase();
+        let map = FieldMap::ALL.into_iter().find(|m| lower.starts_with(m.prefix()))?;
+        let name = &lower[map.prefix().len()..];
+        if name.contains('.') || !yaak_query::is_valid_path(name) {
+            return None;
+        }
+        Some(Self { map, name: name.to_string() })
+    }
+
+    /// The value the column shows, as text in SQL, NULL when the flow has none: the first value
+    /// under the name, as `customValue` in the app's `lib/columns.ts` reads it. Each `?` is
+    /// bound to the name, one parameter for each.
+    fn sql(&self) -> (String, Vec<Value>) {
+        let first = |json: &str| {
+            format!(
+                "(SELECT json_extract(kv.value, '$.value') FROM json_each({json}) AS kv \
+                WHERE q_lower(json_extract(kv.value, '$.name')) = ? ORDER BY kv.key LIMIT 1)"
+            )
+        };
+        let (sql, sides) = match self.map {
+            FieldMap::Header => (
+                format!("coalesce({}, {})", first("response_headers"), first("request_headers")),
+                2,
+            ),
+            FieldMap::RequestHeader => (first("request_headers"), 1),
+            FieldMap::ResponseHeader => (first("response_headers"), 1),
+            FieldMap::Query => (first("url_query_json(url)"), 1),
+        };
+        (sql, vec![Value::Text(self.name.clone()); sides])
+    }
+}
+
+impl std::fmt::Display for FieldPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.map.prefix(), self.name)
+    }
 }
 
 /// What an empty number sorts as: below every value, as an empty text's `''` is.
@@ -156,26 +277,55 @@ impl SortColumn {
     }
 }
 
-/// A sort's keys in SQL, each with whether it descends, then start and id, ascending.
-fn sort_terms(sort: &[FlowSortKey], columns: &FlowColumns) -> Vec<(String, bool)> {
+impl SortBy {
+    /// The value the key sorts by, in SQL, as [`SortColumn::sql`] makes it, and the parameters
+    /// its `?`s are bound to, in order.
+    fn sql(&self, columns: &FlowColumns) -> (String, Vec<Value>) {
+        match self {
+            Self::Column(column) => (column.sql(columns), Vec::new()),
+            // Text, as the other text columns sort
+            Self::Field(field) => {
+                let (value, params) = field.sql();
+                (format!("(coalesce({value}, '') COLLATE NOCASE)"), params)
+            }
+        }
+    }
+}
+
+/// One term of a sort in SQL: its value, the parameters the value's `?`s are bound to, and
+/// whether it descends.
+struct SortTerm {
+    sql: String,
+    params: Vec<Value>,
+    descending: bool,
+}
+
+/// A sort's keys in SQL, then start and id, ascending.
+fn sort_terms(sort: &[FlowSortKey], columns: &FlowColumns) -> Vec<SortTerm> {
+    let tiebreak = |sql: &str| SortTerm { sql: sql.into(), params: Vec::new(), descending: false };
     sort.iter()
-        .map(|k| (k.column.sql(columns), k.descending))
-        .chain([
-            ("started_at".to_string(), false),
-            ("flows.id".to_string(), false),
-        ])
+        .map(|k| {
+            let (sql, params) = k.column.sql(columns);
+            SortTerm { sql, params, descending: k.descending }
+        })
+        .chain([tiebreak("started_at"), tiebreak("flows.id")])
         .collect()
 }
 
-/// The `ORDER BY` for a sort, and the condition for the flows after `cursor`'s values in it:
-/// each key equal up to one that is past the cursor's.
-fn sort_after(terms: &[(String, bool)], cursor: &[Value]) -> (String, Vec<Value>) {
+/// The condition for the flows after `cursor`'s values in a sort, and its parameters: each key
+/// equal up to one that is past the cursor's.
+fn sort_after(terms: &[SortTerm], cursor: &[Value]) -> (String, Vec<Value>) {
     let mut params = Vec::new();
     let mut alternatives = Vec::new();
-    for (i, (term, descending)) in terms.iter().enumerate() {
-        let mut parts: Vec<String> = terms[..i].iter().map(|(t, _)| format!("{t} = ?")).collect();
-        params.extend(cursor[..i].iter().cloned());
-        parts.push(format!("{term} {} ?", if *descending { "<" } else { ">" }));
+    for (i, term) in terms.iter().enumerate() {
+        let mut parts = Vec::new();
+        for (before, value) in terms[..i].iter().zip(cursor) {
+            parts.push(format!("{} = ?", before.sql));
+            params.extend(before.params.iter().cloned());
+            params.push(value.clone());
+        }
+        parts.push(format!("{} {} ?", term.sql, if term.descending { "<" } else { ">" }));
+        params.extend(term.params.iter().cloned());
         params.push(cursor[i].clone());
         alternatives.push(format!("({})", parts.join(" AND ")));
     }
@@ -377,15 +527,17 @@ fn list_and_cursor(
     conn: &rusqlite::Connection,
     filter: &FlowFilter,
 ) -> Result<(Vec<Flow>, Option<Vec<SortValue>>), String> {
-    let (condition, mut params) = filter.condition_in(conn);
     let terms = if filter.sort.is_empty() {
         Vec::new()
     } else {
         sort_terms(&filter.sort, &FlowColumns::of(conn))
     };
-    // The rowid, for the flow's number, and a sort's values, for its cursor.
+    // The rowid, for the flow's number, and a sort's values, for its cursor and its order.
     let keys: String =
-        terms.iter().enumerate().map(|(i, (t, _))| format!(", {t} AS sort_{i}")).collect();
+        terms.iter().enumerate().map(|(i, t)| format!(", {} AS sort_{i}", t.sql)).collect();
+    let mut params: Vec<Value> = terms.iter().flat_map(|t| t.params.iter().cloned()).collect();
+    let (condition, condition_params) = filter.condition_in(conn);
+    params.extend(condition_params);
     let mut sql = format!("SELECT rowid, *{keys} FROM flows WHERE {condition}");
     push_clear_mark(conn, &mut sql, &mut params);
     if let Some(id) = &filter.after {
@@ -407,9 +559,11 @@ fn list_and_cursor(
             sql.push_str(&after);
             params.extend(after_params);
         }
+        // By the values selected above, so a key with parameters is computed once a row
         let order: Vec<String> = terms
             .iter()
-            .map(|(t, descending)| format!("{t} {}", if *descending { "DESC" } else { "ASC" }))
+            .enumerate()
+            .map(|(i, t)| format!("sort_{i} {}", if t.descending { "DESC" } else { "ASC" }))
             .collect();
         sql.push_str(" ORDER BY ");
         sql.push_str(&order.join(", "));
@@ -1254,7 +1408,8 @@ mod tests {
             flow("https://A.com/", "GET", Some(404), None),
             flow("https://c.com/", "GET", Some(200), None),
         ]);
-        let key = |column, descending| FlowSortKey { column, descending };
+        let key =
+            |column: SortColumn, descending| FlowSortKey { column: column.into(), descending };
         let read = |sort: &[FlowSortKey], cursor: Option<Vec<SortValue>>, limit| {
             let filter = FlowFilter {
                 sort: sort.to_vec(),
@@ -1298,6 +1453,84 @@ mod tests {
         // Query alone: the flows without one first, in start order.
         let all = sorted(&[key(SortColumn::Query, true)]);
         assert_eq!(all, ["000", "001", "002", "003", "004", "005", "006", "007"]);
+    }
+
+    /// Flows and the order each sort lists them in, shared with the app's `lib/columns.test.ts`,
+    /// whose in-memory sort must agree with the database's.
+    #[derive(Deserialize)]
+    struct SortFixture {
+        flows: Vec<Flow>,
+        sorts: Vec<SortCase>,
+    }
+
+    #[derive(Deserialize)]
+    struct SortCase {
+        sort: Vec<FlowSortKey>,
+        order: Vec<usize>,
+    }
+
+    /// A custom column sorts by the value it shows: a header's first value, the response's over
+    /// the request's for `header.`, or a query parameter's, as text without regard to case and
+    /// empty lowest; alone, after a built-in key or before another, and paged from a cursor.
+    #[test]
+    fn a_custom_column_sorts_by_its_value_and_pages() {
+        let fixture: SortFixture =
+            serde_json::from_str(include_str!("../tests/fixtures/custom_column_sort.json"))
+                .unwrap();
+        let (_dir, db) = db_of(fixture.flows);
+        let read = |sort: &[FlowSortKey], cursor: Option<Vec<SortValue>>, limit| {
+            let filter = FlowFilter {
+                sort: sort.to_vec(),
+                cursor,
+                limit: Some(limit),
+                ..Default::default()
+            };
+            let page = sorted_page(&db, &filter).unwrap();
+            let order: Vec<usize> = page.flows.iter().map(|f| f.id[3..].parse().unwrap()).collect();
+            (order, page.cursor)
+        };
+        for case in &fixture.sorts {
+            let (all, _) = read(&case.sort, None, 100);
+            assert_eq!(all, case.order, "{:?}", case.sort);
+            let mut paged = Vec::new();
+            let mut cursor = None;
+            loop {
+                let (page, next) = read(&case.sort, cursor.clone(), 3);
+                if page.is_empty() {
+                    break;
+                }
+                cursor = next;
+                paged.extend(page);
+            }
+            assert_eq!(paged, case.order, "paged {:?}", case.sort);
+        }
+    }
+
+    /// A custom column's key names it as the app does, `field:` and its path, and takes only
+    /// the paths a custom column can have.
+    #[test]
+    fn a_sort_key_names_a_custom_column_by_its_path() {
+        let parse = |column: &str| {
+            serde_json::from_value::<FlowSortKey>(
+                serde_json::json!({ "column": column, "descending": false }),
+            )
+            .map(|k| k.column)
+        };
+        assert_eq!(parse("status").unwrap(), SortBy::Column(SortColumn::Status));
+        let field = parse("field:Res.Header.X-Cache").unwrap();
+        assert_eq!(serde_json::to_value(&field).unwrap(), "field:res.header.x-cache");
+        assert_eq!(serde_json::to_value(parse("tls").unwrap()).unwrap(), "tls");
+        for path in [
+            "field:host",
+            "field:header.",
+            "field:header.a b",
+            "field:header.a.b",
+            "field:query.x'); DROP TABLE flows; --",
+            "field:query.filter[status]",
+            "nope",
+        ] {
+            assert!(parse(path).is_err(), "{path}");
+        }
     }
 
     #[test]

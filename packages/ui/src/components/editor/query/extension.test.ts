@@ -1,5 +1,33 @@
 import { describe, expect, test } from "vite-plus/test";
-import { pathsAt } from "./extension";
+import type { Completion } from "@yaakapp-internal/query";
+import { fieldReferences, pathsAt } from "./extension";
+
+describe("fieldReferences", () => {
+  const item = (insert: string, kind: Completion["kind"] = "field"): Completion => ({
+    label: insert,
+    insert,
+    kind,
+    info: null,
+    example: null,
+    reopen: true,
+  });
+  const refs = (items: Completion[]) => fieldReferences(items).map((i) => [i.insert, i.reopen]);
+
+  test("ends a field or a map's key with no colon, and does not open again", () => {
+    expect(refs([item("@req.header.user-agent:"), item("@host:")])).toEqual([
+      ["@req.header.user-agent", false],
+      ["@host", false],
+    ]);
+  });
+
+  test("opens again after a map, for its key", () => {
+    expect(refs([item("@header.")])).toEqual([["@header.", true]]);
+  });
+
+  test("never offers values", () => {
+    expect(refs([item("Mozilla/5.0", "value"), item("@query.")])).toEqual([["@query.", true]]);
+  });
+});
 
 describe("pathsAt", () => {
   const at = (text: string) => pathsAt(text, text.length);
