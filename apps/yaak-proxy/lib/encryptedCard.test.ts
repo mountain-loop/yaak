@@ -4,6 +4,7 @@ import {
   connectionOf,
   type EncryptedCardInput,
   encryptedCard,
+  lineText,
   stopDecryptingConnection,
 } from "./encryptedCard";
 
@@ -67,7 +68,7 @@ describe("connectionOf", () => {
 describe("the card of an encrypted connection", () => {
   test("nothing decrypted yet: the host, the app and everything, each with what it writes", () => {
     const c = card();
-    expect(c.why).toBe("Nothing is decrypted yet");
+    expect(lineText(c.why)).toBe("Nothing is decrypted yet");
     expect(summary(c)).toEqual([
       [
         "Decrypt www.google.com",
@@ -77,21 +78,19 @@ describe("the card of an encrypted connection", () => {
       ["Decrypt Dia", "app:Dia", { add: ["app:Dia"], remove: [] }],
       ["Decrypt Everything", "*", { add: ["*"], remove: [] }],
     ]);
-    expect(c.foot).toEqual(["New connections only"]);
+    // Nothing under the buttons while the certificate is trusted
+    expect(c.foot).toEqual([]);
     expect(c.fact).toBeNull();
   });
 
   test("asks for the password once while the certificate isn't trusted, where it can be", () => {
-    expect(card({ trusted: false }).foot).toEqual([
-      "New connections only",
-      "Asks for your password once",
-    ]);
-    expect(card({ trusted: false, canTrust: false }).foot).toEqual(["New connections only"]);
+    expect(card({ trusted: false }).foot).toEqual(["Asks for your password once"]);
+    expect(card({ trusted: false, canTrust: false }).foot).toEqual([]);
   });
 
   test("something else listed: not on the list, with the same choices", () => {
     const c = card({ list: [...user("host:api.stripe.com"), ...BUILT_INS] });
-    expect(c.why).toBe("Decryption not configured for www.google.com");
+    expect(lineText(c.why)).toBe("Decryption not configured for `www.google.com`");
     expect(c.actions.map((a) => a.label)).toEqual([
       "Decrypt www.google.com",
       "Decrypt Dia",
@@ -108,11 +107,11 @@ describe("the card of an encrypted connection", () => {
 
   test("names the host nothing on the list covers, its port only when not 443", () => {
     const list = [...user("host:api.stripe.com"), ...BUILT_INS];
-    expect(card({ list, flow: { ...tunnel, url: "t.yaak.app:443" } }).why).toBe(
-      "Decryption not configured for t.yaak.app",
+    expect(lineText(card({ list, flow: { ...tunnel, url: "t.yaak.app:443" } }).why)).toBe(
+      "Decryption not configured for `t.yaak.app`",
     );
-    expect(card({ list, flow: { ...tunnel, url: "home.ts.net:8317" } }).why).toBe(
-      "Decryption not configured for home.ts.net:8317",
+    expect(lineText(card({ list, flow: { ...tunnel, url: "home.ts.net:8317" } }).why)).toBe(
+      "Decryption not configured for `home.ts.net:8317`",
     );
   });
 
@@ -139,7 +138,10 @@ describe("the card of an encrypted connection", () => {
         tunnelExcludedBuiltIn: true,
       },
     });
-    expect([pinned.why, pinned.whySub]).toEqual(["Excluded by default", "pins its certificate"]);
+    expect([lineText(pinned.why), pinned.whySub]).toEqual([
+      "Excluded by default",
+      "pins its certificate",
+    ]);
     expect(summary(pinned)).toEqual([
       [
         "Decrypt my.1password.com",
@@ -171,7 +173,7 @@ describe("the card of an encrypted connection", () => {
       list,
       flow: { ...tunnel, tunnelReason: "excluded", tunnelExcludedBy: "!host:*.google.com" },
     });
-    expect([c.why, c.whyEntry]).toEqual(["Excluded by", "!host:*.google.com"]);
+    expect(lineText(c.why)).toBe("Excluded by `!host:*.google.com`");
     // Nothing added wins over the person's own exclusion, so taking it off is the way in
     expect(summary(c)).toEqual([
       [
@@ -204,8 +206,10 @@ describe("the card of an encrypted connection", () => {
   test("once the list decrypts it: opened before, the opposite, and Reconnect while open", () => {
     const list = [...user("host:www.google.com"), ...BUILT_INS];
     const closed = card({ list });
-    expect(closed.why).toBe("Not on the decrypt list");
-    expect(closed.fact).toBe("Opened before www.google.com was decrypted");
+    expect(lineText(closed.why)).toBe("Not on the decrypt list");
+    expect(closed.fact && lineText(closed.fact)).toBe(
+      "Opened before `www.google.com` was decrypted",
+    );
     expect(summary(closed)).toEqual([
       [
         "Stop Decrypting www.google.com",
@@ -219,7 +223,9 @@ describe("the card of an encrypted connection", () => {
     expect(open.actions.map((a) => a.kind)).toEqual(["reconnect", "stop"]);
 
     const everything = card({ list: [...user("*"), ...BUILT_INS] });
-    expect(everything.fact).toBe("Opened before everything was decrypted");
+    expect(everything.fact && lineText(everything.fact)).toBe(
+      "Opened before everything was decrypted",
+    );
     expect(everything.actions[0]?.label).toBe("Stop Decrypting Everything");
   });
 });
@@ -240,7 +246,7 @@ describe("the card of a refused handshake", () => {
   test("an app: likely pinned, Stop Decrypting first, Try Again while passed through", () => {
     const c = card({ flow: refused, list: listed, passthrough: ["sync.acme.dev:443"] });
     expect(c.rejected).toBe(true);
-    expect([c.why, c.whySub]).toEqual(["Acme rejected the certificate", "likely pinned"]);
+    expect([lineText(c.why), c.whySub]).toEqual(["Acme rejected the certificate", "likely pinned"]);
     expect(summary(c)).toEqual([
       ["Stop Decrypting Acme", "!app:Acme", { add: ["!app:Acme"], remove: [] }],
       ["Try Again", "next connection", null],
@@ -264,7 +270,7 @@ describe("the card of a refused handshake", () => {
       clientPath: "/opt/homebrew/bin/python3",
     };
     const c = card({ flow: python, list: listed, passthrough: ["pypi.org:443"] });
-    expect([c.why, c.whySub]).toEqual([
+    expect([lineText(c.why), c.whySub]).toEqual([
       "python3 rejected the certificate",
       "uses its own trust store",
     ]);
@@ -281,7 +287,7 @@ describe("the card of a refused handshake", () => {
       flow: { ...refused, clientName: null, clientBundleId: null, clientPath: null },
       list: listed,
     });
-    expect(c.why).toBe("A client rejected the certificate");
+    expect(lineText(c.why)).toBe("A client rejected the certificate");
     expect(summary(c)[0]).toEqual([
       "Stop Decrypting sync.acme.dev",
       "!host:sync.acme.dev",
@@ -296,7 +302,7 @@ describe("the card of a refused handshake", () => {
       trusted: false,
       passthrough: ["sync.acme.dev:443"],
     });
-    expect(c.why).toBe("Certificate not trusted");
+    expect(lineText(c.why)).toBe("Certificate not trusted");
     expect(c.actions.map((a) => a.kind)).toEqual(["trust", "stop"]);
     expect(c.foot).toEqual(["Passed through until trusted"]);
   });
@@ -312,7 +318,7 @@ describe("the card of a refused handshake", () => {
       list: listed,
       rejectedBy: { clientName: "Acme", clientBundleId: "dev.acme", clientPath: null },
     });
-    expect(c.why).toBe("Acme rejected the certificate for this host");
+    expect(lineText(c.why)).toBe("Acme rejected the certificate for this host");
     // Stop Decrypting acts on this connection, so on Dia's own
     expect(c.actions[0]?.hint).toBe("!app:Dia");
   });

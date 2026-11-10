@@ -9,6 +9,8 @@ import {
   IconButton,
   type IconProps,
   InlineCode,
+  Tooltip,
+  CONTROL_TOOLTIP_DELAY,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { type ReactNode, useEffect, useState } from "react";
@@ -22,6 +24,7 @@ import {
   encryptedCard,
   isOpen,
   isRejection,
+  type Line,
 } from "../lib/encryptedCard";
 import { useFlowActions } from "../lib/flowActions";
 import { utcTimestamp } from "../lib/flowViews";
@@ -122,17 +125,22 @@ export function EncryptedCard({ flow }: { flow: Flow }) {
       <div className="mx-3 border-t border-border-subtle overflow-auto">
         <div className="mx-auto max-w-[27rem] py-10 grid gap-2">
           <div className="text-sm text-text mb-1">
-            {model.why}
-            {model.whyEntry != null && (
-              <>
-                {" "}
-                <InlineCode>{model.whyEntry}</InlineCode>
-              </>
-            )}
+            <LineText line={model.why} />
             {model.whySub != null && <span className="text-text-subtle"> · {model.whySub}</span>}
+            <Tooltip wrap content={ABOUT} delay={CONTROL_TOOLTIP_DELAY}>
+              <IconButton
+                size="2xs"
+                icon="info"
+                iconColor="secondary"
+                title="About decryption"
+                className="ml-1 align-middle inline-flex!"
+              />
+            </Tooltip>
           </div>
           {model.fact != null && (
-            <div className="text-sm text-text-subtle -mt-1 mb-1">{model.fact}</div>
+            <div className="text-sm text-text-subtle -mt-1 mb-1">
+              <LineText line={model.fact} />
+            </div>
           )}
           {model.actions.map((action) => (
             <ActionButton
@@ -162,6 +170,27 @@ export function EncryptedCard({ flow }: { flow: Flow }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** What the info button beside the why line says */
+const ABOUT =
+  "HTTPS is encrypted between the app and the server. Yaak Proxy shows requests only for hosts and apps you decrypt, from their next connection on.";
+
+/** A why or fact line, its hosts, apps and entries shown as code */
+function LineText({ line }: { line: Line }) {
+  return (
+    <>
+      {line.map((part, i) =>
+        typeof part === "string" ? (
+          // oxlint-disable-next-line react/no-array-index-key -- the parts of one fixed line
+          <span key={i}>{part}</span>
+        ) : (
+          // oxlint-disable-next-line react/no-array-index-key -- the parts of one fixed line
+          <InlineCode key={i}>{part.code}</InlineCode>
+        ),
+      )}
+    </>
   );
 }
 

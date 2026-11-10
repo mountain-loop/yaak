@@ -78,16 +78,22 @@ export interface CardAction {
   icon: "host" | "app" | "everything" | "lock" | "lock_open" | "refresh" | "shield" | "terminal";
 }
 
+/** A line of text, the hosts, apps and entries in it shown as code, as Yaak shows literal values */
+export type Line = (string | { code: string })[];
+
+/** A line as plain text, its code in backticks */
+export function lineText(line: Line): string {
+  return line.map((part) => (typeof part === "string" ? part : `\`${part.code}\``)).join("");
+}
+
 export interface EncryptedCardModel {
   rejected: boolean;
   /** Why the connection is encrypted, in one line */
-  why: string;
+  why: Line;
   /** Quieter, after it */
   whySub: string | null;
-  /** The exclusion that kept it out, when the person's own, shown as code after "Excluded by" */
-  whyEntry: string | null;
   /** A fact about the connection since the list changed: when it opened */
-  fact: string | null;
+  fact: Line | null;
   actions: CardAction[];
   /** Small lines under the buttons */
   foot: string[];
@@ -142,8 +148,8 @@ function tunnelCard({ flow, list, trusted, canTrust }: EncryptedCardInput): Encr
   const c = connectionOf(flow);
   const q = queryOf(c);
   const decryptsNow = decrypts(list, q);
-  const { why, whySub, whyEntry } = whyLine(flow, list, c, decryptsNow);
-  const foot = ["New connections only"];
+  const { why, whySub } = whyLine(flow, list, c, decryptsNow);
+  const foot: string[] = [];
 
   if (decryptsNow) {
     // Decrypted from the next connection on: the entries that do it, each to take back.
@@ -155,14 +161,13 @@ function tunnelCard({ flow, list, trusted, canTrust }: EncryptedCardInput): Encr
       actions.unshift({ kind: "reconnect", label: "Reconnect", hint: null, icon: "refresh" });
     }
     const first = decrypting[0]?.entry;
-    const what =
-      first == null ? c.label : first === EVERYTHING ? "everything" : entrySubject(first);
+    const what: Line[number] =
+      first === EVERYTHING ? "everything" : { code: first == null ? c.label : entrySubject(first) };
     return {
       rejected: false,
       why,
       whySub,
-      whyEntry,
-      fact: `Opened before ${what} was decrypted`,
+      fact: ["Opened before ", what, " was decrypted"],
       actions,
       foot: [],
     };
@@ -230,7 +235,6 @@ function tunnelCard({ flow, list, trusted, canTrust }: EncryptedCardInput): Encr
     rejected: false,
     why,
     whySub,
-    whyEntry,
     fact: null,
     actions,
     foot: actions.length === 0 ? [] : foot,
@@ -246,24 +250,23 @@ function whyLine(
   list: DecryptListEntry[],
   c: Connection,
   decryptsNow: boolean,
-): { why: string; whySub: string | null; whyEntry: string | null } {
+): { why: Line; whySub: string | null } {
   if (flow.tunnelReason === "excluded" && flow.tunnelExcludedBy != null) {
     if (flow.tunnelExcludedBuiltIn) {
       const kind = list.find((e) => e.entry === flow.tunnelExcludedBy)?.kind;
       const whySub =
         kind === "apple" ? "Apple service" : kind === "pinned" ? "pins its certificate" : null;
-      return { why: "Excluded by default", whySub, whyEntry: null };
+      return { why: ["Excluded by default"], whySub };
     }
-    return { why: "Excluded by", whySub: null, whyEntry: flow.tunnelExcludedBy };
+    return { why: ["Excluded by ", { code: flow.tunnelExcludedBy }], whySub: null };
   }
   return {
     why: !decryptsAnything(list)
-      ? "Nothing is decrypted yet"
+      ? ["Nothing is decrypted yet"]
       : decryptsNow
-        ? "Not on the decrypt list"
-        : `Decryption not configured for ${c.label}`,
+        ? ["Not on the decrypt list"]
+        : ["Decryption not configured for ", { code: c.label }],
     whySub: null,
-    whyEntry: null,
   };
 }
 
@@ -362,9 +365,8 @@ function rejectedCard(input: EncryptedCardInput): EncryptedCardModel {
   if (canTrust && trusted === false && decryptsAnything(list)) {
     return {
       rejected: true,
-      why: "Certificate not trusted",
+      why: ["Certificate not trusted"],
       whySub: null,
-      whyEntry: null,
       fact: null,
       actions: [
         { kind: "trust", label: "Trust Certificate", hint: null, primary: true, icon: "shield" },
@@ -378,9 +380,8 @@ function rejectedCard(input: EncryptedCardInput): EncryptedCardModel {
   if (refuser.kind === "program") {
     return {
       rejected: true,
-      why: `${refuser.name} rejected the certificate${forHost}`,
+      why: [`${refuser.name} rejected the certificate${forHost}`],
       whySub: "uses its own trust store",
-      whyEntry: null,
       fact: null,
       actions: [
         {
@@ -398,12 +399,12 @@ function rejectedCard(input: EncryptedCardInput): EncryptedCardModel {
   }
   return {
     rejected: true,
-    why:
+    why: [
       refuser.kind === "app"
         ? `${refuser.name} rejected the certificate${forHost}`
         : "A client rejected the certificate",
+    ],
     whySub: refuser.kind === "app" ? "likely pinned" : null,
-    whyEntry: null,
     fact: null,
     actions: [
       ...(stop == null ? [] : [{ ...stop, primary: true }]),
