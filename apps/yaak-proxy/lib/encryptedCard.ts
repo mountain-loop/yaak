@@ -78,12 +78,19 @@ export interface CardAction {
   icon: "host" | "app" | "everything" | "lock" | "lock_open" | "refresh" | "shield" | "terminal";
 }
 
-/** A line of text, the hosts, apps and entries in it shown as code, as Yaak shows literal values */
-export type Line = (string | { code: string })[];
+/**
+ * A line of text, the hosts, apps and entries in it shown as code, as Yaak shows literal values,
+ * and a lead in bold
+ */
+export type Line = (string | { code: string } | { bold: string })[];
 
-/** A line as plain text, its code in backticks */
+/** A line as plain text, its code in backticks and its bold in asterisks */
 export function lineText(line: Line): string {
-  return line.map((part) => (typeof part === "string" ? part : `\`${part.code}\``)).join("");
+  return line
+    .map((part) =>
+      typeof part === "string" ? part : "code" in part ? `\`${part.code}\`` : `**${part.bold}**`,
+    )
+    .join("");
 }
 
 export interface EncryptedCardModel {
@@ -265,7 +272,11 @@ function whyLine(
       ? ["Nothing is decrypted yet"]
       : decryptsNow
         ? ["Not on the decrypt list"]
-        : ["Decryption not configured for ", { code: c.label }],
+        : [
+            { bold: "Encrypted Content:" },
+            " Enable decryption to see requests to ",
+            { code: c.label },
+          ],
     whySub: null,
   };
 }

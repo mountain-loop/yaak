@@ -40,6 +40,12 @@ const apps = {
     clientBundleId: "com.1password.1password",
     clientPath: "/Applications/1Password.app",
   },
+  headless: {
+    clientName: "chrome-headless-shell",
+    clientBundleId: null,
+    clientPath:
+      "/Users/you/.cache/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell",
+  },
   acme: {
     clientName: "Acme Sync",
     clientBundleId: "dev.acme.sync",
@@ -124,6 +130,7 @@ function encryptedScene(): Flow[] {
     tunnel(10, "fonts.gstatic.com", apps.dia),
     tunnel(11, "clients2.google.com", apps.chrome),
     tunnel(12, "home.taila714c.ts.net:8317", apps.dia, { url: "home.taila714c.ts.net:8317" }),
+    tunnel(13, "optimizationguide-pa.googleapis.com", apps.headless),
   ];
 }
 

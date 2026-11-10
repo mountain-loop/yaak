@@ -77,9 +77,9 @@ export function HttpsStrip() {
         app.path == null ? (
           app.name
         ) : (
-          <span className="flex items-center gap-2">
-            <AppIcon path={app.path} className="size-4" />
-            {app.name}
+          <span className="flex items-center gap-2 min-w-0">
+            <AppIcon path={app.path} className="size-4 min-w-4" />
+            <span className="truncate">{app.name}</span>
           </span>
         ),
       keepOpenOnSelect: true,

@@ -90,7 +90,9 @@ describe("the card of an encrypted connection", () => {
 
   test("something else listed: not on the list, with the same choices", () => {
     const c = card({ list: [...user("host:api.stripe.com"), ...BUILT_INS] });
-    expect(lineText(c.why)).toBe("Decryption not configured for `www.google.com`");
+    expect(lineText(c.why)).toBe(
+      "**Encrypted Content:** Enable decryption to see requests to `www.google.com`",
+    );
     expect(c.actions.map((a) => a.label)).toEqual([
       "Decrypt www.google.com",
       "Decrypt Dia",
@@ -108,10 +110,10 @@ describe("the card of an encrypted connection", () => {
   test("names the host nothing on the list covers, its port only when not 443", () => {
     const list = [...user("host:api.stripe.com"), ...BUILT_INS];
     expect(lineText(card({ list, flow: { ...tunnel, url: "t.yaak.app:443" } }).why)).toBe(
-      "Decryption not configured for `t.yaak.app`",
+      "**Encrypted Content:** Enable decryption to see requests to `t.yaak.app`",
     );
     expect(lineText(card({ list, flow: { ...tunnel, url: "home.ts.net:8317" } }).why)).toBe(
-      "Decryption not configured for `home.ts.net:8317`",
+      "**Encrypted Content:** Enable decryption to see requests to `home.ts.net:8317`",
     );
   });
 

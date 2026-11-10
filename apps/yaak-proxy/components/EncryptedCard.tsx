@@ -185,6 +185,11 @@ function LineText({ line }: { line: Line }) {
         typeof part === "string" ? (
           // oxlint-disable-next-line react/no-array-index-key -- the parts of one fixed line
           <span key={i}>{part}</span>
+        ) : "bold" in part ? (
+          // oxlint-disable-next-line react/no-array-index-key -- the parts of one fixed line
+          <span key={i} className="font-semibold">
+            {part.bold}
+          </span>
         ) : (
           // oxlint-disable-next-line react/no-array-index-key -- the parts of one fixed line
           <InlineCode key={i}>{part.code}</InlineCode>
@@ -222,7 +227,7 @@ function ActionButton({
       flow.clientPath == null ? (
         <Icon icon="box" size="sm" />
       ) : (
-        <AppIcon path={flow.clientPath} className="size-4" />
+        <AppIcon path={flow.clientPath} className="size-4 min-w-4" />
       )
     ) : (
       <Icon icon={ICONS[action.icon]} size="sm" />
@@ -241,7 +246,7 @@ function ActionButton({
         action.hint == null ? undefined : (
           <span
             className={classNames(
-              "ml-auto pl-3 font-mono text-xs text-text-subtlest truncate max-w-[50%]",
+              "block ml-auto pl-3 font-mono text-xs text-text-subtlest truncate max-w-[11rem]",
               action.removes && "line-through",
             )}
           >

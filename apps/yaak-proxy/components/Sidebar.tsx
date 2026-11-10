@@ -85,7 +85,9 @@ function ItemInner({ item }: { item: SidebarItem }) {
       {item.kind === "encrypted" && <Icon icon="lock" size="sm" className="text-text-subtle" />}
       {item.kind === "saved" && <Icon icon="bookmark" size="sm" className="text-text-subtle" />}
       {item.kind === "folder" && <Icon icon="folder" size="sm" className="text-text-subtle" />}
-      {item.appPath != null && <AppIcon path={item.appPath} className="size-[1.125rem]" />}
+      {item.appPath != null && (
+        <AppIcon path={item.appPath} className="size-[1.125rem] min-w-[1.125rem]" />
+      )}
       {item.kind === "folder" && item.path != null ? (
         // Named by its last part; the whole path on hover
         <Tooltip wrap content={item.path} delay={CONTROL_TOOLTIP_DELAY}>

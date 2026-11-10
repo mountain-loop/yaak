@@ -42,8 +42,13 @@ export function AppIcon({ path, className = "size-4" }: { path: string; classNam
   }, [path]);
 
   return url == null ? (
-    <span aria-hidden className={classNames(className, "inline-block shrink-0")} />
+    <span aria-hidden className={classNames(className, "inline-block shrink-0 aspect-square")} />
   ) : (
-    <img alt="" src={url} className={classNames(className, "shrink-0")} />
+    // Square whatever squeezes it, beside text that truncates
+    <img
+      alt=""
+      src={url}
+      className={classNames(className, "shrink-0 aspect-square object-contain")}
+    />
   );
 }
