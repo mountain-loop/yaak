@@ -1,10 +1,11 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
-import type { Flow } from "@yaakapp-internal/proxy-lib";
+import type { Flow, FlowSortKey, SortColumn } from "@yaakapp-internal/proxy-lib";
 import {
   ContextMenu,
   CONTROL_TOOLTIP_DELAY,
   CountBadge,
+  type DropdownItem,
   formatMillis,
   HttpMethodTagRaw,
   HttpStatusTagRaw,
@@ -12,7 +13,7 @@ import {
   Tooltip,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactElement, WheelEvent } from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { selectedFlowAtom, selectedFlowIdAtom } from "../lib/atoms";
@@ -21,33 +22,49 @@ import { utcTimestamp } from "../lib/flowViews";
 import {
   type Column,
   type ColumnId,
+  cellFilterTerm,
+  customValue,
   gridTemplate,
   gridWidth,
   hostOf,
+  isCustomColumn,
   nextSort,
+  operationOf,
+  showOperationFor,
   shownColumns,
+  tlsVersionOf,
+  toggleSortKey,
+  unavailableColumns,
+  urlParts,
 } from "../lib/columns";
 import { useExportShownHar, useFlowActions } from "../lib/flowActions";
 import { compareFlows } from "../lib/flowWindow";
-import { countNewFlows } from "../lib/follow";
+import { countNewFlows, isAtEnd, resumesFollowing } from "../lib/follow";
+import { asOneTerm } from "../lib/query";
 import { folderOf } from "../lib/search";
 import {
   columnPrefsAtom,
   hasAppsAtom,
   flowSortAtom,
   followAtom,
+  loadMoreSortedAtom,
   loadOlderFlowsAtom,
   newestStartedAtAtom,
   oldestFlowAtom,
   proxyStateAtom,
+  searchLoadingAtom,
+  searchTextAtom,
+  setSearchTextAtom,
+  flowsAtom,
   shownFlowsAtom,
 } from "../lib/store";
+import { useShowToast } from "../lib/toast";
 import { AppIcon } from "./AppIcon";
 import { FlowListEmpty, PausedRow } from "./FlowListEmpty";
 import { FlowListHeader } from "./FlowListHeader";
 
 const BOTTOM_PADDING = 6;
-/** Rows from the top at which older flows start loading */
+/** Rows from the top at which older flows start loading, or from the bottom, sorted, more */
 const LOAD_OLDER_ROWS = 20;
 /** How long a row that arrives while following stays tinted */
 const ARRIVAL_MS = 1400;
@@ -68,20 +85,37 @@ interface Props {
 /**
  * Follows new traffic until a flow is selected or the list is scrolled, then holds. Scrolling to
  * the top loads older flows from the database. Catching up leaves a divider where the hold
- * began. Sorting by a column sorts the flows loaded and stops following. The columns keep their
- * widths, and the list scrolls sideways when they are wider than it, the header with it.
+ * began. Sorting by columns reads the flows from the database in that order, a page at a time on
+ * scrolling down, and stops following. The columns keep their widths, and the list scrolls
+ * sideways when they are wider than it, the header with it.
  */
 export function FlowList({ style, className }: Props) {
   const flows = useAtomValue(shownFlowsAtom);
-  const [menu, setMenu] = useState<{ flow: Flow; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{
+    flow: Flow;
+    column: ColumnId | null;
+    x: number;
+    y: number;
+  } | null>(null);
   const flowActions = useFlowActions();
+  const cellActions = useCellActions();
   const exportShown = useExportShownHar();
   const selectedId = useAtomValue(selectedFlowIdAtom);
   const setSelectedFlow = useSetAtom(selectedFlowAtom);
   const loadOlder = useSetAtom(loadOlderFlowsAtom);
+  const loadMoreSorted = useSetAtom(loadMoreSortedAtom);
   const oldestFlow = useAtomValue(oldestFlowAtom);
-  const prefs = useAtomValue(columnPrefsAtom);
+  const [prefs, setPrefs] = useAtom(columnPrefsAtom);
   const [sort, setSort] = useAtom(flowSortAtom);
+  const sorted = sort.length > 0;
+  const allFlows = useAtomValue(flowsAtom);
+
+  // Operation shows itself the first time a flow has one, unless the person set it already.
+  useEffect(() => {
+    if (prefs.visible.operation !== undefined) return;
+    const next = showOperationFor(prefs, allFlows);
+    if (next !== prefs) setPrefs(next);
+  }, [prefs, allFlows, setPrefs]);
   const proxyState = useAtomValue(proxyStateAtom);
   const paused = proxyState?.state === "running" && proxyState.recording === false;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -89,6 +123,8 @@ export function FlowList({ style, className }: Props) {
   const lastScrollTop = useRef(0);
   // The list's vertical scrollbar, which the header leaves room for so the two scroll as far
   const [scrollbarWidth, setScrollbarWidth] = useState(0);
+  // The list's visible height, so a resize that leaves it at its end follows again
+  const [viewportHeight, setViewportHeight] = useState(0);
   const ignoreScroll = useRef(false);
   const [following, setFollowing] = useAtom(followAtom);
   const [heldAt, setHeldAt] = useState<string | null>(null);
@@ -105,14 +141,11 @@ export function FlowList({ style, className }: Props) {
 
   // Where the platform cannot tell which app sent a flow, there is no App column.
   const hasApps = useAtomValue(hasAppsAtom);
-  const columns = useMemo(
-    () => shownColumns(prefs).filter((c) => hasApps || c.id !== "app"),
-    [prefs, hasApps],
-  );
+  const columns = useMemo(() => shownColumns(prefs, unavailableColumns(hasApps)), [prefs, hasApps]);
   const template = useMemo(() => gridTemplate(columns), [columns]);
   // A row's grid, its padding and the list's margins: `px-1.5` and `left-1.5 right-1.5`
   const contentWidth = useMemo(() => `calc(${gridWidth(columns)} + 1.5rem)`, [columns]);
-  const arrivals = useArrivals(flows, following && sort == null);
+  const arrivals = useArrivals(flows, following && !sorted);
 
   const virtualizer = useVirtualizer({
     count: flows.length,
@@ -142,48 +175,83 @@ export function FlowList({ style, className }: Props) {
   const follow = useCallback(() => {
     const { flows, heldAt, following, sort } = latest.current;
     // Catching up from a hold marks where it began.
-    if (!following && sort == null) {
+    if (!following && sort.length === 0) {
       const count = countNewFlows(flows, heldAt);
       const first = flows[flows.length - count];
       setDivider(count > 0 && first != null ? { id: first.id, count } : null);
     }
-    setSort(null);
+    setSort([]);
     setFollowing(true);
     setHeldAt(null);
     setScrollTop(Number.MAX_SAFE_INTEGER);
   }, [setFollowing, setScrollTop, setSort]);
 
+  // A sorted list never follows, whether the sort was just set, kept from the last launch, or
+  // kept through a clear.
   useLayoutEffect(() => {
-    if (following) setScrollTop(Number.MAX_SAFE_INTEGER);
-  }, [following, flows, paused, setScrollTop]);
+    if (sorted && following) setFollowing(false);
+  }, [sorted, following, setFollowing]);
+
+  // A held list follows again once it is at its end, not only when scrolled there: a sidebar row,
+  // search or resize can leave it there with no scroll to make, as one that fits its viewport
+  // always is, and its flows would otherwise count as new while all are on screen. Judged when
+  // which flows are listed changes, or the list's height, not when one listed is updated or
+  // `following` itself changes, so selecting a row at the end still holds; and not while a
+  // search's first page loads, as its empty list is at its end only until the page is in.
+  const searchLoading = useAtomValue(searchLoadingAtom);
+  const listed = `${flows.length}:${flows[0]?.id ?? ""}:${flows.at(-1)?.id ?? ""}`;
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el == null || searchLoading) return;
+    if (!resumesFollowing({ following: latest.current.following, sorted, el })) return;
+    setFollowing(true);
+    setHeldAt(null);
+  }, [listed, sorted, searchLoading, viewportHeight, setFollowing]);
+
+  useLayoutEffect(() => {
+    if (following && !sorted) setScrollTop(Number.MAX_SAFE_INTEGER);
+  }, [following, sorted, flows, paused, setScrollTop]);
+
+  // Sorted, rows that leave, deleted or moved past what is read, can leave the end of the list
+  // in view with no scroll to load the next page; it loads as they go.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!sorted || el == null) return;
+    const toEnd = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (toEnd < LOAD_OLDER_ROWS * ROW_HEIGHT) void loadMoreSorted();
+  }, [sorted, flows, loadMoreSorted, ROW_HEIGHT]);
 
   // A new sort starts from its top.
+  const sortKey = JSON.stringify(sort);
   useLayoutEffect(() => {
-    if (sort != null) setScrollTop(0);
-  }, [sort, setScrollTop]);
+    if (sortKey !== "[]") setScrollTop(0);
+  }, [sortKey, setScrollTop]);
 
   // Older flows that loaded in above push the rows down; scroll by as much, so they stay put.
   const anchor = useRef<Flow | null>(null);
   useLayoutEffect(() => {
     const previous = anchor.current;
     anchor.current = oldestFlow;
-    if (following || sort != null || previous == null || oldestFlow == null) return;
+    if (following || sorted || previous == null || oldestFlow == null) return;
     if (compareFlows(oldestFlow, previous) >= 0) return;
     const added = flows.findIndex((f) => compareFlows(f, previous) >= 0);
     const el = scrollRef.current;
     if (added > 0 && el != null) setScrollTop(el.scrollTop + added * ROW_HEIGHT);
-  }, [oldestFlow, flows, following, sort, setScrollTop, ROW_HEIGHT]);
+  }, [oldestFlow, flows, following, sorted, setScrollTop, ROW_HEIGHT]);
 
   // Sorted, the flows loaded are what is sorted; older ones would land anywhere.
   const loadOlderHeld = useCallback(() => {
     hold();
-    if (latest.current.sort == null) void loadOlder();
+    if (latest.current.sort.length === 0) void loadOlder();
   }, [hold, loadOlder]);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el == null) return;
-    const measure = () => setScrollbarWidth(el.offsetWidth - el.clientWidth);
+    const measure = () => {
+      setScrollbarWidth(el.offsetWidth - el.clientWidth);
+      setViewportHeight(el.clientHeight);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
@@ -203,17 +271,20 @@ export function FlowList({ style, className }: Props) {
       return;
     }
     if (!moved) return;
-    const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 2;
-    if (atEnd && latest.current.sort == null) {
+    const sortedNow = latest.current.sort.length > 0;
+    if (isAtEnd(el) && !sortedNow) {
       setFollowing(true);
       setHeldAt(null);
     } else {
       hold();
-      if (el.scrollTop < LOAD_OLDER_ROWS * ROW_HEIGHT && latest.current.sort == null) {
+      if (el.scrollTop < LOAD_OLDER_ROWS * ROW_HEIGHT && !sortedNow) {
         void loadOlder();
       }
     }
-  }, [hold, loadOlder, setFollowing, ROW_HEIGHT]);
+    // Sorted, the next page of the sort loads near the bottom.
+    const toEnd = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (sortedNow && toEnd < LOAD_OLDER_ROWS * ROW_HEIGHT) void loadMoreSorted();
+  }, [hold, loadOlder, loadMoreSorted, setFollowing, ROW_HEIGHT]);
 
   // Focus moving to a sort button out of view scrolls the header itself; the rows follow.
   const handleHeaderScroll = useCallback(() => {
@@ -269,9 +340,12 @@ export function FlowList({ style, className }: Props) {
       const index = flows.findIndex((f) => f.id === selectedId);
       if (index === -1) select(e.key === "ArrowDown" ? 0 : flows.length - 1);
       else if (index === 0 && e.key === "ArrowUp") loadOlderHeld();
-      else select(e.key === "ArrowDown" ? index + 1 : index - 1);
+      else {
+        if (sorted && index >= flows.length - 2 && e.key === "ArrowDown") void loadMoreSorted();
+        select(e.key === "ArrowDown" ? index + 1 : index - 1);
+      }
     },
-    [flows, follow, loadOlderHeld, select, selectedId],
+    [flows, follow, loadOlderHeld, loadMoreSorted, select, selectedId, sorted],
   );
 
   const openMenu = useCallback(
@@ -280,16 +354,21 @@ export function FlowList({ style, className }: Props) {
       if (flow == null) return;
       e.preventDefault();
       select(index);
-      setMenu({ flow, x: e.clientX, y: e.clientY });
+      // The cell under the pointer, for the menu's items on its value
+      const cellEl = (e.target as HTMLElement).closest<HTMLElement>("[data-column]");
+      const column = (cellEl?.dataset.column as ColumnId | undefined) ?? null;
+      setMenu({ flow, column, x: e.clientX, y: e.clientY });
     },
     [select],
   );
 
-  // A third click on a column goes back to start time, following as Sort by Start Time does.
+  // A click sorts by the column alone; a third goes back to arrival order, following as Reset
+  // Sort does. Option-click adds the column to the sort, reverses it, then takes it out.
   const handleSort = useCallback(
-    (column: ColumnId) => {
-      const next = nextSort(latest.current.sort, column);
-      if (next == null) {
+    (column: SortColumn, add: boolean) => {
+      const current = latest.current.sort;
+      const next = add ? toggleSortKey(current, column) : nextSort(current, column);
+      if (next.length === 0) {
         follow();
         return;
       }
@@ -299,7 +378,30 @@ export function FlowList({ style, className }: Props) {
     [follow, hold, setSort],
   );
 
-  const newCount = following || sort != null ? 0 : countNewFlows(flows, heldAt);
+  const handleSetSort = useCallback(
+    (next: FlowSortKey[]) => {
+      if (next.length === 0) {
+        follow();
+        return;
+      }
+      hold();
+      setSort(next);
+    },
+    [follow, hold, setSort],
+  );
+
+  const menuItems = useMemo((): DropdownItem[] => {
+    if (menu == null) return [];
+    // The cell's value first, as it is what was right-clicked
+    const cell = menu.column == null ? [] : cellActions(menu.flow, menu.column);
+    return [
+      ...(cell.length > 0 ? [...cell, { type: "separator" } as const] : []),
+      ...flowActions(menu.flow),
+      exportShown(),
+    ];
+  }, [menu, flowActions, cellActions, exportShown]);
+
+  const newCount = following || sorted ? 0 : countNewFlows(flows, heldAt);
   const dividerIndex = divider == null ? -1 : flows.findIndex((f) => f.id === divider.id);
   const totalSize = virtualizer.getTotalSize();
 
@@ -326,7 +428,8 @@ export function FlowList({ style, className }: Props) {
           prefs={prefs}
           sort={sort}
           onSort={handleSort}
-          onSortByStart={follow}
+          onSetSort={handleSetSort}
+          onResetSort={follow}
         />
       </div>
       <div className="relative min-h-0">
@@ -398,11 +501,7 @@ export function FlowList({ style, className }: Props) {
             {newCount === 1 ? "1 new flow" : `${newCount} new flows`}
           </button>
         )}
-        <ContextMenu
-          triggerPosition={menu}
-          items={menu == null ? [] : [...flowActions(menu.flow), exportShown()]}
-          onClose={() => setMenu(null)}
-        />
+        <ContextMenu triggerPosition={menu} items={menuItems} onClose={() => setMenu(null)} />
       </div>
     </div>
   );
@@ -475,8 +574,9 @@ const FlowRow = memo(function FlowRow({
   // Failed or cancelled before any response; after the headers, the body was cut short mid-way.
   const noResponse = (failed || flow.cancelled) && flow.status == null;
   const ids = columns.map((c) => c.id);
-  // A failure's reason, or Cancelled, takes the type and size cells together.
-  const spanReason = noResponse && ids.includes("type") && ids.includes("size");
+  // A failure's reason, or Cancelled, takes the type and size cells together, side by side.
+  const typeAt = ids.indexOf("type");
+  const spanReason = noResponse && typeAt !== -1 && ids[typeAt + 1] === "size";
   const sinceArrival = arrivedAt == null ? null : Date.now() - arrivedAt;
 
   return (
@@ -510,7 +610,10 @@ const FlowRow = memo(function FlowRow({
       {columns.map((c) => {
         if (spanReason && c.id === "size") return null;
         return (
-          <FlowCell key={c.id} column={c.id} flow={flow} span={spanReason && c.id === "type"} />
+          // Names the cell's column for its menu, without a box of its own in the row's grid
+          <div key={c.id} data-column={c.id} className="contents">
+            <FlowCell column={c.id} flow={flow} span={spanReason && c.id === "type"} />
+          </div>
         );
       })}
     </div>
@@ -585,9 +688,7 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
   switch (column) {
     case "number":
       return (
-        <span className={classNames(cell, mono, "text-right text-text-subtlest")}>
-          {flow.number || ""}
-        </span>
+        <span className={classNames(cell, mono, "text-text-subtlest")}>{flow.number || ""}</span>
       );
     case "app": {
       if (flow.clientPath == null) return <span className={cell} />;
@@ -601,7 +702,7 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
           delay={CONTROL_TOOLTIP_DELAY}
         >
           <span className={classNames(cell, "flex items-center")}>
-            <AppIcon path={flow.clientPath} />
+            <AppIcon path={flow.clientPath} className="size-5" />
           </span>
         </Tooltip>
       );
@@ -632,26 +733,20 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
       if (flow.tunnelled) {
         return <span className={classNames(cell, "text-text-subtlest")}>Not decrypted</span>;
       }
-      const { path, query } = splitPath(flow.url);
+      const path = pathOf(flow.url);
       if (flow.streamKind == null) {
         return (
-          <Truncated text={path + query}>
-            <span className={cell}>
-              {path}
-              <span className="text-text-subtlest">{query}</span>
-            </span>
+          <Truncated text={path}>
+            <span className={cell}>{path}</span>
           </Truncated>
         );
       }
       // A stream's message count rides the end of the path, so it survives the narrow width,
       // ticking while the stream is open.
       return (
-        <Truncated text={path + query}>
+        <Truncated text={path}>
           <span className={classNames(cell, "flex items-center")}>
-            <span className="truncate">
-              {path}
-              <span className="text-text-subtlest">{query}</span>
-            </span>
+            <span className="truncate">{path}</span>
             <CountBadge
               count={flow.messageCount}
               showZero
@@ -732,14 +827,166 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
           {flow.upstreamHttpVersion ?? flow.clientHttpVersion}
         </span>
       );
+    case "query": {
+      const query = flow.tunnelled ? "" : (urlParts(flow.url).query ?? "");
+      return (
+        <Truncated text={query}>
+          <span className={classNames(cell, "text-text-subtle")}>{query}</span>
+        </Truncated>
+      );
+    }
+    case "started": {
+      const at = new Date(utcTimestamp(flow.startedAt));
+      if (Number.isNaN(at.getTime())) return <span className={cell} />;
+      return (
+        <Tooltip wrap content={at.toLocaleString()} delay={CONTROL_TOOLTIP_DELAY}>
+          <span className={classNames(cell, mono, "text-text-subtle")}>{clockTime(at)}</span>
+        </Tooltip>
+      );
+    }
+    case "requestSize":
+      return (
+        <span
+          className={classNames(
+            cell,
+            mono,
+            "text-right",
+            flow.requestTruncated ? "text-notice" : "text-text-subtle",
+          )}
+        >
+          {flow.requestSize === 0 ? "--" : formatSize(flow.requestSize)}
+        </span>
+      );
+    case "latency":
+      return (
+        <span className={classNames(cell, mono, "text-right text-text-subtle")}>
+          {flow.elapsedHeadersMs == null ? "--" : formatMillis(flow.elapsedHeadersMs)}
+        </span>
+      );
+    case "tls":
+      return (
+        <span className={classNames(cell, mono, "text-text-subtle")}>{tlsVersionOf(flow)}</span>
+      );
+    case "operation": {
+      const operation = operationOf(flow) ?? "";
+      return (
+        <Truncated text={operation}>
+          <span className={classNames(cell, "text-text-subtle")}>{operation}</span>
+        </Truncated>
+      );
+    }
+    default: {
+      if (!isCustomColumn(column)) return <span className={cell} />;
+      const value = customValue(flow, column.slice("field:".length)) ?? "";
+      return (
+        <Truncated text={value}>
+          <span className={classNames(cell, mono, "text-text-subtle")}>{value}</span>
+        </Truncated>
+      );
+    }
   }
 }
 
-function splitPath(url: string): { path: string; query: string } {
+/** The URL's path as the browser reads it, `/` for none, without the query */
+function pathOf(url: string): string {
   try {
-    const u = new URL(url);
-    return { path: u.pathname, query: u.search };
+    return new URL(url).pathname;
   } catch {
-    return { path: url, query: "" };
+    return url;
+  }
+}
+
+/** `14:03:27.481`, in local time */
+function clockTime(at: Date): string {
+  const two = (n: number) => String(n).padStart(2, "0");
+  const ms = String(at.getMilliseconds()).padStart(3, "0");
+  return `${two(at.getHours())}:${two(at.getMinutes())}:${two(at.getSeconds())}.${ms}`;
+}
+
+/**
+ * The items a cell's menu adds for its value: a search term for it, either way, where its column
+ * has a field to match it by, and copying it
+ */
+function useCellActions(): (flow: Flow, column: ColumnId) => DropdownItem[] {
+  const store = useStore();
+  const setSearchText = useSetAtom(setSearchTextAtom);
+  const showToast = useShowToast();
+  return useCallback(
+    (flow: Flow, column: ColumnId) => {
+      const add = (term: string) => {
+        // A search with `OR` at its top is grouped first, so the term narrows all of it.
+        const text = store.get(searchTextAtom).trim();
+        setSearchText(text === "" ? term : `${asOneTerm(text)} ${term}`);
+      };
+      const include = cellFilterTerm(flow, column, false);
+      const exclude = cellFilterTerm(flow, column, true);
+      const value = cellText(flow, column);
+      const items: DropdownItem[] = [];
+      if (include != null && exclude != null) {
+        items.push(
+          { label: "Filter by This Value", icon: "filter", onSelect: () => add(include) },
+          { label: "Exclude This Value", icon: "minus_circle", onSelect: () => add(exclude) },
+        );
+      }
+      if (value !== "") {
+        items.push({
+          label: "Copy Value",
+          icon: "copy",
+          onSelect: async () => {
+            try {
+              await navigator.clipboard.writeText(value);
+              showToast({ message: "Copied value" });
+            } catch (err) {
+              showToast({ message: `Failed to copy value: ${String(err)}`, color: "danger" });
+            }
+          },
+        });
+      }
+      return items;
+    },
+    [store, setSearchText, showToast],
+  );
+}
+
+/** A cell's value as text, as it shows it, for copying */
+function cellText(flow: Flow, column: ColumnId): string {
+  if (isCustomColumn(column)) return customValue(flow, column.slice("field:".length)) ?? "";
+  switch (column) {
+    case "number":
+      return flow.number ? String(flow.number) : "";
+    case "app":
+      return flow.clientName ?? flow.clientPath ?? "";
+    case "method":
+      return flow.method;
+    case "host":
+      return hostOf(flow.url);
+    case "path":
+      return flow.tunnelled ? "" : pathOf(flow.url);
+    case "query":
+      return flow.tunnelled ? "" : (urlParts(flow.url).query ?? "");
+    case "status":
+      return flow.status == null ? "" : String(flow.status);
+    case "type":
+      return flow.contentType ?? "";
+    case "size":
+      return String(flow.responseSize);
+    case "requestSize":
+      return String(flow.requestSize);
+    case "time":
+      return flow.elapsedMs == null ? "" : String(flow.elapsedMs);
+    case "latency":
+      return flow.elapsedHeadersMs == null ? "" : String(flow.elapsedHeadersMs);
+    case "started": {
+      const at = new Date(utcTimestamp(flow.startedAt));
+      return Number.isNaN(at.getTime()) ? "" : at.toISOString();
+    }
+    case "remote":
+      return flow.remoteAddr ?? "";
+    case "version":
+      return flow.upstreamHttpVersion ?? flow.clientHttpVersion;
+    case "tls":
+      return tlsVersionOf(flow);
+    case "operation":
+      return operationOf(flow) ?? "";
   }
 }

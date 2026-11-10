@@ -49,6 +49,7 @@ const flowBase: Flow = {
   grpcMethod: null,
   grpcStatus: null,
   grpcMessage: null,
+  graphqlOperation: null,
   tunnelled: false,
   agentRead: false,
   clientAddr: null,

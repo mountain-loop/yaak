@@ -1,8 +1,10 @@
 import type {
   Flow,
+  FlowSortKey,
   GetProxyStateResponse,
   ModelPayload,
   SavedQuery,
+  SortValue,
 } from "@yaakapp-internal/proxy-lib";
 import { selectedIdsFamily } from "@yaakapp-internal/ui";
 import { atom, type createStore } from "jotai";
@@ -11,10 +13,11 @@ import { followingAtom, SIDEBAR_TREE_ID, selectedFlowAtom } from "./atoms";
 import {
   type ColumnPrefs,
   defaultColumnPrefs,
-  type FlowSort,
   parseColumnPrefs,
+  sortComparator,
   sortFlows,
 } from "./columns";
+import { appendPage, applySortedChanges, pageBoundary, type SortedWindow } from "./sortedWindow";
 import {
   applyChanges,
   emptyWindow,
@@ -158,7 +161,7 @@ const storedColumnPrefsAtom = atomWithStorage<unknown>(
   },
 );
 
-/** Which columns the list shows and how wide, as the person left them */
+/** Which columns the list shows, how wide, and its sort, as the person left them */
 export const columnPrefsAtom = atom(
   (get) => parseColumnPrefs(get(storedColumnPrefsAtom)),
   (get, set, update: ColumnPrefs | ((prev: ColumnPrefs) => ColumnPrefs)) => {
@@ -167,8 +170,14 @@ export const columnPrefsAtom = atom(
   },
 );
 
-/** The list's sort, or null for start time, the order flows arrive in */
-export const flowSortAtom = atom<FlowSort | null>(null);
+/** The list's sort keys, in order, kept with the columns; empty for the order flows arrive in */
+export const flowSortAtom = atom(
+  (get) => get(columnPrefsAtom).sort,
+  (_get, set, sort: FlowSortKey[]) => set(columnPrefsAtom, (p) => ({ ...p, sort })),
+);
+
+/** The flows the list shows while sorted, read from the database in the sort's order */
+export const sortedWindowAtom = atom<SortedWindow | null>(null);
 
 /** A window onto the flows a search covers, loaded from the database as the main one is */
 export interface SearchWindow {
@@ -189,11 +198,25 @@ const shownWindowAtom = atom((get) => get(searchWindowAtom)?.win ?? get(flowWind
 /** The flows loaded for the list, oldest first */
 export const windowFlowsAtom = atom((get) => get(shownWindowAtom).flows);
 
-/** The flows the list shows: oldest first, or in the sort's order, over those loaded */
-export const shownFlowsAtom = atom((get) => sortFlows(get(windowFlowsAtom), get(flowSortAtom)));
+/**
+ * The flows the list shows: oldest first, or in the sort's order from the database. Until a
+ * sort's first page is in, the flows loaded, sorted here, stand in for it.
+ */
+export const shownFlowsAtom = atom((get) => {
+  const sort = get(flowSortAtom);
+  if (sort.length === 0) return get(windowFlowsAtom);
+  const sorted = get(sortedWindowAtom);
+  if (sorted == null || (sorted.loading && sorted.flows.length === 0)) {
+    return sortFlows(get(windowFlowsAtom), sort);
+  }
+  return sorted.flows;
+});
 
 /** Flows in the database the list covers: every one, or those the search matches */
 export const shownTotalAtom = atom((get) => get(shownWindowAtom).total);
+
+/** The search's first page has not arrived, so the list shows none of its flows yet */
+export const searchLoadingAtom = atom((get) => get(searchWindowAtom)?.loading ?? false);
 
 /** Start and id of the oldest flow shown, which loading older flows moves back */
 export const oldestFlowAtom = atom((get) => get(windowFlowsAtom)[0] ?? null);
@@ -288,6 +311,54 @@ export const loadOlderFlowsAtom = atom(null, async (get, set) => {
   }
 });
 
+/** Changes applied while a page of a sort loads, applied again over it once it is in */
+let changesDuringSortedPage: ModelPayload[] | null = null;
+
+/** The key flow events mark matches of the search shown with, or null for all traffic */
+function searchKeyOf(search: SearchWindow | null): string | null {
+  return search?.key ?? null;
+}
+
+/** Loads the sort's next page, after the last flow shown, on scrolling to the bottom */
+export const loadMoreSortedAtom = atom(null, async (get, set) => {
+  const win = get(sortedWindowAtom);
+  const cursor = win?.cursor;
+  if (win == null || win.loading || win.boundary == null || cursor == null) return;
+  if (changesDuringSortedPage != null) return;
+  const changes: ModelPayload[] = [];
+  changesDuringSortedPage = changes;
+  pageStarted();
+  try {
+    const res = await rpc("list_flows", {
+      ...win.query,
+      sort: win.sort,
+      cursor,
+      limit: PAGE_SIZE,
+    });
+    set(sortedWindowAtom, (s) => {
+      if (s?.key !== win.key || s.cursor !== cursor) return s;
+      const kept = new Set(withoutRemoved(res.flows).map((f) => f.id));
+      const merged = appendPage(s, res.flows, res.cursor, PAGE_SIZE, (f) => kept.has(f.id));
+      const compare = sortComparator(s.sort);
+      const key = searchKeyOf(get(searchWindowAtom));
+      return {
+        ...merged,
+        flows: applySortedChanges(merged.flows, merged.boundary, changes, compare, key),
+      };
+    });
+  } catch (err) {
+    // Read the sort again from its top.
+    console.warn("Failed to load more sorted flows", err);
+    reloadSorted?.();
+  } finally {
+    changesDuringSortedPage = null;
+    pageSettled();
+  }
+});
+
+/** Reads the sort's first page again, once `syncFlows` has started */
+let reloadSorted: (() => void) | null = null;
+
 /** `changesFor`, with flows matched against another search sent to be matched again */
 function changesOf(
   search: Pick<SearchWindow, "key" | "query">,
@@ -320,6 +391,7 @@ function matchLater(search: Pick<SearchWindow, "key" | "query">, changes: ModelP
         search: { key: search.key, matches: covered.has(c.model.id) },
       }));
       if (marked.length === 0) return;
+      applySortedChangesTo(store, marked);
       const following = store.get(followingAtom);
       store.set(searchWindowAtom, (s) => {
         if (s?.key !== search.key) return s;
@@ -329,6 +401,19 @@ function matchLater(search: Pick<SearchWindow, "key" | "query">, changes: ModelP
       });
     })
     .catch((err) => console.warn("Failed to match flows", err));
+}
+
+/** Applies flow events to the sorted window, or holds them while its first page loads */
+function applySortedChangesTo(store: Store, changes: ModelPayload[]) {
+  if (store.get(sortedWindowAtom) == null) return;
+  changesDuringSortedPage?.push(...changes);
+  const key = searchKeyOf(store.get(searchWindowAtom));
+  store.set(sortedWindowAtom, (s) => {
+    if (s == null) return s;
+    if (s.loading) return { ...s, buffered: [...s.buffered, ...changes] };
+    const flows = applySortedChanges(s.flows, s.boundary, changes, sortComparator(s.sort), key);
+    return flows === s.flows ? s : { ...s, flows };
+  });
 }
 
 /**
@@ -366,6 +451,7 @@ export function syncFlows(store: Store) {
       const next = applyChanges(s.win, changesOf(s, s.win, changes));
       return { ...s, win: following ? trimWindow(next) : next };
     });
+    applySortedChangesTo(store, changes);
     const selected = store.get(selectedFlowAtom);
     const change = changes.findLast((c) => c.model.id === selected?.id);
     if (change != null) {
@@ -477,6 +563,16 @@ export function syncFlows(store: Store) {
       dropRemovedChanges(buffered, removed);
       return { ...s, win: drop(s.win), buffered };
     });
+    if (changesDuringSortedPage != null) dropRemovedChanges(changesDuringSortedPage, removed);
+    store.set(sortedWindowAtom, (s) => {
+      if (s == null) return s;
+      const buffered = [...s.buffered];
+      dropRemovedChanges(buffered, removed);
+      const flows = s.flows.some((f) => removed.has(f.id))
+        ? s.flows.filter((f) => !removed.has(f.id))
+        : s.flows;
+      return { ...s, flows, buffered };
+    });
     if (removed.has(store.get(selectedFlowAtom)?.id ?? "")) store.set(selectedFlowAtom, null);
     if (recountTimer == null) recountTimer = setTimeout(recount, RECOUNT_MS);
   });
@@ -503,8 +599,61 @@ export function syncFlows(store: Store) {
       })
       .finally(pageSettled);
     loadSearch(store.get(activeQueryAtom));
+    loadSorted();
   }
   reloadFlows = load;
+
+  /**
+   * Reads the first page of the list's sort from the database, over the search shown, or drops
+   * the sorted window when there is no sort. Until the page is in, the flows loaded, sorted here,
+   * stand in for it.
+   */
+  let sortedLoads = 0;
+  function loadSorted() {
+    const sort = store.get(flowSortAtom);
+    if (sort.length === 0) {
+      store.set(sortedWindowAtom, null);
+      return;
+    }
+    const query = store.get(activeQueryAtom);
+    const key = `${++sortedLoads}:${JSON.stringify({ sort, query })}`;
+    store.set(sortedWindowAtom, {
+      key,
+      sort,
+      query,
+      flows: [],
+      boundary: null,
+      cursor: null,
+      loading: true,
+      buffered: [],
+    });
+    const settle = (page: Flow[] | null, cursor: SortValue[] | null) =>
+      store.set(sortedWindowAtom, (s) => {
+        if (s?.key !== key) return s;
+        const ends = pageBoundary(page ?? [], cursor, PAGE_SIZE);
+        const base = page == null ? s.flows : withoutRemoved(page);
+        const search = searchKeyOf(store.get(searchWindowAtom));
+        const compare = sortComparator(sort);
+        const flows = applySortedChanges(base, ends.boundary, s.buffered, compare, search);
+        return { ...s, ...ends, flows, loading: false, buffered: [] };
+      });
+    pageStarted();
+    void rpc("list_flows", { ...query, sort, limit: PAGE_SIZE })
+      .then((res) => settle(res.flows, res.cursor))
+      .catch((err) => {
+        console.warn("Failed to read the sorted flows", err);
+        settle(null, null);
+      })
+      .finally(pageSettled);
+  }
+  reloadSorted = loadSorted;
+  let sortJson = JSON.stringify(store.get(flowSortAtom));
+  store.sub(flowSortAtom, () => {
+    const json = JSON.stringify(store.get(flowSortAtom));
+    if (json === sortJson) return;
+    sortJson = json;
+    loadSorted();
+  });
 
   /**
    * Loads the first page of `query`'s flows into a window of its own, or drops it for null. The
@@ -590,6 +739,7 @@ export function syncFlows(store: Store) {
     if (key === activeKey) return;
     activeKey = key;
     loadSearch(query);
+    loadSorted();
   });
 
   // While another process owns the engine no events come, so new flows are read from the
@@ -652,9 +802,11 @@ const emptyFlowsAtom = atom(null, (_get, set) => {
   set(flowWindowAtom, emptyWindow);
   set(nonSystemTotalAtom, 0);
   set(searchWindowAtom, (s) => (s == null ? s : { ...s, win: emptyWindow, buffered: [] }));
+  set(sortedWindowAtom, (s) =>
+    s == null ? s : { ...s, flows: [], boundary: null, cursor: null, buffered: [] },
+  );
   set(selectedFlowAtom, null);
   set(followingAtom, true);
-  set(flowSortAtom, null);
 });
 
 /**

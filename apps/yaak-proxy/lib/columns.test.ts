@@ -1,35 +1,59 @@
-import type { Flow } from "@yaakapp-internal/proxy-lib";
+import type { Flow, FlowSortKey } from "@yaakapp-internal/proxy-lib";
 import { describe, expect, test } from "vite-plus/test";
 import {
+  addCustomColumn,
+  addSortKey,
+  cellFilterTerm,
   type ColumnPrefs,
+  customPath,
+  customValue,
   defaultColumnPrefs,
   gridTemplate,
   gridWidth,
+  hideOtherColumns,
   nextSort,
+  operationOf,
   parseColumnPrefs,
+  removeCustomColumn,
   resetWidth,
   resetWidths,
   resizeColumn,
+  showOperationFor,
   shownColumns,
   sortFlows,
   toggleColumn,
+  toggleSortKey,
+  urlParts,
 } from "./columns";
 
 function flow(number: number, extra: Partial<Flow> = {}): Flow {
   return {
-    id: `fl_${number}`,
+    id: `fl_${String(number).padStart(3, "0")}`,
     number,
+    startedAt: `2026-11-09T12:00:${String(number).padStart(2, "0")}`,
     url: "https://example.com/",
     method: "GET",
     status: 200,
     error: null,
+    requestSize: 0,
     responseSize: 0,
     elapsedMs: null,
+    elapsedHeadersMs: null,
     contentType: null,
     clientName: null,
     clientBundleId: null,
     clientPath: null,
     clientCwd: null,
+    clientHttpVersion: "HTTP/1.1",
+    upstreamHttpVersion: null,
+    upstreamTlsVersion: null,
+    remoteAddr: null,
+    requestHeaders: [],
+    responseHeaders: [],
+    grpcService: null,
+    grpcMethod: null,
+    graphqlOperation: null,
+    tunnelled: false,
     ...extra,
   } as Flow;
 }
@@ -37,13 +61,14 @@ function flow(number: number, extra: Partial<Flow> = {}): Flow {
 const ids = (prefs: ColumnPrefs) => shownColumns(prefs).map((c) => c.id);
 
 describe("shownColumns", () => {
-  test("shows every visible column, however narrow the list", () => {
+  test("shows every visible column, Query after Path", () => {
     expect(ids(defaultColumnPrefs)).toEqual([
       "number",
       "app",
       "method",
       "host",
       "path",
+      "query",
       "status",
       "type",
       "size",
@@ -51,29 +76,33 @@ describe("shownColumns", () => {
     ]);
   });
 
-  test("follows the picker, and always keeps the path", () => {
+  test("follows the picker, Path included, but keeps the last column", () => {
     let prefs = toggleColumn(defaultColumnPrefs, "remote");
     prefs = toggleColumn(prefs, "type");
     prefs = toggleColumn(prefs, "path");
     expect(ids(prefs)).toContain("remote");
     expect(ids(prefs)).not.toContain("type");
-    expect(ids(prefs)).toContain("path");
+    expect(ids(prefs)).not.toContain("path");
+    const alone = hideOtherColumns(defaultColumnPrefs, "host");
+    expect(ids(alone)).toEqual(["host"]);
+    expect(toggleColumn(alone, "host")).toBe(alone);
+    // Where App has nothing to show, the last other column is the last one.
+    const withApp = hideOtherColumns(defaultColumnPrefs, "app");
+    const both = toggleColumn(withApp, "host");
+    expect(toggleColumn(both, "host", ["app"])).toBe(both);
+    expect(ids(both)).toEqual(["app", "host"]);
+    expect(shownColumns(both, ["app"]).map((c) => c.id)).toEqual(["host"]);
   });
 
-  test("lays out every column at a fixed width, the path included", () => {
+  test("lays out every column at a fixed width", () => {
     let prefs = resizeColumn(defaultColumnPrefs, "host", 240.4);
     prefs = resizeColumn(prefs, "path", 500);
     const columns = shownColumns(prefs);
     const pad = (w: number) => `calc(${w}px + 0.75rem)`;
     expect(gridTemplate(columns)).toBe(
-      ["24px", ...[46, 18, 50, 240, 500, 46, 50, 72, 64].map(pad)].join(" "),
+      ["24px", ...[46, 20, 50, 240, 500, 120, 46, 50, 72, 64].map(pad)].join(" "),
     );
-    expect(gridWidth(columns)).toBe("calc(1110px + 9 * 0.75rem)");
-  });
-
-  test("keeps the host's width in a narrow list", () => {
-    const host = shownColumns(defaultColumnPrefs).find((c) => c.id === "host");
-    expect(host?.current).toBe(190);
+    expect(gridWidth(columns)).toBe("calc(1232px + 10 * 0.75rem)");
   });
 });
 
@@ -81,11 +110,32 @@ describe("column preferences", () => {
   test("persist through storage and drop what no longer applies", () => {
     let prefs = resizeColumn(defaultColumnPrefs, "host", 10);
     prefs = toggleColumn(prefs, "number");
+    prefs = addCustomColumn(prefs, "header.x-cache");
+    prefs = { ...prefs, sort: [{ column: "status", descending: true }] };
     const stored = JSON.parse(JSON.stringify(prefs));
-    expect(parseColumnPrefs(stored)).toEqual({ visible: { number: false }, widths: { host: 60 } });
+    expect(parseColumnPrefs(stored)).toEqual({
+      visible: { number: false, "field:header.x-cache": true },
+      widths: { host: 60 },
+      custom: ["field:header.x-cache"],
+      sort: [{ column: "status", descending: true }],
+    });
     expect(
-      parseColumnPrefs({ visible: { gone: true, size: "yes" }, widths: { time: -1, size: 90 } }),
-    ).toEqual({ visible: {}, widths: { size: 90 } });
+      parseColumnPrefs({
+        visible: { gone: true, size: "yes" },
+        widths: { time: -1, size: 90 },
+        custom: ["field:nope.x", 3, "field:query.page"],
+        sort: [
+          { column: "gone", descending: true },
+          { column: "host" },
+          { column: "time", descending: false },
+        ],
+      }),
+    ).toEqual({
+      visible: {},
+      widths: { size: 90 },
+      custom: ["field:query.page"],
+      sort: [{ column: "time", descending: false }],
+    });
     expect(parseColumnPrefs(null)).toEqual(defaultColumnPrefs);
     expect(resetWidths(prefs).widths).toEqual({});
   });
@@ -95,61 +145,162 @@ describe("column preferences", () => {
     prefs = resizeColumn(prefs, "path", 400);
     expect(resetWidth(prefs, "path").widths).toEqual({ host: 300 });
   });
+
+  test("custom columns are added at the end and removed with their settings", () => {
+    let prefs = addCustomColumn(defaultColumnPrefs, "res.header.x-cache");
+    prefs = resizeColumn(prefs, "field:res.header.x-cache", 200);
+    expect(ids(prefs).at(-1)).toBe("field:res.header.x-cache");
+    prefs = removeCustomColumn(prefs, "field:res.header.x-cache");
+    expect(prefs).toEqual(defaultColumnPrefs);
+  });
+
+  test("Operation shows itself once, unless the person set it", () => {
+    const grpc = flow(1, { grpcService: "pkg.Greeter", grpcMethod: "SayHello" });
+    const anonymous = flow(2, { graphqlOperation: "" });
+    expect(showOperationFor(defaultColumnPrefs, [flow(3), anonymous])).toBe(defaultColumnPrefs);
+    expect(showOperationFor(defaultColumnPrefs, [grpc]).visible.operation).toBe(true);
+    const hidden = { ...defaultColumnPrefs, visible: { operation: false } };
+    expect(showOperationFor(hidden, [grpc])).toBe(hidden);
+  });
 });
 
 describe("sorting", () => {
-  test("sorts numbers largest first and names from A, reverses, then goes back to start", () => {
-    expect(nextSort(null, "size")).toEqual({ column: "size", descending: true });
-    expect(nextSort(null, "host")).toEqual({ column: "host", descending: false });
-    expect(nextSort({ column: "host", descending: false }, "host")).toEqual({
-      column: "host",
-      descending: true,
-    });
-    expect(nextSort({ column: "host", descending: true }, "host")).toBeNull();
-    expect(nextSort({ column: "size", descending: true }, "size")).toEqual({
-      column: "size",
-      descending: false,
-    });
-    expect(nextSort({ column: "size", descending: false }, "size")).toBeNull();
-    // Another column starts over.
-    expect(nextSort({ column: "host", descending: true }, "size")).toEqual({
-      column: "size",
-      descending: true,
-    });
+  const one = (column: FlowSortKey["column"], descending: boolean) => [{ column, descending }];
+
+  test("a click sorts by a column alone, reverses it, then goes back to arrival order", () => {
+    expect(nextSort([], "size")).toEqual(one("size", true));
+    expect(nextSort([], "host")).toEqual(one("host", false));
+    expect(nextSort(one("host", false), "host")).toEqual(one("host", true));
+    expect(nextSort(one("host", true), "host")).toEqual([]);
+    expect(nextSort(one("size", true), "size")).toEqual(one("size", false));
+    expect(nextSort(one("size", false), "size")).toEqual([]);
+    // Another column, or a sort on several, starts over.
+    expect(nextSort(one("host", true), "size")).toEqual(one("size", true));
+    const two = [...one("host", false), ...one("size", true)];
+    expect(nextSort(two, "host")).toEqual(one("host", false));
   });
 
-  test("sorts the loaded flows, those without a value lowest, ties in arrival order", () => {
-    const a = flow(1, { responseSize: 10, elapsedMs: 5, url: "https://b.com/" });
-    const b = flow(2, { responseSize: 300, elapsedMs: null, url: "https://a.com/" });
-    const c = flow(3, { responseSize: 10, elapsedMs: 50, url: "https://c.com/" });
-    const d = flow(4, { error: "DNS lookup failed", status: null, url: "https://a.com/" });
-    const flows = [a, b, c, d];
-    const by = (column: Parameters<typeof nextSort>[1], descending: boolean) =>
-      sortFlows(flows, { column, descending }).map((f) => f.number);
+  test("Option-click adds a key ascending, reverses it, then takes it out", () => {
+    let sort = toggleSortKey(one("status", true), "host");
+    expect(sort).toEqual([...one("status", true), ...one("host", false)]);
+    sort = toggleSortKey(sort, "host");
+    expect(sort).toEqual([...one("status", true), ...one("host", true)]);
+    expect(toggleSortKey(sort, "host")).toEqual(one("status", true));
+    expect(addSortKey(sort, "status", false)).toEqual([
+      ...one("status", false),
+      ...one("host", true),
+    ]);
+    expect(addSortKey([], "time", true)).toEqual(one("time", true));
+  });
+
+  // The same flows and orders as `a_sort_on_several_columns_pages_in_its_order` in the lib's
+  // `flows.rs`, so the app places a flow where the database would.
+  const flows = [
+    flow(0, { url: "https://B.com/x", status: 200 }),
+    flow(1, { url: "https://a.com/y", status: 404 }),
+    flow(2, { url: "https://a.com/z", status: null }),
+    flow(3, { url: "https://c.com/", status: 200 }),
+    flow(4, { url: "https://a.com/", status: null, error: "boom" }),
+    flow(5, { url: "https://b.com/q", status: 200 }),
+    flow(6, { url: "https://A.com/", status: 404 }),
+    flow(7, { url: "https://c.com/", status: 200 }),
+  ];
+  const numbers = (sort: FlowSortKey[]) => sortFlows(flows, sort).map((f) => f.number);
+
+  test("sorts on several columns as the database does", () => {
+    const status = [...one("status", true), ...one("host", false)];
+    expect(numbers(status)).toEqual([1, 6, 0, 5, 3, 7, 4, 2]);
+    const ascending = [...one("status", false), ...one("host", false)];
+    expect(numbers(ascending)).toEqual([2, 4, 0, 5, 3, 7, 1, 6]);
+    expect(numbers(one("query", true))).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(sortFlows(flows, [])).toBe(flows);
+  });
+
+  test("sizes, times and the rest put flows without a value lowest", () => {
+    const a = flow(1, { responseSize: 10, elapsedMs: 5, requestSize: 3, elapsedHeadersMs: 2 });
+    const b = flow(2, { responseSize: 300, elapsedMs: null, requestSize: 0 });
+    const c = flow(3, { responseSize: 10, elapsedMs: 50, elapsedHeadersMs: 40 });
+    const d = flow(4, { error: "DNS lookup failed", status: null, responseSize: 99 });
+    const four = [a, b, c, d];
+    const by = (column: FlowSortKey["column"], descending: boolean) =>
+      sortFlows(four, one(column, descending)).map((f) => f.number);
     expect(by("size", true)).toEqual([2, 1, 3, 4]);
     expect(by("size", false)).toEqual([4, 1, 3, 2]);
     expect(by("time", true)).toEqual([3, 1, 2, 4]);
-    expect(by("time", false)).toEqual([2, 4, 1, 3]);
-    expect(by("host", false)).toEqual([2, 4, 1, 3]);
+    expect(by("latency", true)).toEqual([3, 1, 2, 4]);
+    expect(by("requestSize", true)).toEqual([1, 2, 3, 4]);
     expect(by("number", true)).toEqual([4, 3, 2, 1]);
     // Failures sort below every status.
     expect(by("status", true)).toEqual([1, 2, 3, 4]);
     expect(by("status", false)).toEqual([4, 1, 2, 3]);
-    expect(sortFlows(flows, null)).toBe(flows);
+  });
+});
+
+describe("values", () => {
+  test("splits URLs as the lib does", () => {
+    expect(urlParts("https://a.com:8080/v1/x?page=2&q=1#top")).toEqual({
+      authority: "a.com:8080",
+      path: "/v1/x",
+      query: "page=2&q=1",
+    });
+    expect(urlParts("https://a.com?x")).toEqual({ authority: "a.com", path: "", query: "x" });
+    expect(urlParts("bank.example.com:443")).toEqual({
+      authority: "bank.example.com:443",
+      path: "",
+      query: null,
+    });
   });
 
-  test("flips flows with no status, type, size or time to the other end", () => {
-    const done = flow(1, { status: 200, contentType: "text/html", responseSize: 5, elapsedMs: 9 });
-    const pending = flow(2, { status: null, contentType: null, responseSize: 0, elapsedMs: null });
-    const cancelled = flow(3, { status: null, cancelled: true, contentType: "" });
-    const flows = [done, pending, cancelled];
-    for (const column of ["status", "type", "size", "time"] as const) {
-      expect(sortFlows(flows, { column, descending: true }).map((f) => f.number)).toEqual([
-        1, 2, 3,
-      ]);
-      expect(sortFlows(flows, { column, descending: false }).map((f) => f.number)).toEqual([
-        2, 3, 1,
-      ]);
+  test("reads a custom column's path from what was typed", () => {
+    expect(customPath("@header.X-Request-Id:")).toBe("header.x-request-id");
+    expect(customPath("query.page")).toBe("query.page");
+    expect(customPath(" res.header.x-cache ")).toBe("res.header.x-cache");
+    expect(customPath("@host")).toBeNull();
+    expect(customPath("header.")).toBeNull();
+    expect(customPath("header.a b")).toBeNull();
+    expect(customPath("query.filter[status]")).toBeNull();
+  });
+
+  test("a custom column shows the first value, the response's header before the request's", () => {
+    const f = flow(1, {
+      url: "https://a.com/?Page=2&page=3",
+      requestHeaders: [
+        { name: "X-Cache", value: "req" },
+        { name: "Accept", value: "a" },
+        { name: "accept", value: "b" },
+      ],
+      responseHeaders: [{ name: "x-cache", value: "HIT" }],
+    });
+    expect(customValue(f, "header.x-cache")).toBe("HIT");
+    expect(customValue(f, "req.header.x-cache")).toBe("req");
+    expect(customValue(f, "header.accept")).toBe("a");
+    expect(customValue(f, "query.page")).toBe("2");
+    expect(customValue(f, "query.nope")).toBeNull();
+  });
+
+  test("a cell's filter terms, where its column has a field to match", () => {
+    const f = flow(1, {
+      url: "https://api.stripe.com:443/v1/charges?x=1",
+      status: 404,
+      clientName: "Google Chrome",
+      contentType: "application/json; charset=utf-8",
+      responseHeaders: [{ name: "X-Cache", value: "HIT" }],
+    });
+    expect(cellFilterTerm(f, "host", false)).toBe("@host:api.stripe.com");
+    expect(cellFilterTerm(f, "status", true)).toBe("-@status:404");
+    expect(cellFilterTerm(f, "app", false)).toBe('@app:"Google Chrome"');
+    expect(cellFilterTerm(f, "path", false)).toBe("@path:/v1/charges");
+    expect(cellFilterTerm(f, "type", false)).toBe("@type:application/json");
+    expect(cellFilterTerm(f, "field:header.x-cache", false)).toBe("@header.x-cache:HIT");
+    for (const column of ["number", "size", "time", "query", "started"] as const) {
+      expect(cellFilterTerm(f, column, false)).toBeNull();
     }
+    const grpc = flow(2, { grpcService: "pkg.Greeter", grpcMethod: "SayHello" });
+    expect(operationOf(grpc)).toBe("pkg.Greeter/SayHello");
+    expect(cellFilterTerm(grpc, "operation", true)).toBe(
+      "-(@grpc.service:pkg.Greeter @grpc.method:SayHello)",
+    );
+    const graphql = flow(3, { graphqlOperation: "GetUser" });
+    expect(cellFilterTerm(graphql, "operation", false)).toBe("@graphql.operation:GetUser");
   });
 });

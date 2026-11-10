@@ -37,6 +37,7 @@ pub const FLAGS: &[&str] = &[
     "ws",
     "sse",
     "grpc",
+    "graphql",
 ];
 
 /// Flags `@is:` will take once flows have what they need. Valid, matching nothing.
@@ -100,6 +101,14 @@ pub fn schema() -> &'static Schema {
                 field("id", number(), "Flow number", "@id:>1200"),
                 field("cwd", text(), "Working folder", "@cwd:myapp"),
                 field("pid", number(), "Process id", "@pid:4121"),
+                field(
+                    "graphql.operation",
+                    text(),
+                    "GraphQL operation name",
+                    "@graphql.operation:GetUser",
+                ),
+                field("grpc.service", text(), "gRPC service", "@grpc.service:pkg.Greeter"),
+                field("grpc.method", text(), "gRPC method", "@grpc.method:SayHello"),
                 field("body", text(), "Not yet", ""),
                 field("req.body", text(), "Not yet", ""),
                 field("res.body", text(), "Not yet", ""),
@@ -471,9 +480,10 @@ const SEEN_VALUES: i64 = 200;
 const HEADER_VALUES: i64 = 20;
 
 /// The values seen for a field path, for completing it, most recent first: hosts, methods,
-/// statuses, content types, protocols, schemes, apps, working folders, `@is` flags, and header
-/// names, or a header's values when it has had few. Nothing for fields whose values are
-/// near-unique (URLs, paths, ids, sizes, times, query parameters).
+/// statuses, content types, protocols, schemes, apps, working folders, GraphQL operations, gRPC
+/// services and methods, `@is` flags, header names, or a header's values when it has had few,
+/// and query parameter names. Nothing for fields whose values are near-unique (URLs, paths, ids,
+/// sizes, times, query parameter values).
 pub fn seen_values(db: &crate::db::ProxyQueryManager, path: &str) -> Result<Vec<String>, String> {
     let path = path.to_lowercase();
     let column = match path.as_str() {
@@ -486,6 +496,10 @@ pub fn seen_values(db: &crate::db::ProxyQueryManager, path: &str) -> Result<Vec<
         "scheme" => "url_scheme(url)",
         "app" => "client_name",
         "cwd" => "folder_name(client_cwd)",
+        "graphql.operation" => "graphql_operation",
+        "grpc.service" => "grpc_service",
+        "grpc.method" => "grpc_method",
+        "query" => return seen_query_names(db),
         "header" | "req.header" | "res.header" => {
             return seen_headers(db, &path, None);
         }
@@ -522,6 +536,17 @@ fn newest_flows() -> String {
         "SELECT rowid AS rid, * FROM flows WHERE rowid > (SELECT coalesce(max(max_rowid), 0) \
         FROM flow_clear_mark) ORDER BY rowid DESC LIMIT {SEEN_FLOWS}"
     )
+}
+
+/// The names of the query parameters seen, for completing `@query.`.
+fn seen_query_names(db: &crate::db::ProxyQueryManager) -> Result<Vec<String>, String> {
+    let sql = format!(
+        "SELECT q_lower(json_extract(kv.value, '$.name')) AS name FROM ({}) AS f, \
+        json_each(url_query_json(f.url)) AS kv WHERE name IS NOT NULL AND name != '' \
+        GROUP BY name ORDER BY max(f.rid) DESC LIMIT {SEEN_VALUES}",
+        newest_flows()
+    );
+    select_strings(db, &sql, None)
 }
 
 /// Header names under a map, or one header's values when it has had few.
@@ -723,6 +748,16 @@ pub fn url_sidebar_path(url: &str) -> Option<String> {
     (normalized != path && !path.is_empty()).then_some(normalized)
 }
 
+/// The authority as written, user info and port included: the list's Host column.
+pub fn url_authority(url: &str) -> &str {
+    url_parts(url).authority
+}
+
+/// The query string as written, without its `?`: the list's Query column.
+pub fn url_query_string(url: &str) -> Option<&str> {
+    url_parts(url).query
+}
+
 /// The query's parameters, decoded, their names lowercased.
 pub fn url_query(url: &str) -> Vec<(String, String)> {
     let Some(query) = url_parts(url).query else {
@@ -784,6 +819,7 @@ fn flags(flow: &Flow) -> Vec<&'static str> {
         "ws" => stream == Some("websocket"),
         "sse" => stream == Some("sse"),
         "grpc" => matches!(stream, Some("grpc" | "grpc_web")),
+        "graphql" => flow.graphql_operation.is_some(),
         _ => false,
     };
     FLAGS.iter().copied().filter(|f| set(f)).collect()
@@ -862,6 +898,16 @@ pub fn document(flow: &Flow) -> Document {
     if let Some(pid) = flow.client_pid {
         add("pid", num(f64::from(pid)));
     }
+    // An anonymous operation is GraphQL with no name: `@is:graphql`, not `@graphql.operation:*`.
+    if let Some(op) = flow.graphql_operation.as_deref().filter(|op| !op.is_empty()) {
+        add("graphql.operation", text(op));
+    }
+    if let Some(service) = &flow.grpc_service {
+        add("grpc.service", text(service));
+    }
+    if let Some(method) = &flow.grpc_method {
+        add("grpc.method", text(method));
+    }
     for (side, headers) in [
         ("req", &flow.request_headers),
         ("res", &flow.response_headers),
@@ -919,7 +965,7 @@ impl FlowColumns {
     }
 
     /// `name`, or what the model reads in its place when the table lacks it.
-    fn col(&self, name: &str) -> String {
+    pub(crate) fn col(&self, name: &str) -> String {
         if self.0.contains(name) {
             return name.to_string();
         }
@@ -1005,6 +1051,9 @@ impl Sql<'_> {
             "req.size" => (vec!["request_size".into()], true),
             "duration" => (vec!["elapsed_ms".into()], true),
             "pid" => (vec![c("client_pid")], true),
+            "graphql.operation" => (vec![format!("nullif({}, '')", c("graphql_operation"))], false),
+            "grpc.service" => (vec![c("grpc_service")], false),
+            "grpc.method" => (vec![c("grpc_method")], false),
             "app" => {
                 let (bundle, path, name) =
                     (c("client_bundle_id"), c("client_path"), c("client_name"));
@@ -1103,6 +1152,7 @@ impl Sql<'_> {
             "ws" => format!("{} = 'websocket'", c("stream_kind")),
             "sse" => format!("{} = 'sse'", c("stream_kind")),
             "grpc" => format!("{} IN ('grpc', 'grpc_web')", c("stream_kind")),
+            "graphql" => format!("{} IS NOT NULL", c("graphql_operation")),
             _ => "0".into(),
         }
     }
@@ -1213,6 +1263,12 @@ pub(crate) fn add_functions(conn: &rusqlite::Connection) -> rusqlite::Result<()>
     })?;
     conn.create_scalar_function("url_path", 1, flags, move |ctx| {
         Ok(url_path(&text_arg(ctx, 0)?.unwrap_or_default()).map(str::to_string))
+    })?;
+    conn.create_scalar_function("url_authority", 1, flags, move |ctx| {
+        Ok(url_authority(&text_arg(ctx, 0)?.unwrap_or_default()).to_string())
+    })?;
+    conn.create_scalar_function("url_query_string", 1, flags, move |ctx| {
+        Ok(url_query_string(&text_arg(ctx, 0)?.unwrap_or_default()).map(str::to_string))
     })?;
     conn.create_scalar_function("url_sidebar_path", 1, flags, move |ctx| {
         Ok(url_sidebar_path(&text_arg(ctx, 0)?.unwrap_or_default()))

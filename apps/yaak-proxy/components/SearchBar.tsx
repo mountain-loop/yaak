@@ -23,6 +23,7 @@ import {
   useState,
 } from "react";
 import { useRpcQuery } from "../hooks/useRpcQuery";
+import { useExportShownHar } from "../lib/flowActions";
 import { loadSeenValues, savedCompletions, searchProblems } from "../lib/searchBox";
 import {
   allTrafficTotalAtom,
@@ -54,6 +55,7 @@ export const SearchBar = memo(function SearchBar() {
   const total = useAtomValue(allTrafficTotalAtom);
   const store = useStore();
   const setSavedDialog = useSetAtom(savedSearchDialogAtom);
+  const exportShown = useExportShownHar();
   // Nothing to search while captured traffic is locked.
   const locked = useAtomValue(lockedAtom) != null;
   const schema = useRpcQuery("query_schema", {}, { staleTime: Infinity }).data?.schema;
@@ -179,6 +181,7 @@ export const SearchBar = memo(function SearchBar() {
                       leftSlot: <Icon icon="bookmark" />,
                       onSelect: () => setSavedDialog({ mode: "save", query: text.trim() }),
                     },
+                    exportShown(),
                   ]}
                 >
                   <IconButton

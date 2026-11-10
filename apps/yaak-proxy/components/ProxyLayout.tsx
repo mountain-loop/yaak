@@ -12,8 +12,10 @@ import { useState } from "react";
 import { useLocalStorage } from "react-use";
 import { flowLayoutAtom } from "../lib/atoms";
 import { setupIncomplete } from "../lib/firstRun";
+import { useMenuExportHar } from "../lib/flowActions";
 import { lockedAtom, noFlowsAtom, systemProxyEverOnAtom } from "../lib/store";
 import { getOsType } from "../lib/tauri";
+import { AddColumnDialog } from "./AddColumnDialog";
 import { ClearFlowsButton } from "./ClearFlowsButton";
 import { FirstRun } from "./FirstRun";
 import { FlowDetail } from "./FlowDetail";
@@ -32,6 +34,7 @@ export function ProxyLayout() {
   const os = getOsType();
   const [flowLayout, setFlowLayout] = useAtom(flowLayoutAtom);
   const openSettings = useOpenSettings();
+  useMenuExportHar();
   const [sidebarWidth, setSidebarWidth] = useLocalStorage("sidebar_width", 250);
   const [sidebarHidden, setSidebarHidden] = useLocalStorage("sidebar_hidden", false);
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useLocalStorage(
@@ -164,6 +167,7 @@ export function ProxyLayout() {
       </SidebarLayout>
       <SaveDialog />
       <SavedSearchDialog />
+      <AddColumnDialog />
       <HelperDialog />
       <SettingsWindow />
       <Toasts />

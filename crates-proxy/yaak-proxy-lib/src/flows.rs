@@ -34,6 +34,152 @@ pub struct FlowFilter {
     /// through older traffic.
     #[ts(optional)]
     pub before: Option<String>,
+    /// The order to list in, the list's column sort: each key in turn, then by start and id,
+    /// oldest first. Empty lists newest first, as without it. With keys, `before` does not
+    /// apply; `cursor` pages instead.
+    #[ts(optional, as = "Option<Vec<FlowSortKey>>")]
+    pub sort: Vec<FlowSortKey>,
+    /// Only flows after these values in `sort`'s order, for paging through a sort: the `cursor`
+    /// of the page before, the sort values of its last flow as it was read, so a change to that
+    /// flow since does not move where the next page starts.
+    #[ts(optional, as = "Option<Vec<SortValue>>")]
+    pub cursor: Option<Vec<SortValue>>,
+}
+
+/// One of a flow's sort values, as the database sorted it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(untagged)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub enum SortValue {
+    Int(#[ts(type = "number")] i64),
+    Text(String),
+}
+
+impl SortValue {
+    fn from_sql(value: Value) -> Self {
+        match value {
+            Value::Integer(i) => Self::Int(i),
+            Value::Real(f) => Self::Int(f as i64),
+            Value::Text(t) => Self::Text(t),
+            Value::Null | Value::Blob(_) => Self::Text(String::new()),
+        }
+    }
+
+    fn to_sql(&self) -> Value {
+        match self {
+            Self::Int(i) => Value::Integer(*i),
+            Self::Text(t) => Value::Text(t.clone()),
+        }
+    }
+}
+
+/// A column the list sorts by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub enum SortColumn {
+    Number,
+    App,
+    Method,
+    Host,
+    Path,
+    Query,
+    Status,
+    Type,
+    Size,
+    RequestSize,
+    Time,
+    Latency,
+    Started,
+    Remote,
+    Version,
+    Tls,
+    Operation,
+}
+
+/// One key of a sort.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct FlowSortKey {
+    pub column: SortColumn,
+    pub descending: bool,
+}
+
+/// What an empty number sorts as: below every value, as an empty text's `''` is.
+const EMPTY_NUMBER: &str = "-1000000000000000000";
+
+impl SortColumn {
+    /// The value the column sorts by, in SQL, never NULL: empty values (none, `''` or `0`)
+    /// lowest, text without regard to ASCII case. `columnSortKey` in the app's
+    /// `lib/columns.ts` makes the same values for flows it places itself.
+    fn sql(self, columns: &FlowColumns) -> String {
+        let c = |n: &str| columns.col(n);
+        let number = |v: &str| format!("coalesce(nullif({v}, 0), {EMPTY_NUMBER})");
+        let text = |v: &str| format!("(coalesce({v}, '') COLLATE NOCASE)");
+        match self {
+            Self::Number => "flows.rowid".into(),
+            Self::App => text(&format!(
+                "coalesce({}, {}, {})",
+                c("client_name"),
+                c("client_bundle_id"),
+                c("client_path")
+            )),
+            Self::Method => text("method"),
+            Self::Host => text("url_authority(url)"),
+            Self::Path => text("url_path(url)"),
+            Self::Query => text("url_query_string(url)"),
+            Self::Status => {
+                format!("CASE WHEN error IS NOT NULL THEN -1 ELSE {} END", number("status"))
+            }
+            Self::Type => text("content_type"),
+            Self::Size => format!(
+                "CASE WHEN error IS NOT NULL AND status IS NULL THEN {EMPTY_NUMBER} ELSE {} END",
+                number("response_size")
+            ),
+            Self::RequestSize => number("request_size"),
+            Self::Time => number("elapsed_ms"),
+            Self::Latency => number("elapsed_headers_ms"),
+            Self::Started => "started_at".into(),
+            Self::Remote => text("remote_addr"),
+            Self::Version => text("coalesce(upstream_http_version, client_http_version)"),
+            Self::Tls => text(&c("upstream_tls_version")),
+            Self::Operation => {
+                let (service, method) = (c("grpc_service"), c("grpc_method"));
+                text(&format!(
+                    "CASE WHEN {service} IS NOT NULL AND {method} IS NOT NULL \
+                    THEN {service} || '/' || {method} ELSE {} END",
+                    c("graphql_operation")
+                ))
+            }
+        }
+    }
+}
+
+/// A sort's keys in SQL, each with whether it descends, then start and id, ascending.
+fn sort_terms(sort: &[FlowSortKey], columns: &FlowColumns) -> Vec<(String, bool)> {
+    sort.iter()
+        .map(|k| (k.column.sql(columns), k.descending))
+        .chain([
+            ("started_at".to_string(), false),
+            ("flows.id".to_string(), false),
+        ])
+        .collect()
+}
+
+/// The `ORDER BY` for a sort, and the condition for the flows after `cursor`'s values in it:
+/// each key equal up to one that is past the cursor's.
+fn sort_after(terms: &[(String, bool)], cursor: &[Value]) -> (String, Vec<Value>) {
+    let mut params = Vec::new();
+    let mut alternatives = Vec::new();
+    for (i, (term, descending)) in terms.iter().enumerate() {
+        let mut parts: Vec<String> = terms[..i].iter().map(|(t, _)| format!("{t} = ?")).collect();
+        params.extend(cursor[..i].iter().cloned());
+        parts.push(format!("{term} {} ?", if *descending { "<" } else { ">" }));
+        params.push(cursor[i].clone());
+        alternatives.push(format!("({})", parts.join(" AND ")));
+    }
+    (format!("({})", alternatives.join(" OR ")), params)
 }
 
 impl FlowFilter {
@@ -197,20 +343,50 @@ pub fn page(
     db: &ProxyQueryManager,
     filter: &FlowFilter,
 ) -> Result<(Vec<Flow>, usize, Option<usize>), String> {
+    let page = sorted_page(db, filter)?;
+    Ok((page.flows, page.total, page.matching))
+}
+
+/// A page of flows, as [`page`] reads it, with where a sort's next page starts.
+pub struct Page {
+    pub flows: Vec<Flow>,
+    pub total: usize,
+    pub matching: Option<usize>,
+    /// The sort values of the last flow, for the next page's `cursor`. None without a sort.
+    pub cursor: Option<Vec<SortValue>>,
+}
+
+/// [`page`], with the cursor for a sort's next page.
+pub fn sorted_page(db: &ProxyQueryManager, filter: &FlowFilter) -> Result<Page, String> {
     db.with_conn(|c| {
         let tx = c.conn().resolve().unchecked_transaction().map_err(|e| e.to_string())?;
-        let flows = list_in(&tx, filter)?;
+        let (flows, cursor) = list_and_cursor(&tx, filter)?;
         let total = count_in(&tx)?;
         let matching = if filter.narrows() { Some(count_matching(&tx, filter)?) } else { None };
         tx.commit().map_err(|e| e.to_string())?;
-        Ok((flows, total, matching))
+        Ok(Page { flows, total, matching, cursor })
     })
 }
 
 fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
+    list_and_cursor(conn, filter).map(|(flows, _)| flows)
+}
+
+/// The flows `filter` covers and, sorted, the sort values of the last one.
+fn list_and_cursor(
+    conn: &rusqlite::Connection,
+    filter: &FlowFilter,
+) -> Result<(Vec<Flow>, Option<Vec<SortValue>>), String> {
     let (condition, mut params) = filter.condition_in(conn);
-    // The rowid, for the flow's number.
-    let mut sql = format!("SELECT rowid, * FROM flows WHERE {condition}");
+    let terms = if filter.sort.is_empty() {
+        Vec::new()
+    } else {
+        sort_terms(&filter.sort, &FlowColumns::of(conn))
+    };
+    // The rowid, for the flow's number, and a sort's values, for its cursor.
+    let keys: String =
+        terms.iter().enumerate().map(|(i, (t, _))| format!(", {t} AS sort_{i}")).collect();
+    let mut sql = format!("SELECT rowid, *{keys} FROM flows WHERE {condition}");
     push_clear_mark(conn, &mut sql, &mut params);
     if let Some(id) = &filter.after {
         // By rowid, which only grows as flows are written.
@@ -220,24 +396,53 @@ fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>
         sql.push_str(" AND rowid > ?");
         params.push(rowid.into());
     }
-    if let Some(id) = &filter.before {
-        let started_at: Value = conn
-            .query_row("SELECT started_at FROM flows WHERE id = ?", [id], |r| r.get(0))
-            .map_err(|_| format!("No flow {id}"))?;
-        sql.push_str(" AND (started_at, id) < (?, ?)");
-        params.push(started_at);
-        params.push(id.clone().into());
+    if !terms.is_empty() {
+        if let Some(cursor) = &filter.cursor {
+            if cursor.len() != terms.len() {
+                return Err("The cursor is not for this sort".into());
+            }
+            let cursor: Vec<Value> = cursor.iter().map(SortValue::to_sql).collect();
+            let (after, after_params) = sort_after(&terms, &cursor);
+            sql.push_str(" AND ");
+            sql.push_str(&after);
+            params.extend(after_params);
+        }
+        let order: Vec<String> = terms
+            .iter()
+            .map(|(t, descending)| format!("{t} {}", if *descending { "DESC" } else { "ASC" }))
+            .collect();
+        sql.push_str(" ORDER BY ");
+        sql.push_str(&order.join(", "));
+    } else {
+        if let Some(id) = &filter.before {
+            let started_at: Value = conn
+                .query_row("SELECT started_at FROM flows WHERE id = ?", [id], |r| r.get(0))
+                .map_err(|_| format!("No flow {id}"))?;
+            sql.push_str(" AND (started_at, id) < (?, ?)");
+            params.push(started_at);
+            params.push(id.clone().into());
+        }
+        sql.push_str(" ORDER BY started_at DESC, id DESC");
     }
-    sql.push_str(" ORDER BY started_at DESC, id DESC");
     if let Some(limit) = filter.limit {
         sql.push_str(" LIMIT ?");
         params.push((limit.min(i64::MAX as usize) as i64).into());
     }
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map(rusqlite::params_from_iter(params), Flow::from_row)
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    let mut cursor = None;
+    let mut flows = Vec::new();
+    let mut rows = stmt.query(rusqlite::params_from_iter(params)).map_err(|e| e.to_string())?;
+    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        flows.push(Flow::from_row(row).map_err(|e| e.to_string())?);
+        if !terms.is_empty() {
+            let values = (0..terms.len())
+                .map(|i| row.get::<_, Value>(format!("sort_{i}").as_str()).map(SortValue::from_sql))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            cursor = Some(values);
+        }
+    }
+    Ok((flows, cursor))
 }
 
 fn count_matching(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<usize, String> {
@@ -1033,6 +1238,66 @@ mod tests {
         let (_, _, matching) =
             page(&db, &FlowFilter { limit: Some(1), ..Default::default() }).unwrap();
         assert_eq!(matching, None);
+    }
+
+    /// A sort on several columns orders by each in turn, text without regard to case, empty
+    /// values lowest and start as the last tiebreak, and pages through that order from a cursor.
+    #[test]
+    fn a_sort_on_several_columns_pages_in_its_order() {
+        let (_dir, db) = db_of(vec![
+            flow("https://B.com/x", "GET", Some(200), None),
+            flow("https://a.com/y", "GET", Some(404), None),
+            flow("https://a.com/z", "GET", None, None),
+            flow("https://c.com/", "GET", Some(200), None),
+            flow("https://a.com/", "GET", None, Some("boom")),
+            flow("https://b.com/q", "GET", Some(200), None),
+            flow("https://A.com/", "GET", Some(404), None),
+            flow("https://c.com/", "GET", Some(200), None),
+        ]);
+        let key = |column, descending| FlowSortKey { column, descending };
+        let read = |sort: &[FlowSortKey], cursor: Option<Vec<SortValue>>, limit| {
+            let filter = FlowFilter {
+                sort: sort.to_vec(),
+                cursor,
+                limit: Some(limit),
+                ..Default::default()
+            };
+            let page = sorted_page(&db, &filter).unwrap();
+            let ids: Vec<String> = page.flows.iter().map(|f| f.id[3..].to_string()).collect();
+            (ids, page.cursor)
+        };
+        let sorted = |sort: &[FlowSortKey]| read(sort, None, 100).0;
+        let by_status = [key(SortColumn::Status, true), key(SortColumn::Host, false)];
+        let all = sorted(&by_status);
+        assert_eq!(all, ["001", "006", "000", "005", "003", "007", "004", "002"]);
+        let mut paged: Vec<String> = Vec::new();
+        let mut cursor = None;
+        loop {
+            let (page, next) = read(&by_status, cursor.clone(), 3);
+            if page.is_empty() {
+                break;
+            }
+            cursor = next;
+            paged.extend(page);
+        }
+        assert_eq!(paged, all);
+
+        // The last flow of a page changing does not move where the next page starts.
+        let (first, cursor) = read(&by_status, None, 3);
+        assert_eq!(first, ["001", "006", "000"]);
+        db.with_conn(|c| {
+            c.conn().resolve().execute("UPDATE flows SET status = 100 WHERE id = 'fl_000'", [])
+        })
+        .unwrap();
+        let (next, _) = read(&by_status, cursor, 3);
+        assert_eq!(next, ["005", "003", "007"]);
+
+        let ascending = [key(SortColumn::Status, false), key(SortColumn::Host, false)];
+        assert_eq!(sorted(&ascending), ["002", "004", "000", "005", "003", "007", "001", "006"]);
+
+        // Query alone: the flows without one first, in start order.
+        let all = sorted(&[key(SortColumn::Query, true)]);
+        assert_eq!(all, ["000", "001", "002", "003", "004", "005", "006", "007"]);
     }
 
     #[test]
