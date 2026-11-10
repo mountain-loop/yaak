@@ -31,8 +31,9 @@ import {
   ALL_ID,
   APPS_ID,
   DOMAINS_ID,
+  exclusiveAll,
   itemsById,
-  queryInText,
+  rowsForFilter,
   SAVED_ID,
   selectionText,
 } from "./sidebarTree";
@@ -291,45 +292,49 @@ export function syncSidebarSelection(store: Store) {
   const selectedAtom = selectedIdsFamily(SIDEBAR_TREE_ID);
   let syncing = false;
 
-  function keepRows() {
-    if (syncing) return;
-    const text = store.get(appliedFilterAtom);
-    const items = itemsById(store.get(sidebarTreeAtom));
+  function select(next: string[]) {
     const ids = store.get(selectedAtom);
-    const kept = ids.filter((id) => {
-      const item = items.get(id);
-      return item != null && item.query !== "" && queryInText(item.query, text);
-    });
-    const next = text.trim() === "" ? [ALL_ID] : kept;
     if (next.length === ids.length && next.every((id, i) => id === ids[i])) return;
     syncing = true;
     store.set(selectedAtom, next);
     syncing = false;
   }
 
+  // `add`: rows whose query is a whole group of the filter join, as when Back returns to a
+  // filter the rows wrote; otherwise only those selected are kept or dropped.
+  function keepRows(add: boolean) {
+    if (syncing) return;
+    const items = itemsById(store.get(sidebarTreeAtom));
+    const next = rowsForFilter(store.get(appliedFilterAtom), store.get(selectedAtom), items, add);
+    select(next);
+  }
+
   // The tree writes its selection again as it renders, the same rows in a new array, or its last
   // row when the selection was emptied; only a change of rows right after a click or a key in
   // the sidebar is the person selecting.
-  let lastRows = store.get(selectedAtom).join("\n");
+  let lastRows = store.get(selectedAtom);
   store.sub(selectedAtom, () => {
+    const before = lastRows;
     const ids = store.get(selectedAtom);
-    const key = ids.join("\n");
-    if (key === lastRows) return;
-    lastRows = key;
+    if (ids.join("\n") === before.join("\n")) return;
+    lastRows = ids;
     if (syncing) return;
     // Not the person's, such as the tree selecting its first row as it mounts over a filter
     // restored at launch: the rows go back to what the filter says.
     if (Date.now() - lastSidebarInput > SIDEBAR_INPUT_MS) {
-      keepRows();
+      keepRows(false);
       return;
     }
+    const exclusive = exclusiveAll(ids, before);
+    if (exclusive !== ids) select(exclusive);
     // Group headings are not filters.
-    const rows = ids.filter((id) => id !== APPS_ID && id !== DOMAINS_ID && id !== SAVED_ID);
+    const rows = exclusive.filter((id) => id !== APPS_ID && id !== DOMAINS_ID && id !== SAVED_ID);
     if (rows.length === 0) return;
     const items = itemsById(store.get(sidebarTreeAtom));
     const selected = rows.flatMap((id) => {
       const item = items.get(id);
-      return item == null ? [] : [item];
+      // A heading has no query to apply; System's has its own.
+      return item == null || (item.query === "" && item.kind !== "all") ? [] : [item];
     });
     if (selected.length === 0) return;
     const text = selectionText(selected);
@@ -338,7 +343,7 @@ export function syncSidebarSelection(store: Store) {
     applyFilter(store, text);
     syncing = false;
   });
-  store.sub(appliedFilterAtom, keepRows);
+  store.sub(appliedFilterAtom, () => keepRows(true));
 
   // A filter restored at launch selects no row; none at all is All traffic.
   if (store.get(selectedAtom).length === 0 && store.get(appliedFilterAtom).trim() === "") {

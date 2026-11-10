@@ -33,10 +33,20 @@ vi.mock("./rpc", () => ({
 }));
 vi.mock("./tauri", () => ({ command: vi.fn(async () => {}), subscribe: vi.fn(() => () => {}) }));
 // The package's index reaches for the window as it loads; the sidebar's selection is all used.
-vi.mock("@yaakapp-internal/ui", () => ({ selectedIdsFamily: () => atom<string[]>([]) }));
+const sidebarSelection = vi.hoisted(() => ({ atom: null as unknown }));
+vi.mock("@yaakapp-internal/ui", () => ({ selectedIdsFamily: () => sidebarSelection.atom }));
 
-const { applyFilter, goToPlace, searchDraftAtom, searchDraftVersionAtom, syncNavigation } =
-  await import("./navigation");
+const {
+  applyFilter,
+  goToPlace,
+  noteSidebarInput,
+  searchDraftAtom,
+  searchDraftVersionAtom,
+  syncNavigation,
+  syncSidebarSelection,
+} = await import("./navigation");
+const { sidebarFlowsAtom, sidebarTreeAtom } = await import("./store");
+const { itemsById } = await import("./sidebarTree");
 
 function flow(id: string): Flow {
   return { id } as Flow;
@@ -51,6 +61,7 @@ function newStore() {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
+  sidebarSelection.atom = atom<string[]>([]);
   existing.clear();
   recorded.length = 0;
   lastFilter = "";
@@ -209,5 +220,75 @@ describe("goToPlace", () => {
     applyFilter(store, "@host:x");
     expect(store.get(searchDraftAtom)).toBe("@host:x");
     expect(store.get(searchDraftVersionAtom)).toBe(version + 1);
+  });
+});
+
+describe("syncSidebarSelection", () => {
+  function sidebar() {
+    const store = newStore();
+    const flows = ["https://a.example.com/x", "https://api.github.com/y", "https://api.stripe.com"];
+    store.set(
+      sidebarFlowsAtom,
+      flows.map((url, i) => ({ id: `f${i}`, url, method: "GET" }) as Flow),
+    );
+    syncSidebarSelection(store);
+    const selected = sidebarSelection.atom as ReturnType<typeof atom<string[]>>;
+    const idOf = (label: string) =>
+      [...itemsById(store.get(sidebarTreeAtom)).values()].find((i) => i.label === label)?.id ?? "";
+    // As a click in the sidebar does
+    const choose = (ids: string[]) => {
+      noteSidebarInput();
+      store.set(selected, ids);
+    };
+    return { store, selected, idOf, choose };
+  }
+
+  test("rows chosen together apply as one filter and stay selected", () => {
+    const { store, selected, idOf, choose } = sidebar();
+    const [example, github] = [idOf("example.com"), idOf("github.com")];
+    choose([example]);
+    choose([example, github]);
+    expect(store.get(appliedFilterAtom)).toBe("@host:*.example.com OR @host:*.github.com");
+    expect(store.get(selected)).toEqual([example, github]);
+  });
+
+  test("System's heading applies its query; the other headings apply nothing", () => {
+    const { store, idOf, choose } = sidebar();
+    store.set(sidebarFlowsAtom, [
+      {
+        id: "s",
+        url: "https://ocsp.apple.com/x",
+        method: "GET",
+        clientName: "trustd",
+        clientPath: "/usr/libexec/trustd",
+      } as Flow,
+    ]);
+    choose([idOf("System")]);
+    expect(store.get(appliedFilterAtom)).toBe("@is:system");
+    choose([idOf("Domains")]);
+    expect(store.get(appliedFilterAtom)).toBe("@is:system");
+  });
+
+  test("All traffic is exclusive either way round", () => {
+    const { store, selected, idOf, choose } = sidebar();
+    const [all, github] = [idOf("All traffic"), idOf("github.com")];
+    choose([github]);
+    choose([github, all]);
+    expect(store.get(selected)).toEqual([all]);
+    expect(store.get(appliedFilterAtom)).toBe("");
+    choose([all, github]);
+    expect(store.get(selected)).toEqual([github]);
+    expect(store.get(appliedFilterAtom)).toBe("@host:*.github.com");
+  });
+
+  test("a box filter keeps the rows in it, and Back finds the rows again", () => {
+    const { store, selected, idOf, choose } = sidebar();
+    const [example, github] = [idOf("example.com"), idOf("github.com")];
+    choose([example]);
+    choose([example, github]);
+    applyFilter(store, "@host:*.example.com @method:get", { record: true });
+    expect(store.get(selected)).toEqual([example]);
+    goToPlace(store, "back");
+    expect(store.get(selected).sort()).toEqual([example, github].sort());
   });
 });

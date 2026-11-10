@@ -14,6 +14,8 @@ import { appIconPng, fixtures } from "./fixtures";
 export function installFixtureBackend() {
   const internals = (window as unknown as { __TAURI_INTERNALS__: Record<string, unknown> })
     .__TAURI_INTERNALS__;
+  // For checking the window as traffic arrives: `__harnessEmit("model_write", payload)`
+  (window as unknown as { __harnessEmit: typeof emit }).__harnessEmit = emit;
   internals.transformCallback = (callback: (event: unknown) => void) => {
     const id = callbacks.size + 1;
     callbacks.set(id, callback);
@@ -99,6 +101,9 @@ function matches(flow: Flow, query: string): boolean {
     }
   })();
   const text = `${flow.method} ${flow.url} ${flow.status ?? ""}`.toLowerCase();
+  // `OR` between groups, as the sidebar writes several rows
+  const groups = query.replace(/[()]/g, " ").split(/\s+OR\s+/);
+  if (groups.length > 1) return groups.some((g) => matches(flow, g));
   return query
     .toLowerCase()
     .split(/\s+/)

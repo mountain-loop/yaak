@@ -85,6 +85,20 @@ export function isVisibleNode<T extends { id: string }>(
   return true;
 }
 
+/**
+ * The selection that keeps a row tabbable, from the last row focused and the closest of it still
+ * in view, or null to leave the selection as it is: while that row is in view and selected, a
+ * selection of several rows stands, rather than shrinking to it each time the tree renders.
+ */
+export function tabbableSelection(
+  selected: readonly string[],
+  lastId: string,
+  closestId: string,
+): string[] | null {
+  if (closestId === lastId && selected.includes(lastId)) return null;
+  return [closestId];
+}
+
 export function closestVisibleNode<T extends { id: string }>(
   store: JotaiStore,
   collapsedAtom: CollapsedAtom,
