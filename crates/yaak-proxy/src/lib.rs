@@ -105,8 +105,10 @@ impl ProxyConfig {
 /// server-sent events, gRPC) has a `StreamStart` and then a `Message` for each message as it
 /// passes. An HTTPS connection the engine tunnels without decrypting, because the decrypt policy
 /// leaves it out or its client rejected the engine's certificate, is a flow of its own, from
-/// `TunnelStart` to `TunnelEnd`. Other traffic tunnelled blind (non-TLS CONNECT payloads,
-/// upgrades to protocols other than WebSocket) produces no events.
+/// `TunnelStart` to `TunnelEnd`. A client's failed handshake that starts its address being
+/// passed through is a flow too, of the one event `HandshakeFailed`. Other traffic tunnelled
+/// blind (non-TLS CONNECT payloads, upgrades to protocols other than WebSocket) produces no
+/// events.
 #[derive(Debug, Clone)]
 pub enum ProxyEvent {
     /// Request headers arrived from the client.
