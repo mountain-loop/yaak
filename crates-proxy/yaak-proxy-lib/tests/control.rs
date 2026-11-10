@@ -809,9 +809,11 @@ async fn the_decrypt_list_is_read_and_replaced_over_the_control_api() {
         ]),
         "every built-in exclusion left out is removed"
     );
+    // Saved, it says how many open connections stay encrypted: none, as none are open.
+    assert_eq!(list["stillEncrypted"], 0);
     let read: Value =
         http.get(&url).bearer_auth(&info.token).send().await.unwrap().json().await.unwrap();
-    assert_eq!(read, list);
+    assert_eq!(read["entries"], list["entries"]);
 
     let bad = http
         .put(&url)

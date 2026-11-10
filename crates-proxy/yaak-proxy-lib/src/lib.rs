@@ -20,6 +20,7 @@ pub mod save;
 pub mod saved_queries;
 pub mod settings;
 pub mod terminal;
+pub mod tunnels;
 
 use crate::actions::{ActionInvocation, ActionMetadata, GlobalAction};
 use crate::attribution::Attribution;
@@ -32,7 +33,9 @@ use crate::grpc::{DecodedGrpcMessage, GrpcSchema, GrpcState};
 use crate::helper::HelperState;
 use crate::macos::{SystemProxyBackend, SystemProxyStatus};
 use crate::messages::FlowMessage;
-use crate::models::{Flow, FlowBody, ModelPayload, ProxyHeader, StreamKind, find_header};
+use crate::models::{
+    Flow, FlowBody, ModelPayload, ProxyHeader, StreamKind, TunnelReason, find_header,
+};
 use crate::save::{ClientDb, SaveFlowRequest, SaveFlowResponse, WorkspaceSummary};
 use crate::settings::{DecryptList, HttpVersion, ProxySettings, TrafficRetention};
 use base64::Engine;
@@ -130,6 +133,8 @@ pub struct ProxyCtx {
     pub grpc: GrpcState,
     /// The search the app shows, which written flows' events are matched against.
     live_search: Arc<query::LiveSearch>,
+    /// The HTTPS connections the running engine passes through undecrypted now.
+    tunnels: Arc<tunnels::OpenTunnels>,
 }
 
 impl ProxyCtx {
@@ -178,6 +183,7 @@ impl ProxyCtx {
             events,
             grpc: GrpcState::default(),
             live_search: Default::default(),
+            tunnels: Default::default(),
         };
         // Unreadable settings keep the traffic: nothing is deleted on a guess. Nor is traffic
         // another process is capturing as this launches, which this one may take over later.
@@ -513,6 +519,7 @@ impl ProxyCtx {
         let mut proxy_handle = yaak_proxy::start_proxy(config)?;
         let attribution = Attribution::new(proxy_handle.port);
         let _ = attribution_slot.set(attribution.clone());
+        let tunnel_run = self.tunnels.begin_run(Some(attribution.clone()));
 
         if let Some(event_rx) = proxy_handle.take_event_rx() {
             let sink = FlowSink {
@@ -524,6 +531,10 @@ impl ProxyCtx {
                 recording: self.recording.clone(),
                 finished: Default::default(),
                 clock: BatchClock::Real,
+                tunnels: self.tunnels.clone(),
+                tunnel_run,
+                handle: self.handle.clone(),
+                rejections: Default::default(),
             };
             std::thread::spawn(move || run_event_loop(event_rx, sink));
         }
@@ -1098,7 +1109,7 @@ impl ProxyCtx {
 
     /// Replaces the decrypt list, saved in `settings.json` and applied to the running engine's
     /// next connections. Connections already open stay as they were.
-    pub fn set_decrypt_list(&self, entries: &[String]) -> Result<DecryptList, String> {
+    pub fn set_decrypt_list(&self, entries: &[String]) -> Result<DecryptListSaved, String> {
         self.change_decrypt_list(|settings| settings.set_decrypt_list(entries))
     }
 
@@ -1108,28 +1119,33 @@ impl ProxyCtx {
         &self,
         add: &[String],
         remove: &[String],
-    ) -> Result<DecryptList, String> {
+    ) -> Result<DecryptListSaved, String> {
         self.change_decrypt_list(|settings| settings.edit_decrypt_list(add, remove))
     }
 
     /// Changes the list in `settings.json`, one change at a time, applies it to the running
-    /// engine, and tells the app.
+    /// engine, and tells the app. Connections already open are left as they are; the reply
+    /// counts those the new list would decrypt if they reconnected.
     fn change_decrypt_list(
         &self,
         change: impl FnOnce(&mut ProxySettings) -> Result<(), String>,
-    ) -> Result<DecryptList, String> {
+    ) -> Result<DecryptListSaved, String> {
         let _turn = self.decrypt_edits.lock().map_err(|_| "lock poisoned".to_string())?;
         let mut settings = self.settings()?;
         change(&mut settings)?;
         settings.save(&self.settings_path())?;
+        let policy = settings.decrypt_policy();
         if let Ok(handle) = self.handle.lock()
             && let Some(handle) = handle.as_ref()
         {
-            handle.set_decrypt_policy(settings.decrypt_policy());
+            handle.set_decrypt_policy(policy.clone());
         }
         let list = settings.decrypt_list();
         self.events.emit("decrypt_list_changed", &DecryptListChangedPayload { list: list.clone() });
-        Ok(list)
+        let open = self.tunnels.list();
+        let all = tunnels::TunnelScope::default();
+        let still_encrypted = tunnels::reconnectable(&open, &policy, &self.passthrough(), &all)?;
+        Ok(DecryptListSaved { list, still_encrypted: still_encrypted.len() })
     }
 
     /// Intercepts again the hosts passed through after clients rejected the CA, as they no
@@ -1140,6 +1156,94 @@ impl ProxyCtx {
         {
             handle.forget_passthrough();
         }
+        self.passthrough_changed();
+    }
+
+    /// Intercepts again one address (`host:port`) passed through after a client rejected the
+    /// CA. Returns whether it was passed through.
+    pub fn forget_passthrough_address(&self, address: &str) -> bool {
+        let forgotten = self.handle.lock().ok().is_some_and(|handle| {
+            handle.as_ref().is_some_and(|h| h.forget_passthrough_address(address))
+        });
+        if forgotten {
+            self.passthrough_changed();
+        }
+        forgotten
+    }
+
+    /// The addresses (`host:port`) the running engine passes through after clients rejected
+    /// the CA. Empty while it is stopped.
+    pub fn passthrough(&self) -> Vec<String> {
+        let handle = self.handle.lock().unwrap_or_else(PoisonError::into_inner);
+        handle.as_ref().map(ProxyHandle::passthrough).unwrap_or_default()
+    }
+
+    /// [`Self::forget_passthrough_address`] for an address as the app or the control API names
+    /// it, with what is still passed through.
+    pub fn forget_passthrough_request(
+        &self,
+        req: &ForgetPassthroughRequest,
+    ) -> Result<ForgetPassthroughResponse, String> {
+        let address = passthrough_address(&req.address)
+            .ok_or_else(|| format!("Invalid address {:?}", req.address))?;
+        let forgotten = self.forget_passthrough_address(&address);
+        Ok(ForgetPassthroughResponse { forgotten, addresses: self.passthrough() })
+    }
+
+    /// Trusts the CA, made first when the engine has never run so there is one to trust. Once
+    /// trusted, the addresses passed through after clients rejected it are intercepted again.
+    pub async fn trust_ca(&self) -> Result<ca::CaTrustResult, String> {
+        // Off the async threads: it may wait for the keychain or a conversion.
+        let ca = {
+            let ctx = self.clone();
+            blocking(move || ctx.load_ca()).await.map_err(|e| e.message)?
+        };
+        let trusted = ca::trust(ca.cert_path()).await?;
+        if trusted == ca::Trusted::Yes {
+            self.forget_passthrough();
+        }
+        let status = ca::status(ca.cert_path()).await?;
+        Ok(ca::CaTrustResult { status, cancelled: trusted == ca::Trusted::Cancelled })
+    }
+
+    /// The process that owns the engine, while it is another one: commands about the running
+    /// engine go there.
+    fn engine_elsewhere(&self) -> Option<ControlInfo> {
+        if self.port().is_some() {
+            return None;
+        }
+        self.other_owner()
+    }
+
+    fn passthrough_changed(&self) {
+        let payload = PassthroughChangedPayload { addresses: self.passthrough() };
+        self.events.emit("passthrough_changed", &payload);
+    }
+
+    /// The HTTPS connections open now that the decrypt list would decrypt if their clients
+    /// reconnected, within `scope`. Not those passed through after a client rejected the CA.
+    pub fn reconnectable_tunnels(
+        &self,
+        scope: &tunnels::TunnelScope,
+    ) -> Result<Vec<tunnels::OpenTunnel>, String> {
+        let policy = self.settings()?.decrypt_policy();
+        tunnels::reconnectable(&self.tunnels.list(), &policy, &self.passthrough(), scope)
+    }
+
+    /// Closes tunnels so their clients reconnect, decrypted as the list now says: those in
+    /// `ids`, or, without ids, those [`Self::reconnectable_tunnels`] finds in `scope`. Each ends
+    /// with its flow marked `reconnectRequested`. Returns how many were open.
+    pub fn reconnect_tunnels(
+        &self,
+        ids: Option<&[u64]>,
+        scope: &tunnels::TunnelScope,
+    ) -> Result<usize, String> {
+        let ids = match ids {
+            Some(ids) => ids.to_vec(),
+            None => self.reconnectable_tunnels(scope)?.iter().map(|t| t.id).collect(),
+        };
+        let handle = self.handle.lock().map_err(|_| "lock poisoned".to_string())?;
+        Ok(handle.as_ref().map_or(0, |h| h.close_tunnels(&ids)))
     }
 
     /// Flows are being stored.
@@ -1630,6 +1734,49 @@ pub struct DecryptListChangedPayload {
     pub list: DecryptList,
 }
 
+/// `host`, `host:port`, `[::1]` or `[::1]:8443` as the engine keys its pass-through set:
+/// `host:port`, an IPv6 host in brackets. None when it is none of these.
+fn passthrough_address(address: &str) -> Option<String> {
+    let address = address.trim();
+    let (host, port) = if let Some(rest) = address.strip_prefix('[') {
+        let (host, after) = rest.split_once(']')?;
+        let port = match after {
+            "" => 443,
+            p => p.strip_prefix(':')?.parse().ok()?,
+        };
+        (format!("[{host}]"), port)
+    } else {
+        match address.split_once(':') {
+            Some((host, port)) if !port.contains(':') => (host.to_string(), port.parse().ok()?),
+            Some(_) => (format!("[{address}]"), 443),
+            None => (address.to_string(), 443),
+        }
+    };
+    (!host.is_empty() && host != "[]").then(|| format!("{host}:{port}"))
+}
+
+/// The decrypt list as saved, and what it means for connections already open.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct DecryptListSaved {
+    #[serde(flatten)]
+    pub list: DecryptList,
+    /// Open connections the list now decrypts that stay encrypted until their clients
+    /// reconnect: `reconnect_tunnels` closes them so they do. Closed by nothing else.
+    #[ts(type = "number")]
+    pub still_encrypted: usize,
+}
+
+/// The addresses passed through after clients rejected the CA changed: one was added or
+/// forgotten.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct PassthroughChangedPayload {
+    /// Each `host:port`, an IPv6 host in brackets, sorted.
+    pub addresses: Vec<String>,
+}
+
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct ProxyStatePayload {
@@ -1702,6 +1849,9 @@ pub struct WatchQueryRequest {
     #[serde(default)]
     #[ts(optional, as = "Option<bool>")]
     pub hide_system: bool,
+    #[serde(default)]
+    #[ts(optional, as = "Option<bool>")]
+    pub hide_encrypted: bool,
 }
 
 /// Which of some flows a search covers, for flows whose events were matched against another.
@@ -1744,6 +1894,9 @@ pub struct CountSavedQueriesRequest {
     #[serde(default)]
     #[ts(optional, as = "Option<bool>")]
     pub hide_system: bool,
+    #[serde(default)]
+    #[ts(optional, as = "Option<bool>")]
+    pub hide_encrypted: bool,
 }
 
 #[derive(Serialize, TS)]
@@ -2191,6 +2344,55 @@ pub struct CaTrustRequest {}
 
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
+pub struct ListPassthroughRequest {}
+
+/// The addresses passed through after clients rejected the CA.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct PassthroughResponse {
+    /// Each `host:port`, an IPv6 host in brackets, sorted.
+    pub addresses: Vec<String>,
+}
+
+/// An address to intercept again: `host`, `host:port` or `[::1]:8443`, as a flow's URL has
+/// it, the port 443 when left out.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ForgetPassthroughRequest {
+    pub address: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ForgetPassthroughResponse {
+    /// It was passed through.
+    pub forgotten: bool,
+    /// The addresses still passed through.
+    pub addresses: Vec<String>,
+}
+
+/// Tunnels to close: those in `ids`, or, without them, every one `list_reconnectable_tunnels`
+/// returns for the same `entry` and `flowId`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ReconnectTunnelsRequest {
+    #[ts(optional, type = "Array<number>")]
+    pub ids: Option<Vec<u64>>,
+    #[serde(flatten)]
+    pub scope: tunnels::TunnelScope,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ReconnectTunnelsResponse {
+    /// Tunnels closed: those still open of the ones asked for.
+    #[ts(type = "number")]
+    pub closed: usize,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
 pub struct SystemProxyStatusRequest {}
 
 #[derive(Deserialize, TS)]
@@ -2472,7 +2674,7 @@ fn get_decrypt_list(ctx: &ProxyCtx, _req: GetDecryptListRequest) -> Result<Decry
 async fn set_decrypt_list(
     ctx: ProxyCtx,
     req: SetDecryptListRequest,
-) -> Result<DecryptList, RpcError> {
+) -> Result<DecryptListSaved, RpcError> {
     if ctx.port().is_none()
         && let Some(owner) = ctx.other_owner()
     {
@@ -2485,7 +2687,7 @@ async fn set_decrypt_list(
 async fn edit_decrypt_list(
     ctx: ProxyCtx,
     req: EditDecryptListRequest,
-) -> Result<DecryptList, RpcError> {
+) -> Result<DecryptListSaved, RpcError> {
     if ctx.port().is_none()
         && let Some(owner) = ctx.other_owner()
     {
@@ -2683,16 +2885,59 @@ async fn ca_status(ctx: ProxyCtx, _req: CaStatusRequest) -> Result<CaStatus, Rpc
     ca::status(&ctx.ca_dir().join("ca.pem")).await.map_err(rpc_error)
 }
 
-async fn ca_trust(ctx: ProxyCtx, _req: CaTrustRequest) -> Result<CaStatus, RpcError> {
-    // Creates the CA when the engine has never run, so there is something to trust. Off the
-    // async threads: it may wait for the keychain or a conversion.
-    let ca = {
-        let ctx = ctx.clone();
-        blocking(move || ctx.load_ca()).await?
-    };
-    ca::trust(ca.cert_path()).await.map_err(rpc_error)?;
-    ctx.forget_passthrough();
-    ca::status(ca.cert_path()).await.map_err(rpc_error)
+/// Asks macOS to trust the CA, whenever the app needs it, not only during setup. A cancelled
+/// password prompt is a result, `cancelled`, not an error.
+async fn ca_trust(ctx: ProxyCtx, _req: CaTrustRequest) -> Result<ca::CaTrustResult, RpcError> {
+    ctx.trust_ca().await.map_err(rpc_error)
+}
+
+/// The addresses passed through after clients rejected the CA, in the engine that runs, here
+/// or in the process that owns it.
+async fn list_passthrough(
+    ctx: ProxyCtx,
+    _req: ListPassthroughRequest,
+) -> Result<PassthroughResponse, RpcError> {
+    if let Some(owner) = ctx.engine_elsewhere() {
+        return ControlClient::new(owner).passthrough().await.map_err(rpc_error);
+    }
+    Ok(PassthroughResponse { addresses: ctx.passthrough() })
+}
+
+/// Intercepts one passed-through address again from its next connection on.
+async fn forget_passthrough(
+    ctx: ProxyCtx,
+    req: ForgetPassthroughRequest,
+) -> Result<ForgetPassthroughResponse, RpcError> {
+    if let Some(owner) = ctx.engine_elsewhere() {
+        return ControlClient::new(owner).forget_passthrough(&req).await.map_err(rpc_error);
+    }
+    ctx.forget_passthrough_request(&req).map_err(rpc_error)
+}
+
+/// The open tunnels the decrypt list would decrypt if their clients reconnected.
+async fn list_reconnectable_tunnels(
+    ctx: ProxyCtx,
+    req: tunnels::TunnelScope,
+) -> Result<Vec<tunnels::OpenTunnel>, RpcError> {
+    if let Some(owner) = ctx.engine_elsewhere() {
+        return ControlClient::new(owner).reconnectable_tunnels(&req).await.map_err(rpc_error);
+    }
+    blocking(move || ctx.reconnectable_tunnels(&req)).await
+}
+
+/// Closes tunnels so their clients reconnect, decrypted as the list now says.
+async fn reconnect_tunnels(
+    ctx: ProxyCtx,
+    req: ReconnectTunnelsRequest,
+) -> Result<ReconnectTunnelsResponse, RpcError> {
+    if let Some(owner) = ctx.engine_elsewhere() {
+        return ControlClient::new(owner).reconnect_tunnels(&req).await.map_err(rpc_error);
+    }
+    blocking(move || {
+        let closed = ctx.reconnect_tunnels(req.ids.as_deref(), &req.scope)?;
+        Ok::<_, String>(ReconnectTunnelsResponse { closed })
+    })
+    .await
 }
 
 async fn system_proxy_status(
@@ -2780,8 +3025,9 @@ async fn query_values(ctx: ProxyCtx, req: QueryValuesRequest) -> Result<Vec<Stri
 }
 
 fn watch_query(ctx: &ProxyCtx, req: WatchQueryRequest) -> Result<bool, RpcError> {
-    let watched = req.query.filter(|q| !q.trim().is_empty() || req.hide_system);
-    ctx.live_search.watch(watched.map(|q| (req.key, q, req.hide_system)));
+    let hidden = query::Hidden { system: req.hide_system, encrypted: req.hide_encrypted };
+    let watched = req.query.filter(|q| !q.trim().is_empty() || hidden != Default::default());
+    ctx.live_search.watch(watched.map(|q| (req.key, q, hidden)));
     Ok(true)
 }
 
@@ -2886,7 +3132,8 @@ async fn count_saved_queries(
     ctx: ProxyCtx,
     req: CountSavedQueriesRequest,
 ) -> Result<Vec<saved_queries::SavedQueryCount>, RpcError> {
-    blocking(move || saved_queries::counts(&ctx.db()?, req.hide_system)).await
+    let hidden = query::Hidden { system: req.hide_system, encrypted: req.hide_encrypted };
+    blocking(move || saved_queries::counts(&ctx.db()?, hidden)).await
 }
 
 // -- Event loop --
@@ -2935,6 +3182,9 @@ const STOPPED_MID_STREAM: &str = "Yaak Proxy stopped before the stream ended";
 
 /// Why a tunnel still open when the engine stopped ended.
 const STOPPED_MID_TUNNEL: &str = "Yaak Proxy stopped before the connection closed";
+
+/// The error of a flow recording a client's refusal of the proxy's certificate.
+const REJECTED_CERTIFICATE: &str = "Rejected the proxy's certificate";
 
 /// A flow between its `RequestStart` and its end, with its bodies being written as they
 /// stream.
@@ -3043,6 +3293,14 @@ struct FlowSink {
     finished: std::cell::RefCell<FinishedFlows>,
     /// What a batch's wait is timed by.
     clock: BatchClock,
+    /// The open tunnels, kept for this engine's run whether or not flows are recorded.
+    tunnels: Arc<tunnels::OpenTunnels>,
+    tunnel_run: u64,
+    /// The engine, for its pass-through set as it changes.
+    handle: Arc<Mutex<Option<ProxyHandle>>>,
+    /// The flow recorded for each refused handshake, by the engine's id for it, for the tunnels
+    /// passed through after it to name.
+    rejections: std::cell::RefCell<HashMap<u64, String>>,
 }
 
 /// What the event loop times a batch's wait by: the time, or in tests a time that stands still,
@@ -3168,6 +3426,7 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
         }
     }
     sink.write_finished();
+    sink.tunnels.end_run(sink.tunnel_run);
     // Its hold on the databases goes before the gate opens again.
     drop(sink);
 }
@@ -3279,19 +3538,60 @@ impl FlowSink {
                     },
                 );
             }
-            ProxyEvent::TunnelStart { id, started_at, authority, connection, client_addr } => {
-                if !recording.lock().map(|r| r.was_on_at(started_at)).unwrap_or(true) {
-                    return;
-                }
+            ProxyEvent::TunnelStart {
+                id,
+                started_at,
+                authority,
+                host,
+                port,
+                connection,
+                client_addr,
+                reason,
+            } => {
                 attribution.begin(connection, client_addr);
+                let recorded = recording.lock().map(|r| r.was_on_at(started_at)).unwrap_or(true);
+                let flow_id = recorded.then(Flow::generate_id);
+                let (tunnel_reason, excluded_by, excluded_built_in, rejected_by) = match reason {
+                    yaak_proxy::TunnelReason::NotListed => {
+                        (TunnelReason::NotListed, None, false, None)
+                    }
+                    yaak_proxy::TunnelReason::Excluded { entry, built_in } => {
+                        (TunnelReason::Excluded, Some(entry), built_in, None)
+                    }
+                    yaak_proxy::TunnelReason::Rejected { rejected_by } => {
+                        let flow = self.rejections.borrow().get(&rejected_by).cloned();
+                        (TunnelReason::Rejected, None, false, flow)
+                    }
+                };
+                // Kept paused too, so it can be closed for a reconnect.
+                let mut open = tunnels::OpenTunnel {
+                    id,
+                    host,
+                    port,
+                    app_name: None,
+                    app_bundle_id: None,
+                    flow_id: flow_id.clone(),
+                    reason: tunnel_reason,
+                };
+                if let Some(app) = attribution.get(connection, Duration::ZERO) {
+                    tunnels::set_app(&mut open, app);
+                }
+                self.tunnels.open(self.tunnel_run, open, connection);
+                let Some(flow_id) = flow_id else {
+                    return;
+                };
                 let flow = Flow {
-                    id: Flow::generate_id(),
+                    id: flow_id,
                     started_at: DateTime::<Utc>::from(started_at).naive_utc(),
                     method: "CONNECT".to_string(),
                     url: format!("https://{authority}"),
                     client_http_version: "HTTP/1.1".to_string(),
                     client_addr: Some(client_addr.to_string()),
                     tunnelled: true,
+                    tunnel_reason: Some(tunnel_reason),
+                    tunnel_excluded_by: excluded_by,
+                    tunnel_excluded_built_in: excluded_built_in,
+                    tunnel_rejected_by: rejected_by,
                     ..Default::default()
                 };
                 let mut f = InFlight {
@@ -3310,14 +3610,66 @@ impl FlowSink {
                 self.write_stream_flow(&mut f);
                 in_flight.insert(id, f);
             }
-            ProxyEvent::TunnelEnd { id, sent, received, elapsed_ms, error } => {
+            ProxyEvent::TunnelEnd { id, sent, received, elapsed_ms, error, reconnect_requested } => {
+                self.tunnels.close(self.tunnel_run, id);
                 if let Some(mut f) = in_flight.remove(&id) {
                     f.flow.request_size = sent as i64;
                     f.flow.response_size = received as i64;
                     f.flow.elapsed_ms = Some(clamp_ms(elapsed_ms));
                     f.flow.error = error;
+                    f.flow.reconnect_requested = reconnect_requested;
                     self.finish_flow(f);
                 }
+            }
+            ProxyEvent::HandshakeFailed {
+                id,
+                started_at,
+                authority,
+                connection,
+                client_addr,
+                rejection,
+                error,
+                elapsed_ms,
+            } => {
+                // Whether or not it is recorded, the pass-through set has changed.
+                let addresses = self
+                    .handle
+                    .lock()
+                    .map(|h| h.as_ref().map(ProxyHandle::passthrough).unwrap_or_default())
+                    .unwrap_or_default();
+                self.events.emit("passthrough_changed", &PassthroughChangedPayload { addresses });
+                if !recording.lock().map(|r| r.was_on_at(started_at)).unwrap_or(true) {
+                    return;
+                }
+                attribution.begin(connection, client_addr);
+                let error = match &rejection {
+                    Some(_) => REJECTED_CERTIFICATE.to_string(),
+                    None => format!("TLS handshake failed: {error}"),
+                };
+                let flow = Flow {
+                    id: Flow::generate_id(),
+                    started_at: DateTime::<Utc>::from(started_at).naive_utc(),
+                    url: format!("https://{authority}"),
+                    client_http_version: "HTTP/1.1".to_string(),
+                    client_addr: Some(client_addr.to_string()),
+                    elapsed_ms: Some(clamp_ms(elapsed_ms)),
+                    tls_rejected: rejection,
+                    error: Some(error),
+                    ..Default::default()
+                };
+                self.rejections.borrow_mut().insert(id, flow.id.clone());
+                self.finish_flow(InFlight {
+                    flow,
+                    connection,
+                    request_body: None,
+                    response_body: None,
+                    persisted: false,
+                    cleared: false,
+                    next_seq: 0,
+                    dirty: false,
+                    last_write: None,
+                    graphql_scan: None,
+                });
             }
             ProxyEvent::StreamStart { id, kind } => {
                 if let Some(f) = in_flight.get_mut(&id) {
@@ -3787,7 +4139,11 @@ define_rpc! {
         add_grpc_schema(AddGrpcSchemaRequest) -> GrpcSchema,
         app_icon(AppIconRequest) -> Option<String>,
         ca_status(CaStatusRequest) -> CaStatus,
-        ca_trust(CaTrustRequest) -> CaStatus,
+        ca_trust(CaTrustRequest) -> ca::CaTrustResult,
+        forget_passthrough(ForgetPassthroughRequest) -> ForgetPassthroughResponse,
+        list_passthrough(ListPassthroughRequest) -> PassthroughResponse,
+        list_reconnectable_tunnels(tunnels::TunnelScope) -> Vec<tunnels::OpenTunnel>,
+        reconnect_tunnels(ReconnectTunnelsRequest) -> ReconnectTunnelsResponse,
         clear_flows(ClearFlowsRequest) -> usize,
         decode_grpc_message(DecodeGrpcMessageRequest) -> DecodedGrpcMessage,
         export_har(ExportHarRequest) -> usize,
@@ -3796,9 +4152,9 @@ define_rpc! {
         get_proxy_state(GetProxyStateRequest) -> GetProxyStateResponse,
         helper_register(HelperRegisterRequest) -> SystemProxyStatus,
         helper_unregister(HelperUnregisterRequest) -> SystemProxyStatus,
-        edit_decrypt_list(EditDecryptListRequest) -> DecryptList,
+        edit_decrypt_list(EditDecryptListRequest) -> DecryptListSaved,
         list_seen(ListSeenRequest) -> flows::SeenTargets,
-        set_decrypt_list(SetDecryptListRequest) -> DecryptList,
+        set_decrypt_list(SetDecryptListRequest) -> DecryptListSaved,
         list_workspaces(ListWorkspacesRequest) -> ListWorkspacesResponse,
         preview_save(PreviewSaveRequest) -> SavePreview,
         reflect_grpc_host(ReflectGrpcHostRequest) -> GrpcSchema,
@@ -3823,6 +4179,7 @@ define_rpc! {
         flows_removed(FlowsRemovedPayload),
         message_write(MessagePayload),
         model_write(ModelPayload),
+        passthrough_changed(PassthroughChangedPayload),
         proxy_state_changed(ProxyStatePayload),
         saved_queries_changed(SavedQueriesChangedPayload),
     }
@@ -3899,6 +4256,10 @@ mod tests {
             recording: ctx.recording.clone(),
             finished: Default::default(),
             clock: BatchClock::Real,
+            tunnels: ctx.tunnels.clone(),
+            tunnel_run: ctx.tunnels.begin_run(None),
+            handle: ctx.handle.clone(),
+            rejections: Default::default(),
         }
     }
 

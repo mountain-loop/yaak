@@ -110,9 +110,56 @@ pub struct Flow {
     /// client rejected the proxy's certificate: method `CONNECT`, its URL the host, its sizes
     /// the bytes each way, and no headers or bodies. Open until `elapsedMs` or `error` is set.
     pub tunnelled: bool,
+    /// Why a tunnelled flow was not decrypted. None for other flows, and for tunnels recorded
+    /// before the reason was.
+    pub tunnel_reason: Option<TunnelReason>,
+    /// For a tunnel the decrypt list excluded, the exclusion that kept it out, as stored:
+    /// `!host:*.apple.com`.
+    pub tunnel_excluded_by: Option<String>,
+    /// That exclusion is one of the built-in ones.
+    pub tunnel_excluded_built_in: bool,
+    /// For a tunnel passed through after a client rejected the proxy's certificate, the id of
+    /// the flow of that refused handshake, when it was recorded.
+    pub tunnel_rejected_by: Option<String>,
+    /// The proxy closed this tunnel on request, so its client would reconnect.
+    pub reconnect_requested: bool,
+    /// A client's refused TLS handshake, recorded as its host and port began to be passed
+    /// through: how it refused, its alert (`unknown_ca`, `bad_certificate`,
+    /// `certificate_unknown`, ...) or `hang_up`. Such a flow has no method, its URL is
+    /// `https://<authority>`, and its error says it rejected the certificate. A handshake that
+    /// failed otherwise is recorded the same way with this None and the failure as its error.
+    pub tls_rejected: Option<String>,
     /// An agent read the flow through the control API: its detail, a body or its messages.
     /// Never written by an upsert, which keeps what is stored.
     pub agent_read: bool,
+}
+
+/// Why a tunnel was passed through undecrypted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum TunnelReason {
+    /// No entry of the decrypt list named it.
+    NotListed,
+    /// An entry named it, and an exclusion kept it out: `tunnelExcludedBy`.
+    Excluded,
+    /// The list decrypts it, but a client rejected the proxy's certificate for its host and
+    /// port, which are passed through until the proxy restarts or forgets them.
+    Rejected,
+}
+
+impl TunnelReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NotListed => "not_listed",
+            Self::Excluded => "excluded",
+            Self::Rejected => "rejected",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        [Self::NotListed, Self::Excluded, Self::Rejected].into_iter().find(|r| r.as_str() == s)
+    }
 }
 
 /// The streaming protocol a flow carries.
@@ -278,6 +325,12 @@ impl UpsertModelInfo for Flow {
             (GrpcMessage, self.grpc_message.into()),
             (GraphqlOperation, self.graphql_operation.into()),
             (Tunnelled, self.tunnelled.into()),
+            (FlowIden::TunnelReason, self.tunnel_reason.map(|r| r.as_str()).into()),
+            (TunnelExcludedBy, self.tunnel_excluded_by.into()),
+            (TunnelExcludedBuiltIn, self.tunnel_excluded_built_in.into()),
+            (TunnelRejectedBy, self.tunnel_rejected_by.into()),
+            (ReconnectRequested, self.reconnect_requested.into()),
+            (TlsRejected, self.tls_rejected.into()),
             (ElapsedConnectMs, self.elapsed_connect_ms.into()),
             (ElapsedTlsMs, self.elapsed_tls_ms.into()),
             (ElapsedRequestMs, self.elapsed_request_ms.into()),
@@ -322,6 +375,12 @@ impl UpsertModelInfo for Flow {
             FlowIden::GrpcMessage,
             FlowIden::GraphqlOperation,
             FlowIden::Tunnelled,
+            FlowIden::TunnelReason,
+            FlowIden::TunnelExcludedBy,
+            FlowIden::TunnelExcludedBuiltIn,
+            FlowIden::TunnelRejectedBy,
+            FlowIden::ReconnectRequested,
+            FlowIden::TlsRejected,
             FlowIden::ElapsedConnectMs,
             FlowIden::ElapsedTlsMs,
             FlowIden::ElapsedRequestMs,
@@ -381,6 +440,14 @@ impl UpsertModelInfo for Flow {
             grpc_message: added_column(r, "grpc_message")?,
             graphql_operation: added_column(r, "graphql_operation")?,
             tunnelled: added_column(r, "tunnelled")?.unwrap_or_default(),
+            tunnel_reason: added_column::<String>(r, "tunnel_reason")?
+                .and_then(|r| TunnelReason::parse(&r)),
+            tunnel_excluded_by: added_column(r, "tunnel_excluded_by")?,
+            tunnel_excluded_built_in: added_column(r, "tunnel_excluded_built_in")?
+                .unwrap_or_default(),
+            tunnel_rejected_by: added_column(r, "tunnel_rejected_by")?,
+            reconnect_requested: added_column(r, "reconnect_requested")?.unwrap_or_default(),
+            tls_rejected: added_column(r, "tls_rejected")?,
             agent_read: added_column(r, "agent_read")?.unwrap_or_default(),
         })
     }

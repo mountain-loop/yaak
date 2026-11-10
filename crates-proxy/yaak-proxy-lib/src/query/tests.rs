@@ -938,9 +938,9 @@ fn live_search_matches_as_the_list_does() {
     let live = LiveSearch::default();
     let flow = fixture().remove(0);
     assert_eq!(live.check(&flow), None);
-    live.watch(Some(("k1".into(), "@status:2xx @host:*.github.com".into(), false)));
+    live.watch(Some(("k1".into(), "@status:2xx @host:*.github.com".into(), false.into())));
     assert_eq!(live.check(&flow), Some(SearchMatch { key: "k1".into(), matches: true }));
-    live.watch(Some(("k2".into(), "@status:4xx".into(), false)));
+    live.watch(Some(("k2".into(), "@status:4xx".into(), false.into())));
     let payload = live.payload(flow, true);
     assert_eq!(payload.search, Some(SearchMatch { key: "k2".into(), matches: false }));
     live.watch(None);
