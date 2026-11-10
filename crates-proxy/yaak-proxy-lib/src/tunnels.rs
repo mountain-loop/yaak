@@ -18,9 +18,13 @@ use yaak_proxy::{DecryptApp, DecryptEntry, DecryptPolicy, DecryptQuery};
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct OpenTunnel {
-    /// The engine's id for it, for closing it. Numbered afresh each time the engine starts.
-    #[ts(type = "number")]
-    pub id: u64,
+    /// Its id for closing it, unique to this run of the engine, so one listed before the
+    /// engine restarted closes nothing after.
+    pub id: String,
+    /// The engine's own number for it, which starts again each run.
+    #[serde(skip)]
+    #[ts(skip)]
+    pub engine_id: u64,
     /// The host it leads to, without an IPv6 address's brackets.
     pub host: String,
     pub port: u16,
@@ -70,9 +74,9 @@ pub struct TunnelScope {
 }
 
 /// The open tunnels among `tunnels` in `scope` that `policy` would decrypt if their clients
-/// reconnected. Those passed through after a client rejected the proxy's certificate are left
-/// out, as their next connection would be passed through again: those whose reason was the
-/// rejection, and any whose address `passthrough` holds now.
+/// reconnected. Those whose address `passthrough` holds, after a client rejected the proxy's
+/// certificate, are left out, as their next connection would be passed through again; once the
+/// address is forgotten, its tunnels count again.
 pub fn reconnectable(
     tunnels: &[OpenTunnel],
     policy: &DecryptPolicy,
@@ -83,7 +87,6 @@ pub fn reconnectable(
     Ok(tunnels
         .iter()
         .filter(|t| scope.flow_id.as_ref().is_none_or(|f| t.flow_id.as_ref() == Some(f)))
-        .filter(|t| t.reason != TunnelReason::Rejected)
         .filter(|t| !passthrough.contains(&t.address()))
         .filter(|t| {
             let query = t.query();
@@ -102,6 +105,8 @@ pub struct OpenTunnels(Mutex<Run>);
 #[derive(Default)]
 struct Run {
     run: u64,
+    /// Random for each run, so ids from another run or process never match this one's.
+    token: String,
     /// Finds the app behind a tunnel not known when it opened.
     attribution: Option<Attribution>,
     tunnels: HashMap<u64, Open>,
@@ -123,6 +128,7 @@ impl OpenTunnels {
     pub fn begin_run(&self, attribution: Option<Attribution>) -> u64 {
         let mut run = self.lock();
         run.run += 1;
+        run.token = yaak_database::generate_prefixed_id("tnl");
         run.attribution = attribution;
         run.tunnels.clear();
         run.run
@@ -136,12 +142,23 @@ impl OpenTunnels {
         }
     }
 
-    /// A tunnel opened in `run`, on client `connection`.
-    pub fn open(&self, run: u64, tunnel: OpenTunnel, connection: u64) {
+    /// A tunnel opened in `run`, on client `connection`, its `id` given here from its
+    /// `engine_id`.
+    pub fn open(&self, run: u64, mut tunnel: OpenTunnel, connection: u64) {
         let mut current = self.lock();
         if current.run == run {
-            current.tunnels.insert(tunnel.id, Open { tunnel, connection });
+            tunnel.id = format!("{}.{}", current.token, tunnel.engine_id);
+            current.tunnels.insert(tunnel.engine_id, Open { tunnel, connection });
         }
+    }
+
+    /// The engine's numbers for those of `ids` this run gave out. Others are left out.
+    pub fn engine_ids(&self, ids: &[String]) -> Vec<u64> {
+        let current = self.lock();
+        ids.iter()
+            .filter_map(|id| id.strip_prefix(current.token.as_str())?.strip_prefix('.'))
+            .filter_map(|n| n.parse().ok())
+            .collect()
     }
 
     /// A tunnel of `run` closed.
@@ -166,7 +183,7 @@ impl OpenTunnels {
             }
         }
         let mut list: Vec<OpenTunnel> = tunnels.values().map(|o| o.tunnel.clone()).collect();
-        list.sort_by_key(|t| t.id);
+        list.sort_by_key(|t| t.engine_id);
         list
     }
 }
@@ -184,7 +201,8 @@ mod tests {
 
     fn tunnel(id: u64, host: &str, app: Option<&str>, reason: TunnelReason) -> OpenTunnel {
         OpenTunnel {
-            id,
+            id: String::new(),
+            engine_id: id,
             host: host.into(),
             port: 443,
             app_name: app.map(String::from),
@@ -224,7 +242,7 @@ mod tests {
         reconnectable(&sample(), policy, &passthrough, &scope)
             .unwrap()
             .iter()
-            .map(|t| t.id)
+            .map(|t| t.engine_id)
             .collect()
     }
 
@@ -252,7 +270,7 @@ mod tests {
 
     #[test]
     fn everything_and_exclusions() {
-        // The built-in exclusions keep iCloud out, and the rejected 1Password tunnel stays.
+        // The built-in exclusions keep iCloud and 1Password out.
         let p = policy(&["*"]);
         assert_eq!(ids(&p, &[], None, None), [1, 2, 5, 6]);
         assert_eq!(ids(&p, &[], Some("*"), None), [1, 2, 5, 6]);
@@ -268,9 +286,12 @@ mod tests {
     #[test]
     fn rejected_pass_throughs_are_left_out() {
         let p = policy(&["*", "host:my.1password.com"]);
-        assert!(!ids(&p, &[], None, None).contains(&4), "rejected when it opened");
+        let rejected = "my.1password.com:443";
+        assert!(!ids(&p, &[rejected], None, None).contains(&4), "passed through still");
+        // Forgotten, its next connection would be decrypted.
+        assert!(ids(&p, &[], None, None).contains(&4));
         // An address passed through since it opened.
-        assert_eq!(ids(&p, &["www.google.com:443"], None, None), [2, 5, 6]);
+        assert_eq!(ids(&p, &[rejected, "www.google.com:443"], None, None), [2, 5, 6]);
     }
 
     #[test]
@@ -293,7 +314,10 @@ mod tests {
         tunnels.open(first, tunnel(1, "a.com", None, TunnelReason::NotListed), 1);
         tunnels.open(first, tunnel(2, "b.com", None, TunnelReason::NotListed), 2);
         tunnels.close(first, 1);
-        assert_eq!(tunnels.list().iter().map(|t| t.id).collect::<Vec<_>>(), [2]);
+        assert_eq!(tunnels.list().iter().map(|t| t.engine_id).collect::<Vec<_>>(), [2]);
+        let id = tunnels.list()[0].id.clone();
+        assert!(id.starts_with("tnl_") && id.ends_with(".2"), "{id}");
+        assert_eq!(tunnels.engine_ids(&[id.clone(), "tnl_x.2".into(), "2".into()]), [2]);
         // A new run starts empty, and the old one's late events change nothing.
         let second = tunnels.begin_run(None);
         tunnels.open(first, tunnel(3, "c.com", None, TunnelReason::NotListed), 3);
@@ -301,6 +325,8 @@ mod tests {
         tunnels.close(first, 2);
         tunnels.end_run(first);
         assert_eq!(tunnels.list().iter().map(|t| t.host.as_str()).collect::<Vec<_>>(), ["d.com"]);
+        // An id the first run gave out names nothing now, though its number is reused.
+        assert!(tunnels.engine_ids(&[id]).is_empty());
         tunnels.end_run(second);
         assert!(tunnels.list().is_empty());
     }

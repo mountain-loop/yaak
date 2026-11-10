@@ -1231,16 +1231,17 @@ impl ProxyCtx {
     }
 
     /// Closes tunnels so their clients reconnect, decrypted as the list now says: those in
-    /// `ids`, or, without ids, those [`Self::reconnectable_tunnels`] finds in `scope`. Each ends
+    /// `ids` this run of the engine gave out, or, without ids, those
+    /// [`Self::reconnectable_tunnels`] finds in `scope`. Each ends
     /// with its flow marked `reconnectRequested`. Returns how many were open.
     pub fn reconnect_tunnels(
         &self,
-        ids: Option<&[u64]>,
+        ids: Option<&[String]>,
         scope: &tunnels::TunnelScope,
     ) -> Result<usize, String> {
         let ids = match ids {
-            Some(ids) => ids.to_vec(),
-            None => self.reconnectable_tunnels(scope)?.iter().map(|t| t.id).collect(),
+            Some(ids) => self.tunnels.engine_ids(ids),
+            None => self.reconnectable_tunnels(scope)?.iter().map(|t| t.engine_id).collect(),
         };
         let handle = self.handle.lock().map_err(|_| "lock poisoned".to_string())?;
         Ok(handle.as_ref().map_or(0, |h| h.close_tunnels(&ids)))
@@ -2379,8 +2380,9 @@ pub struct ForgetPassthroughResponse {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct ReconnectTunnelsRequest {
-    #[ts(optional, type = "Array<number>")]
-    pub ids: Option<Vec<u64>>,
+    /// `OpenTunnel` ids. Ones from an earlier run of the engine close nothing.
+    #[ts(optional)]
+    pub ids: Option<Vec<String>>,
     #[serde(flatten)]
     pub scope: tunnels::TunnelScope,
 }
@@ -3575,7 +3577,8 @@ impl FlowSink {
                 };
                 // Kept paused too, so it can be closed for a reconnect.
                 let mut open = tunnels::OpenTunnel {
-                    id,
+                    id: String::new(),
+                    engine_id: id,
                     host,
                     port,
                     app_name: None,

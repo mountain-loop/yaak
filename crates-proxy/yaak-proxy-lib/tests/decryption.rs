@@ -227,6 +227,9 @@ async fn a_refused_handshake_is_one_flow_per_address() {
         events.try_iter().filter(|e| e.event == "passthrough_changed").collect();
     assert_eq!(pushed.len(), 1);
     assert_eq!(pushed[0].payload["addresses"], json!([other]));
+    // Its tunnel still open would now be decrypted if it reconnected.
+    let open = reconnectable(&ctx, json!({"flowId": tunnel.id})).await;
+    assert_eq!(open.len(), 1, "forgotten, its tunnel counts again");
     let again = rpc(&ctx, "forget_passthrough", json!({"address": target})).await.unwrap();
     assert_eq!(again["forgotten"], false);
     assert!(rpc(&ctx, "forget_passthrough", json!({"address": ""})).await.is_err());
@@ -309,6 +312,29 @@ async fn open_tunnels_are_reconnected_only_when_asked() {
     wait_for_tunnels(&ctx, json!({}), |t| t.is_empty()).await;
     let closed = rpc(&ctx, "reconnect_tunnels", json!({"ids": [id]})).await.unwrap();
     assert_eq!(closed["closed"], 0);
+
+    // An id listed before the engine restarted closes nothing after, though the new run
+    // numbers its tunnels from 1 again. Each is opened while its host is unlisted.
+    let unlisted = || rpc(&ctx, "edit_decrypt_list", json!({"remove": ["host:127.0.0.1"]}));
+    let listed = || rpc(&ctx, "edit_decrypt_list", json!({"add": ["host:127.0.0.1"]}));
+    unlisted().await.unwrap();
+    let mut d = open_tunnel(&ctx, &loopback).await;
+    listed().await.unwrap();
+    wait_for_tunnels(&ctx, json!({}), |t| t.len() == 1).await;
+    let old = reconnectable(&ctx, json!({})).await[0]["id"].clone();
+    ctx.stop().unwrap();
+    d.read_to_end(&mut rest).await.unwrap();
+    ctx.start().unwrap();
+    unlisted().await.unwrap();
+    let mut e = open_tunnel(&ctx, &loopback).await;
+    listed().await.unwrap();
+    wait_for_tunnels(&ctx, json!({}), |t| t.len() == 1).await;
+    assert_ne!(reconnectable(&ctx, json!({})).await[0]["id"], old);
+    let closed = rpc(&ctx, "reconnect_tunnels", json!({"ids": [old]})).await.unwrap();
+    assert_eq!(closed["closed"], 0);
+    e.write_all(b"ping").await.unwrap();
+    let mut echoed = [0u8; 4];
+    e.read_exact(&mut echoed).await.unwrap();
 }
 
 /// Dropping the last context stops its engine, which its event loop does not keep alive.

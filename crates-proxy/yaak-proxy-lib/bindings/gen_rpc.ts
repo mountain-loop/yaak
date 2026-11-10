@@ -484,9 +484,10 @@ vars: Array<[string, string]>, };
  */
 export type OpenTunnel = { 
 /**
- * The engine's id for it, for closing it. Numbered afresh each time the engine starts.
+ * Its id for closing it, unique to this run of the engine, so one listed before the
+ * engine restarted closes nothing after.
  */
-id: number, 
+id: string, 
 /**
  * The host it leads to, without an IPv6 address's brackets.
  */
@@ -580,7 +581,11 @@ path: string, };
  * Tunnels to close: those in `ids`, or, without them, every one `list_reconnectable_tunnels`
  * returns for the same `entry` and `flowId`.
  */
-export type ReconnectTunnelsRequest = { ids?: Array<number>, 
+export type ReconnectTunnelsRequest = { 
+/**
+ * `OpenTunnel` ids. Ones from an earlier run of the engine close nothing.
+ */
+ids?: Array<string>, 
 /**
  * An entry as stored or typed, `host:www.google.com`, `app:Dia`, `*`: only tunnels it
  * names. An exclusion, `!host:*.chase.com`, names those it would keep out.
