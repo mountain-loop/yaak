@@ -1,16 +1,26 @@
-import { Dropdown, type DropdownItem, IconButton } from "@yaakapp-internal/ui";
+import { Dropdown, type DropdownItem, type DropdownRef } from "@yaakapp-internal/ui";
 import { useAtomValue, useSetAtom } from "jotai";
+import type { Ref } from "react";
 import { useState } from "react";
 import { clearFlowsAtom, flowTotalAtom, lockedAtom } from "../lib/store";
 
-/**
- * Clears every flow, once confirmed in its menu, which its hotkey opens too. The list empties at
- * once; the flows are deleted in the background. Disabled with none to clear, or while captured
- * traffic is locked.
- */
-export function ClearFlowsButton() {
+/** Whether there are flows to clear: some, and readable, as they aren't while traffic is locked */
+export function useCanClearFlows(): boolean {
   const total = useAtomValue(flowTotalAtom);
   const locked = useAtomValue(lockedAtom);
+  return locked == null && total > 0;
+}
+
+/**
+ * Clears every flow, once confirmed in its menu, which its hotkey or the status menu's Clear
+ * Traffic opens. It has no button of its own: it covers the element it is placed over, without
+ * taking the pointer, so the menu opens from there. The list empties at once; the flows are
+ * deleted in the background. Neither menu nor hotkey with nothing to clear, or while captured
+ * traffic is locked.
+ */
+export function ClearFlowsMenu({ ref }: { ref?: Ref<DropdownRef> }) {
+  const total = useAtomValue(flowTotalAtom);
+  const canClear = useCanClearFlows();
   const clear = useSetAtom(clearFlowsAtom);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,31 +57,13 @@ export function ClearFlowsButton() {
     },
   ];
 
-  // Nothing to clear, or nothing that can be read while traffic is locked: no menu, nor hotkey.
-  if (locked != null || total === 0) {
-    return (
-      <IconButton
-        className="pointer-events-auto"
-        icon="trash"
-        title={locked != null ? "Clear flows (traffic is locked)" : "Clear flows (none yet)"}
-        tooltip
-        size="sm"
-        iconColor="secondary"
-        disabled
-      />
-    );
-  }
-
   return (
-    <Dropdown items={items} hotKeyAction="flows_clear">
-      <IconButton
-        className="pointer-events-auto"
-        icon="trash"
-        title="Clear flows"
-        tooltip
-        size="sm"
-        iconColor="secondary"
-      />
+    <Dropdown
+      ref={ref}
+      items={canClear ? items : []}
+      hotKeyAction={canClear ? "flows_clear" : undefined}
+    >
+      <span aria-hidden className="absolute inset-0 pointer-events-none" />
     </Dropdown>
   );
 }

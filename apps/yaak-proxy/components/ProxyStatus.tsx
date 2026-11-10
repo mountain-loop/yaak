@@ -12,7 +12,7 @@ import {
 import classNames from "classnames";
 import { useAtom, useAtomValue } from "jotai";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRpcEvent } from "../hooks/useRpcEvent";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
@@ -24,15 +24,19 @@ import { proxyStateAtom, systemProxyEverOnAtom } from "../lib/store";
 import { helperPollInterval, recordingLabel, systemProxySwitch } from "../lib/systemProxy";
 import { onWindowFocus } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
+import { ClearFlowsMenu, useCanClearFlows } from "./ClearFlowsMenu";
 
 /**
- * The header's state pill and its menu of four rows: the state, Pause or Resume Recording,
- * Override system proxy, and the certificate. The engine runs for as long as the app does, so the
+ * The header's state pill and its menu: the listening address, the state, Pause or Resume
+ * Recording, Clear Traffic, Override system proxy, and the certificate. The engine runs for as long as the app does, so the
  * pill shows whether flows are being stored. A certificate that is not trusted steps out of the
  * menu beside the pill until it is. Everything set once and left alone lives in Settings.
  */
 export function ProxyStatus() {
   const dropdownRef = useRef<DropdownRef>(null);
+  const clearRef = useRef<DropdownRef>(null);
+  const canClear = useCanClearFlows();
+  const [copied, setCopied] = useCopied();
   const proxyState = useAtomValue(proxyStateAtom);
   const setup = useProxySetup();
   const execute = useRpcMutation("execute_action");
@@ -104,7 +108,23 @@ export function ProxyStatus() {
     systemProxy.data.helper !== "enabled" &&
     systemProxy.data.helper !== "unavailable";
 
+  const address = port == null ? null : `127.0.0.1:${port}`;
   const items: DropdownItem[] = [
+    {
+      label: <span className="font-mono">{address}</span>,
+      hidden: address == null,
+      keepOpenOnSelect: true,
+      rightSlot: copied ? (
+        <span className="text-xs text-text-subtle">Copied</span>
+      ) : (
+        <Icon icon="copy" size="sm" className="text-text-subtlest" />
+      ),
+      onSelect: () => {
+        if (address == null) return;
+        navigator.clipboard.writeText(address).then(setCopied, console.error);
+      },
+    },
+    { type: "separator", hidden: address == null },
     { type: "content", label: stateRow },
     {
       label: recordingLabel(recording),
@@ -113,6 +133,17 @@ export function ProxyStatus() {
       hotKeyAction: "recording_toggle",
       hotKeyLabelOnly: true,
       onSelect: () => execute.mutate({ scope: "global", action: "recording_toggle" }),
+    },
+    {
+      label: "Clear Traffic",
+      icon: "trash",
+      disabled: !canClear,
+      hotKeyAction: "flows_clear",
+      hotKeyLabelOnly: true,
+      // Its confirmation opens from the pill once this menu has closed.
+      onSelect: () => {
+        setTimeout(() => clearRef.current?.open());
+      },
     },
     { type: "separator" },
     {
@@ -191,37 +222,36 @@ export function ProxyStatus() {
 
   return (
     <>
-      <Dropdown ref={dropdownRef} items={items}>
-        <Pill color={status === "stopped" ? "warning" : undefined}>
-          {status === "encrypting" ? (
-            <>
-              <LoadingIcon size="xs" />
-              <span className="text-text">Encrypting</span>
-              <span className="font-mono text-text-subtle">{encrypting}</span>
-            </>
-          ) : status === "cli" && other != null ? (
-            <>
-              <StateDot state="cli" />
-              <span className="text-text">CLI</span>
-              {other.proxyPort != null && (
-                <span className="font-mono text-text-subtle">:{other.proxyPort}</span>
-              )}
-            </>
-          ) : status === "recording" || status === "paused" ? (
-            <>
-              <StateDot state={status} />
-              <span className="text-text">{recording ? "Recording" : "Paused"}</span>
-              {port != null && <span className="font-mono text-text-subtle">:{port}</span>}
-            </>
-          ) : (
-            <>
-              <Icon icon="alert_triangle" size="xs" />
-              Not running
-            </>
-          )}
-          <Icon icon="chevron_down" size="xs" className="text-text-subtlest" />
-        </Pill>
-      </Dropdown>
+      <span className="relative flex">
+        <Dropdown ref={dropdownRef} items={items}>
+          <Pill color={status === "stopped" ? "warning" : undefined}>
+            {status === "encrypting" ? (
+              <>
+                <LoadingIcon size="xs" />
+                <span className="text-text">Encrypting</span>
+                <span className="font-mono text-text-subtle">{encrypting}</span>
+              </>
+            ) : status === "cli" && other != null ? (
+              <>
+                <StateDot state="cli" />
+                <span className="text-text">CLI</span>
+              </>
+            ) : status === "recording" || status === "paused" ? (
+              <>
+                <StateDot state={status} />
+                <span className="text-text">{recording ? "Recording" : "Paused"}</span>
+              </>
+            ) : (
+              <>
+                <Icon icon="alert_triangle" size="xs" />
+                Not running
+              </>
+            )}
+            <Icon icon="chevron_down" size="xs" className="text-text-subtlest" />
+          </Pill>
+        </Dropdown>
+        <ClearFlowsMenu ref={clearRef} />
+      </span>
       {untrusted && (
         <Pill color="warning" onClick={() => dropdownRef.current?.open()}>
           <Icon icon="shield_off" size="xs" />
@@ -307,6 +337,17 @@ export function useCopyEnvironment() {
     }
   };
 }
+/** Whether something was just copied, for a moment, and the call that says it was */
+function useCopied(): [boolean, () => void] {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timeout = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timeout);
+  }, [copied]);
+  return [copied, () => setCopied(true)];
+}
+
 /** Keeps a click on a control inside a menu row from closing the menu, as a row's click does */
 function KeepMenuOpen({ children, className }: { children: ReactNode; className?: string }) {
   return (

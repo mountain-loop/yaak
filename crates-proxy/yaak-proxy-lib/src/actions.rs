@@ -43,8 +43,9 @@ pub fn all_global_actions() -> Vec<(ActionInvocation, ActionMetadata)> {
         (
             ActionInvocation::Global { action: GlobalAction::FlowsClear },
             ActionMetadata {
-                label: "Clear Flows".into(),
-                default_hotkey: default_hotkey("Meta+K", "Ctrl+K"),
+                label: "Clear Traffic".into(),
+                // Not Cmd+K, which is kept for a command palette.
+                default_hotkey: default_hotkey("Meta+Shift+K", "Ctrl+Shift+K"),
             },
         ),
     ]

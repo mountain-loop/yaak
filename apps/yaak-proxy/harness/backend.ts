@@ -114,7 +114,19 @@ function answer(cmd: string, payload: unknown): unknown {
         ],
       };
     case "list_actions":
-      return { actions: [] };
+      // As the engine lists them on macOS
+      return {
+        actions: [
+          [
+            { scope: "global", action: "recording_toggle" },
+            { label: "Pause or Resume Recording", defaultHotkey: "Meta+R" },
+          ],
+          [
+            { scope: "global", action: "flows_clear" },
+            { label: "Clear Traffic", defaultHotkey: "Meta+Shift+K" },
+          ],
+        ],
+      };
     case "list_flows": {
       const many = Number(new URLSearchParams(location.search).get("many") ?? 0);
       const all = (many > 0 ? manyFlows(many) : fixtures.map((f) => f.flow)).map((f, i) => ({
