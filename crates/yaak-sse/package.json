@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "jsonpath-plus": "^11.2.2"
+    "jsonpath-plus": "^11.3.0"
   },
   "main": "index.ts",
   "scripts": {
