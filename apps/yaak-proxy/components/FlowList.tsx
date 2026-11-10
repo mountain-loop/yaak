@@ -52,6 +52,7 @@ import {
   newestStartedAtAtom,
   oldestFlowAtom,
   proxyStateAtom,
+  searchLoadingAtom,
   searchTextAtom,
   setSearchTextAtom,
   flowsAtom,
@@ -193,15 +194,19 @@ export function FlowList({ style, className }: Props) {
 
   // A held list follows again once it is at its end, not only when scrolled there: a sidebar row,
   // search or resize can leave it there with no scroll to make, as one that fits its viewport
-  // always is, and its flows would otherwise count as new while all are on screen. Not on a
-  // change of `following` itself, so selecting a row at the end still holds.
+  // always is, and its flows would otherwise count as new while all are on screen. Judged when
+  // which flows are listed changes, or the list's height, not when one listed is updated or
+  // `following` itself changes, so selecting a row at the end still holds; and not while a
+  // search's first page loads, as its empty list is at its end only until the page is in.
+  const searchLoading = useAtomValue(searchLoadingAtom);
+  const listed = `${flows.length}:${flows[0]?.id ?? ""}:${flows.at(-1)?.id ?? ""}`;
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (el == null) return;
+    if (el == null || searchLoading) return;
     if (!resumesFollowing({ following: latest.current.following, sorted, el })) return;
     setFollowing(true);
     setHeldAt(null);
-  }, [flows, sorted, viewportHeight, setFollowing]);
+  }, [listed, sorted, searchLoading, viewportHeight, setFollowing]);
 
   useLayoutEffect(() => {
     if (following && !sorted) setScrollTop(Number.MAX_SAFE_INTEGER);

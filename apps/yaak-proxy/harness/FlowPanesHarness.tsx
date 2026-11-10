@@ -68,7 +68,8 @@ function FixtureCard({ fixture }: { fixture: FlowFixture }) {
       if (source == null) return;
       const flow = {
         ...source,
-        id: `fl_arrived_${added}`,
+        // The fixture's id first, so the backend finds its bodies, as `manyFlows` does
+        id: `${source.id}~arrived_${added}`,
         number: 1500 + added,
         startedAt: new Date().toISOString().slice(0, 23),
       };

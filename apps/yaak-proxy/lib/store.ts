@@ -215,6 +215,9 @@ export const shownFlowsAtom = atom((get) => {
 /** Flows in the database the list covers: every one, or those the search matches */
 export const shownTotalAtom = atom((get) => get(shownWindowAtom).total);
 
+/** The search's first page has not arrived, so the list shows none of its flows yet */
+export const searchLoadingAtom = atom((get) => get(searchWindowAtom)?.loading ?? false);
+
 /** Start and id of the oldest flow shown, which loading older flows moves back */
 export const oldestFlowAtom = atom((get) => get(windowFlowsAtom)[0] ?? null);
 
