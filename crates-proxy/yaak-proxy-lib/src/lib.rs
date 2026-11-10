@@ -533,7 +533,7 @@ impl ProxyCtx {
                 clock: BatchClock::Real,
                 tunnels: self.tunnels.clone(),
                 tunnel_run,
-                handle: self.handle.clone(),
+                handle: Arc::downgrade(&self.handle),
                 rejections: Default::default(),
             };
             std::thread::spawn(move || run_event_loop(event_rx, sink));
@@ -1763,7 +1763,9 @@ pub struct DecryptListSaved {
     #[serde(flatten)]
     pub list: DecryptList,
     /// Open connections the list now decrypts that stay encrypted until their clients
-    /// reconnect: `reconnect_tunnels` closes them so they do. Closed by nothing else.
+    /// reconnect: `reconnect_tunnels` closes them so they do. Closed by nothing else. Zero from
+    /// an owner too old to count them.
+    #[serde(default)]
     #[ts(type = "number")]
     pub still_encrypted: usize,
 }
@@ -2726,6 +2728,9 @@ async fn list_workspaces(
 
 async fn preview_save(ctx: ProxyCtx, req: PreviewSaveRequest) -> Result<SavePreview, RpcError> {
     let flow = find_flow(&ctx, &req.flow_id)?;
+    if flow.is_handshake_only() {
+        return Err(rpc_error(NOT_A_REQUEST));
+    }
     let limit = settings(&ctx)?.capture_body_limit;
     let body = bodies::read_body(&ctx.db()?, &ctx.blobs()?, &flow, FlowBody::Request, limit)
         .await
@@ -3183,6 +3188,10 @@ const STOPPED_MID_STREAM: &str = "Yaak Proxy stopped before the stream ended";
 /// Why a tunnel still open when the engine stopped ended.
 const STOPPED_MID_TUNNEL: &str = "Yaak Proxy stopped before the connection closed";
 
+/// Why a failed handshake's flow can't be saved as a request.
+pub(crate) const NOT_A_REQUEST: &str =
+    "Not a request: the client's TLS handshake failed before it sent one";
+
 /// The error of a flow recording a client's refusal of the proxy's certificate.
 const REJECTED_CERTIFICATE: &str = "Rejected the proxy's certificate";
 
@@ -3296,8 +3305,9 @@ struct FlowSink {
     /// The open tunnels, kept for this engine's run whether or not flows are recorded.
     tunnels: Arc<tunnels::OpenTunnels>,
     tunnel_run: u64,
-    /// The engine, for its pass-through set as it changes.
-    handle: Arc<Mutex<Option<ProxyHandle>>>,
+    /// The engine, for its pass-through set as it changes. Weak, so the loop never keeps alive
+    /// the engine whose events it waits for.
+    handle: Weak<Mutex<Option<ProxyHandle>>>,
     /// The flow recorded for each refused handshake, by the engine's id for it, for the tunnels
     /// passed through after it to name.
     rejections: std::cell::RefCell<HashMap<u64, String>>,
@@ -3641,8 +3651,11 @@ impl FlowSink {
                 // Whether or not it is recorded, the pass-through set has changed.
                 let addresses = self
                     .handle
-                    .lock()
-                    .map(|h| h.as_ref().map(ProxyHandle::passthrough).unwrap_or_default())
+                    .upgrade()
+                    .and_then(|handle| {
+                        let handle = handle.lock().ok()?;
+                        handle.as_ref().map(ProxyHandle::passthrough)
+                    })
                     .unwrap_or_default();
                 self.events.emit("passthrough_changed", &PassthroughChangedPayload { addresses });
                 if !recording.lock().map(|r| r.was_on_at(started_at)).unwrap_or(true) {
@@ -4196,6 +4209,25 @@ define_rpc! {
 mod tests {
     use super::*;
 
+    /// An owner from before the count answers a forwarded save without it.
+    #[test]
+    fn a_saved_list_from_an_older_owner_reads_without_its_count() {
+        let saved: DecryptListSaved = serde_json::from_str(r#"{"entries": []}"#).unwrap();
+        assert_eq!((saved.list.entries.len(), saved.still_encrypted), (0, 0));
+    }
+
+    #[test]
+    fn passthrough_addresses_as_the_engine_keys_them() {
+        assert_eq!(passthrough_address("a.com").as_deref(), Some("a.com:443"));
+        assert_eq!(passthrough_address(" a.com:8443 ").as_deref(), Some("a.com:8443"));
+        assert_eq!(passthrough_address("[::1]").as_deref(), Some("[::1]:443"));
+        assert_eq!(passthrough_address("[::1]:8443").as_deref(), Some("[::1]:8443"));
+        assert_eq!(passthrough_address("::1").as_deref(), Some("[::1]:443"));
+        assert_eq!(passthrough_address(""), None);
+        assert_eq!(passthrough_address("a.com:http"), None);
+        assert_eq!(passthrough_address("[]"), None);
+    }
+
     #[test]
     fn settings_the_password_prompt_parked_keep_it_over_the_helper() {
         use yaak_proxy_helper::networksetup::{ProxySetting, ServiceProxy, Snapshot};
@@ -4265,7 +4297,7 @@ mod tests {
             clock: BatchClock::Real,
             tunnels: ctx.tunnels.clone(),
             tunnel_run: ctx.tunnels.begin_run(None),
-            handle: ctx.handle.clone(),
+            handle: Arc::downgrade(&ctx.handle),
             rejections: Default::default(),
         }
     }

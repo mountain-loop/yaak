@@ -111,6 +111,9 @@ impl ClientDb {
         body: &DecodedBody,
         target: &SaveFlowRequest,
     ) -> Result<SaveFlowResponse, String> {
+        if flow.is_handshake_only() {
+            return Err(crate::NOT_A_REQUEST.to_string());
+        }
         let db = self.query_manager.connect();
         db.get_workspace(&target.workspace_id)
             .map_err(|_| format!("No workspace {} in Yaak", target.workspace_id))?;

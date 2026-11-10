@@ -144,7 +144,8 @@ kind?: ExclusionKind, };
 export type DecryptListSaved = { 
 /**
  * Open connections the list now decrypts that stay encrypted until their clients
- * reconnect: `reconnect_tunnels` closes them so they do. Closed by nothing else.
+ * reconnect: `reconnect_tunnels` closes them so they do. Closed by nothing else. Zero from
+ * an owner too old to count them.
  */
 stillEncrypted: number, entries: Array<DecryptListEntry>, };
 

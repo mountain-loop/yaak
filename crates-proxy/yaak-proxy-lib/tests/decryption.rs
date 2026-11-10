@@ -167,6 +167,9 @@ async fn a_refused_handshake_is_one_flow_per_address() {
     assert_eq!(rejected.error.as_deref(), Some("Rejected the proxy's certificate"));
     assert!(!rejected.tunnelled);
     assert!(rejected.elapsed_ms.is_some(), "ended, not pending");
+    // No request was sent, so there is none to save.
+    let preview = rpc(&ctx, "preview_save", json!({"flowId": rejected.id})).await;
+    assert!(preview.unwrap_err().starts_with("Not a request"));
 
     // Passed through from now on, naming the refusal.
     let _tunnel = open_tunnel(&ctx, &target).await;
@@ -306,6 +309,19 @@ async fn open_tunnels_are_reconnected_only_when_asked() {
     wait_for_tunnels(&ctx, json!({}), |t| t.is_empty()).await;
     let closed = rpc(&ctx, "reconnect_tunnels", json!({"ids": [id]})).await.unwrap();
     assert_eq!(closed["closed"], 0);
+}
+
+/// Dropping the last context stops its engine, which its event loop does not keep alive.
+#[tokio::test(flavor = "multi_thread")]
+async fn dropping_the_context_stops_the_engine() {
+    let (_dir, ctx, _events) = started(&[]);
+    let port = ctx.port().unwrap();
+    drop(ctx);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+        assert!(Instant::now() < deadline, "the engine still listens on {port}");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
 }
 
 /// A tunnel that ends on its own is no longer open, and is not marked for a reconnect.

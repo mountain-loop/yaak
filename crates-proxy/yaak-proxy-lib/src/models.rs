@@ -229,6 +229,11 @@ impl Flow {
         }
     }
 
+    /// A client's failed TLS handshake, recorded without a request: nothing to save or replay.
+    pub fn is_handshake_only(&self) -> bool {
+        self.method.is_empty()
+    }
+
     pub fn truncated(&self, body: FlowBody) -> bool {
         match body {
             FlowBody::Request => self.request_truncated,
