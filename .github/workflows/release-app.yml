@@ -308,10 +308,11 @@ jobs:
   # Yaak Proxy, macOS only, on the same tag and version as Yaak. Its own job, sharing nothing
   # with Yaak's, so a proxy failure never stops Yaak's artifacts; it fails the run, visibly.
   #
-  # On a v* tag it runs only once the repository variable RELEASE_PROXY is "true": the update
-  # server and the release audit pick Yaak's assets by suffix and architecture, so the proxy's
-  # must not join Yaak's release until the website tells them apart. The dry run
-  # (workflow_dispatch) runs regardless, and only keeps workflow artifacts.
+  # On a v* tag it runs only once the repository variable RELEASE_PROXY is "true": the website's
+  # download links pick Yaak's assets by suffix and architecture, and its release audit expects
+  # Yaak's exact asset set and this run's success, so the proxy must not join Yaak's release
+  # until the website expects it there. The dry run (workflow_dispatch) runs regardless, and
+  # only keeps workflow artifacts.
   build-proxy:
     if: >-
       github.repository == 'mountain-loop/yaak' && (
