@@ -132,7 +132,6 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
         tab: {
           value: REQUEST_TAB_COOKIES,
           label: "Cookies",
-          empty: sentCount === 0,
           rightSlot: <CountBadge count={sentCount} />,
         },
         content: <ResponseCookies response={cookies} side="sent" />,
@@ -154,7 +153,6 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
       className="px-3"
       request={request}
       fullHeight
-      dimEmptyTabs
       forceUpdateKey={`${flow.updatedAt}.${body.data == null ? "" : "loaded"}`}
       tabsStorageKey="proxy_request_tabs"
       bodyLoader={loader}
@@ -232,7 +230,6 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
               tab: {
                 value: RESPONSE_TAB_MESSAGES,
                 label: messagesLabel,
-                empty: flow.messageCount === 0,
                 rightSlot: (
                   <CountBadge
                     count={flow.messageCount}
@@ -263,7 +260,6 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
     <HttpResponsePaneView
       bare
       requestShownApart
-      dimEmptyTabs
       className={classNames(className, "border-border-subtle")}
       response={response}
       body={loader}

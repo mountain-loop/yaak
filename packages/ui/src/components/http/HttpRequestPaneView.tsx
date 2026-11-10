@@ -109,8 +109,6 @@ export interface HttpRequestPaneViewProps {
 
   /** Replaces the URL bar, as the proxy's card shows a captured request's method and URL */
   urlLine?: ReactNode;
-  /** Tabs with nothing in them read in the subtlest colour */
-  dimEmptyTabs?: boolean;
   /**
    * The tab to open on for a request with no tab of its own; with it, a tab chosen for one
    * request doesn't carry to the next
@@ -166,7 +164,6 @@ export function HttpRequestPaneView({
   authContent,
   extraTabs,
   urlLine,
-  dimEmptyTabs = false,
   defaultTab,
   onTabChange,
 }: HttpRequestPaneViewProps) {
@@ -190,20 +187,17 @@ export function HttpRequestPaneView({
       bodyTab ?? {
         value: REQUEST_TAB_BODY,
         label: bodyTypeLabel(request.bodyType, request.contentType),
-        empty: dimEmptyTabs && request.bodyType == null,
         rightSlot: numParams > 0 ? <CountBadge count={numParams} /> : null,
       },
       {
         value: REQUEST_TAB_PARAMS,
         rightSlot: <CountBadge count={paramPairs.length} />,
         label: "Params",
-        empty: dimEmptyTabs && paramPairs.length === 0,
       },
       ...(headersTabs ?? [
         {
           value: REQUEST_TAB_HEADERS,
           label: "Headers",
-          empty: dimEmptyTabs && headerCount === 0,
           rightSlot: <CountBadge count={headerCount} />,
         },
       ]),
@@ -221,7 +215,6 @@ export function HttpRequestPaneView({
     [
       authTabs,
       bodyTab,
-      dimEmptyTabs,
       extraTabs,
       headerCount,
       headersTabs,

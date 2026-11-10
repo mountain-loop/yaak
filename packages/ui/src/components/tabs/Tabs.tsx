@@ -41,8 +41,6 @@ export type TabItem =
       value: string;
       label: string;
       hidden?: boolean;
-      /** Nothing in it: the label reads in the subtlest colour */
-      empty?: boolean;
       leftSlot?: ReactNode;
       rightSlot?: ReactNode;
     }
@@ -59,8 +57,6 @@ export type TabItem =
 export interface TabOptionsItem {
   value: string;
   options: Omit<RadioDropdownProps, "children">;
-  /** Nothing in it: the label reads in the subtlest colour */
-  empty?: boolean;
   leftSlot?: ReactNode;
   rightSlot?: ReactNode;
 }
@@ -515,15 +511,7 @@ function TabButton({
     ) : "options" in tab ? (
       <TabOptionsButton tab={tab} buttonProps={btnProps} isActive={isActive} />
     ) : (
-      <Button
-        leftSlot={tab.leftSlot}
-        rightSlot={tab.rightSlot}
-        {...btnProps}
-        className={classNames(
-          btnProps.className,
-          !isActive && "empty" in tab && tab.empty && "text-text-subtlest!",
-        )}
-      >
+      <Button leftSlot={tab.leftSlot} rightSlot={tab.rightSlot} {...btnProps}>
         {"label" in tab && tab.label ? tab.label : tab.value}
       </Button>
     );
@@ -596,7 +584,6 @@ function TabOptionsButton({
           </div>
         }
         {...buttonProps}
-        className={classNames(buttonProps.className, !isActive && tab.empty && "text-text-subtlest!")}
       >
         {option && "shortLabel" in option && option.shortLabel
           ? option.shortLabel

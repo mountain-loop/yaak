@@ -80,8 +80,6 @@ export interface HttpResponsePaneViewProps {
   requestShownApart?: boolean;
   /** Drawn inside a card the app draws, without a card of its own */
   bare?: boolean;
-  /** Tabs with nothing in them read in the subtlest colour */
-  dimEmptyTabs?: boolean;
   /**
    * The tab to open on for a key with no tab of its own; with it, a tab chosen under one key
    * doesn't carry to the next
@@ -117,7 +115,6 @@ export function HttpResponsePaneView({
   renderCopyButton,
   requestShownApart = false,
   bare = false,
-  dimEmptyTabs = false,
   defaultTab,
   onTabChange,
 }: HttpResponsePaneViewProps) {
@@ -163,17 +160,12 @@ export function HttpResponsePaneView({
         : []),
     ];
 
-    const noBody = response == null || (response.contentLength ?? 0) === 0;
     const headerCount = response?.headers.length ?? 0;
-    const cookieCount = requestShownApart
-      ? cookieCounts.received
-      : cookieCounts.sent + cookieCounts.received;
     return [
       onViewModeChange == null && itemsAfter.length === 0
-        ? { value: RESPONSE_TAB_BODY, label: "Response", empty: dimEmptyTabs && noBody }
+        ? { value: RESPONSE_TAB_BODY, label: "Response" }
         : {
             value: RESPONSE_TAB_BODY,
-            empty: dimEmptyTabs && noBody,
             options: {
               value: viewMode,
               onChange: (v: string | null) => onViewModeChange?.(v === "raw" ? "raw" : "pretty"),
@@ -199,7 +191,6 @@ export function HttpResponsePaneView({
       {
         value: RESPONSE_TAB_HEADERS,
         label: "Headers",
-        empty: dimEmptyTabs && headerCount === 0,
         rightSlot: requestShownApart ? (
           <CountBadge count={headerCount} />
         ) : (
@@ -209,7 +200,6 @@ export function HttpResponsePaneView({
       {
         value: RESPONSE_TAB_COOKIES,
         label: "Cookies",
-        empty: dimEmptyTabs && cookieCount === 0,
         rightSlot: requestShownApart ? (
           <CountBadge count={cookieCounts.received} />
         ) : cookieCounts.sent > 0 || cookieCounts.received > 0 ? (
@@ -220,7 +210,6 @@ export function HttpResponsePaneView({
     ];
   }, [
     cookieCounts,
-    dimEmptyTabs,
     extraTabs,
     mimeType,
     onCopyAsCurl,

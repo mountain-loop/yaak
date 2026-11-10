@@ -81,6 +81,12 @@ const csvResponse = [
   "2,grace@example.com,team,2026-10-14",
   "3,linus@example.com,free,2026-11-02",
 ].join("\n");
+const tsvResponse = [
+  "sku\tname\tstock\tnote",
+  "A-100\tDesk lamp\t42\tWarm white, dimmable, ships with a long braided fabric cable",
+  "A-101\tMonitor arm\t7\t",
+  "A-102\tKeyboard tray\t0\tBack in stock next week",
+].join("\n");
 const multipartBoundary = "yaakBoundary7MA4YWxk";
 const multipartRequest = [
   `--${multipartBoundary}`,
@@ -237,6 +243,20 @@ export const fixtures: FlowFixture[] = [
     },
     requestBody: body(""),
     responseBody: body(csvResponse),
+  },
+  {
+    label: "TSV GET",
+    flow: {
+      ...base,
+      id: "fl_tsv",
+      url: "https://api.example.com/inventory.tsv",
+      contentType: "text/tab-separated-values",
+      requestHeaders: [{ name: "Accept", value: "text/tab-separated-values" }],
+      responseHeaders: [{ name: "Content-Type", value: "text/tab-separated-values" }],
+      responseSize: tsvResponse.length,
+    },
+    requestBody: body(""),
+    responseBody: body(tsvResponse),
   },
   {
     label: "Multipart POST",
