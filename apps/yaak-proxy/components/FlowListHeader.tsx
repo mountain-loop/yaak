@@ -382,6 +382,8 @@ function useColumnDrag({
     from: number;
     /** The labels' edges when the drag began, from the header's left, as the columns slide */
     cells: { left: number; right: number }[];
+    /** The columns shown when it began, which the edges and `from` describe */
+    shown: string;
     /** The pointer, across the window */
     x: number;
     /** The boundary it would move to, null where it would stay */
@@ -418,7 +420,8 @@ function useColumnDrag({
     );
     const id = e.active.id as ColumnId;
     const x = pointer.current;
-    state.current = { id, from, cells, x, to: null, ghostX: x, frame: 0 };
+    const shown = shownKey(latest.current.columns);
+    state.current = { id, from, cells, shown, x, to: null, ghostX: x, frame: 0 };
     latest.current.onColumnDrag({ type: "start", id, x });
     target(state.current);
 
@@ -459,6 +462,13 @@ function useColumnDrag({
   const cancel = useCallback(() => {
     stop(false);
   }, [stop]);
+
+  // Columns shown or hidden under a drag, as App is when the first flow with an app arrives,
+  // leave its edges and target describing columns that are gone; it is put back instead.
+  const shown = shownKey(columns);
+  useEffect(() => {
+    if (state.current != null && state.current.shown !== shown) cancel();
+  }, [shown, cancel]);
 
   // The pointer from a press on the header until its release, read before dnd-kit sees it.
   // dnd-kit starts a drag on the move that crosses `DRAG_DISTANCE` and reports moves and the
@@ -521,4 +531,9 @@ function useColumnDrag({
     onPointerDownCapture,
     dndHandlers: { onDragStart, onDragEnd: drop, onDragCancel: cancel },
   };
+}
+
+/** Which columns show, in order, to tell when that changes */
+function shownKey(columns: Column[]): string {
+  return columns.map((c) => c.id).join(" ");
 }

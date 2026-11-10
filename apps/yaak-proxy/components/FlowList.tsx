@@ -633,8 +633,8 @@ function useColumnDragView(
           const ghost = snapshotColumn(event.id, event.x, root, header, list);
           const style = document.createElement("style");
           document.head.append(style);
-          const width = cells[from]?.getBoundingClientRect().width ?? 0;
-          drag.current = { ghost, ids, from, width, to: null, style };
+          const widths = cells.map((c) => c.getBoundingClientRect().width);
+          drag.current = { ghost, ids, widths, from, to: null, style };
           style.textContent = columnDragCss(drag.current);
         }
       }
@@ -656,16 +656,16 @@ function useColumnDragView(
 
 interface ColumnDragView {
   ghost: ColumnGhost | null;
-  /** The columns shown, the dragged one's place among them and its width, and its target */
+  /** The columns shown and their widths, the dragged one's place among them, and its target */
   ids: ColumnId[];
+  widths: number[];
   from: number;
-  width: number;
   to: number | null;
   style: HTMLStyleElement;
 }
 
 /** The rules for a drag: the column hidden, and those it passes slid aside */
-function columnDragCss({ ids, from, width, to }: ColumnDragView): string {
+function columnDragCss({ ids, widths, from, to }: ColumnDragView): string {
   // A row's cell is the box in its grid: the column's child, or inside the `contents` span a
   // tooltip wraps it in, as a box that is only its contents can't move
   const cells = (is: string) =>
@@ -679,10 +679,23 @@ function columnDragCss({ ids, from, width, to }: ColumnDragView): string {
   ];
   const dragged = ids[from];
   if (dragged != null) rules.push(`${column(dragged)} { visibility: hidden; }`);
-  columnShifts(ids.length, from, width, to).forEach((dx, i) => {
+  const shifts = columnShifts(ids.length, from, widths[from] ?? 0, to);
+  shifts.forEach((dx, i) => {
     const id = ids[i];
     if (dx !== 0 && id != null) rules.push(`${column(id)} { transform: translateX(${dx}px); }`);
   });
+  // A failed flow's reason spans Type and Size together; while they part, it keeps to Type's
+  // width, so it doesn't slide over the column past Size.
+  const type = ids.indexOf("type");
+  if (type !== -1 && ids[type + 1] === "size") {
+    const size = type + 1;
+    if (from === size || shifts[type] !== shifts[size]) {
+      const is = '[data-flow-rows] [data-column="type"]';
+      rules.push(
+        `${is} > .col-span-2, ${is} > .contents > .col-span-2 { width: ${widths[type] ?? 0}px; }`,
+      );
+    }
+  }
   return rules.join("\n");
 }
 
