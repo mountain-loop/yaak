@@ -1,7 +1,6 @@
 import {
   DndContext,
   DragOverlay,
-  type DragMoveEvent,
   type DragStartEvent,
   PointerSensor,
   useDraggable,
@@ -406,8 +405,7 @@ function useColumnDrag({
   const state = useRef<{
     /** The column dragged */
     id: ColumnId;
-    /** The pointer when the press began, and now */
-    start: number;
+    /** The pointer, across the window */
     x: number;
     /** The boundary it would drop at, and that boundary's line, or null where it would not move */
     to: number | null;
@@ -419,9 +417,16 @@ function useColumnDrag({
     latest.current = { columns, scrollElement, onDropLine, onDrop };
   });
 
+  // The pointer, read as it moves rather than when dnd-kit next renders, so a release right
+  // after a move drops where the pointer is
+  const track = useCallback((e: PointerEvent) => {
+    if (state.current != null) state.current.x = e.clientX;
+  }, []);
+
   const stop = useCallback(() => {
     const s = state.current;
     state.current = null;
+    window.removeEventListener("pointermove", track, true);
     if (s != null) cancelAnimationFrame(s.frame);
     setDragging(null);
     latest.current.onDropLine(null);
@@ -436,63 +441,69 @@ function useColumnDrag({
     [stop],
   );
 
-  const onDragStart = useCallback((e: DragStartEvent) => {
-    const column = latest.current.columns.find((c) => c.id === e.active.id);
-    if (column == null) return;
-    const x = pointerX(e);
-    state.current = { id: column.id, start: x, x, to: null, line: null, frame: 0 };
-    setDragging(column);
+  const onDragStart = useCallback(
+    (e: DragStartEvent) => {
+      const column = latest.current.columns.find((c) => c.id === e.active.id);
+      if (column == null) return;
+      state.current = { id: column.id, x: pointerX(e), to: null, line: null, frame: 0 };
+      window.addEventListener("pointermove", track, true);
+      setDragging(column);
 
-    const tick = () => {
-      const s = state.current;
-      if (s == null) return;
-      // Near an edge, the list scrolls that way, faster the nearer; the header follows it.
-      const list = latest.current.scrollElement();
-      if (list != null) {
-        const { left, right } = list.getBoundingClientRect();
-        const near =
-          s.x < left + EDGE ? s.x - left - EDGE : s.x > right - EDGE ? s.x - right + EDGE : 0;
-        if (near !== 0) {
-          const speed = Math.min(1, Math.abs(near) / EDGE) * EDGE_SPEED;
-          list.scrollLeft += Math.sign(near) * Math.max(1, speed);
+      const tick = () => {
+        const s = state.current;
+        if (s == null) return;
+        // Near an edge, the list scrolls that way, faster the nearer; the header follows it.
+        const list = latest.current.scrollElement();
+        if (list != null) {
+          const { left, right } = list.getBoundingClientRect();
+          const near =
+            s.x < left + EDGE ? s.x - left - EDGE : s.x > right - EDGE ? s.x - right + EDGE : 0;
+          if (near !== 0) {
+            const speed = Math.min(1, Math.abs(near) / EDGE) * EDGE_SPEED;
+            list.scrollLeft += Math.sign(near) * Math.max(1, speed);
+          }
         }
-      }
-      // The boundary before the first label whose middle is right of the pointer
-      const cells = Array.from(
-        gridRef.current?.querySelectorAll<HTMLElement>(":scope > [data-column]") ?? [],
-      ).map((el) => el.getBoundingClientRect());
-      let to = cells.findIndex((r) => s.x < r.left + r.width / 2);
-      if (to === -1) to = cells.length;
-      // Where it already is, it would not move, so no line. Its place is read each frame, as
-      // the columns can change under a drag: Operation shows itself when a flow has one.
-      const from = latest.current.columns.findIndex((c) => c.id === s.id);
-      const moves = from !== -1 && to !== from && to !== from + 1;
-      s.to = moves ? to : null;
-      const line = moves ? (cells[to]?.left ?? cells.at(-1)?.right ?? null) : null;
-      // Told again only when it changes: another boundary, or the same one scrolled
-      if (line !== s.line) latest.current.onDropLine(line);
-      s.line = line;
-      s.frame = requestAnimationFrame(tick);
-    };
-    state.current.frame = requestAnimationFrame(tick);
-  }, []);
-
-  // The pointer, from where the press began; the frames above read it, scrolling or not.
-  const onDragMove = useCallback((e: DragMoveEvent) => {
-    const s = state.current;
-    if (s != null) s.x = s.start + e.delta.x;
-  }, []);
+        target(s);
+        s.frame = requestAnimationFrame(tick);
+      };
+      state.current.frame = requestAnimationFrame(tick);
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- `target` reads only refs
+    },
+    [track],
+  );
 
   const onDragEnd = useCallback(() => {
+    // Where the pointer is now, as a release can come before the next frame reads it
+    if (state.current != null) target(state.current);
     const s = stop();
     if (s?.to != null) latest.current.onDrop(s.id, s.to);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `target` reads only refs
   }, [stop]);
+
+  /** Sets where the drag would drop, from the pointer and the labels where they are now */
+  function target(s: NonNullable<typeof state.current>) {
+    // The boundary before the first label whose middle is right of the pointer
+    const cells = Array.from(
+      gridRef.current?.querySelectorAll<HTMLElement>(":scope > [data-column]") ?? [],
+    ).map((el) => el.getBoundingClientRect());
+    let to = cells.findIndex((r) => s.x < r.left + r.width / 2);
+    if (to === -1) to = cells.length;
+    // Where it already is, it would not move, so no line. Its place is read each time, as the
+    // columns can change under a drag: Operation shows itself when a flow has one.
+    const from = latest.current.columns.findIndex((c) => c.id === s.id);
+    const moves = from !== -1 && to !== from && to !== from + 1;
+    s.to = moves ? to : null;
+    const line = moves ? (cells[to]?.left ?? cells.at(-1)?.right ?? null) : null;
+    // Told again only when it changes: another boundary, or the same one scrolled
+    if (line !== s.line) latest.current.onDropLine(line);
+    s.line = line;
+  }
 
   return {
     dragging,
     sensors,
     gridRef,
-    dndHandlers: { onDragStart, onDragMove, onDragEnd, onDragCancel: stop },
+    dndHandlers: { onDragStart, onDragEnd, onDragCancel: stop },
   };
 }
 
