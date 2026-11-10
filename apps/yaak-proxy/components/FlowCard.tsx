@@ -6,6 +6,7 @@ import {
   Dropdown,
   EmptyStateText,
   type ExtraPaneTab,
+  FormUrlencodedEditor,
   type HttpBodyResult,
   HttpRequestPaneView,
   HttpResponsePaneView,
@@ -148,28 +149,44 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
   ];
   const { defaultTab, onTabChange } = useShapeTab("request", flow, available);
 
+  const forceUpdateKey = `${flow.updatedAt}.${body.data == null ? "" : "loaded"}`;
+
   return (
     <HttpRequestPaneView
-      className="px-3"
+      // Padded below as the response half's tabs are, so their content, and the actions bar
+      // over it, sit the same distance from the card's edges
+      className="px-3 pb-3"
       request={request}
       fullHeight
-      forceUpdateKey={`${flow.updatedAt}.${body.data == null ? "" : "loaded"}`}
+      forceUpdateKey={forceUpdateKey}
       tabsStorageKey="proxy_request_tabs"
       bodyLoader={loader}
       extraTabs={extraTabs}
       defaultTab={defaultTab}
       onTabChange={onTabChange}
       urlLine={<UrlLine flow={flow} />}
-      renderBody={(editor) => (
+      renderBody={() => (
         <FlowRequestBody
           body={body}
           // The response's viewer choice, with the form's fields as a URL-encoded body's
-          // formatted view
+          // formatted view, the switch in one bar with their bulk-view toggle
           viewer={
             <FlowBodyViewer
               flow={flow}
               which="request"
-              form={request.bodyType === BODY_TYPE_FORM_URLENCODED ? editor : undefined}
+              form={
+                request.bodyType === BODY_TYPE_FORM_URLENCODED
+                  ? (actions) => (
+                      <FormUrlencodedEditor
+                        readOnly
+                        requestId={request.id}
+                        form={request.body.form}
+                        forceUpdateKey={forceUpdateKey}
+                        actions={actions}
+                      />
+                    )
+                  : undefined
+              }
               hideCutNote
             />
           }

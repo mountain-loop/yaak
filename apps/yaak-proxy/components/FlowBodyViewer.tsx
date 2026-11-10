@@ -43,8 +43,8 @@ import { useSaveFlowBody } from "../lib/flowActions";
 interface Props {
   flow: Flow;
   which: FlowBody;
-  /** A URL-encoded body's fields, shown as its formatted view */
-  form?: ReactNode;
+  /** A URL-encoded body's fields, its formatted view, with the switch in the fields' own bar */
+  form?: (actions: ReactNode) => ReactNode;
   /** Leaves saying the body was cut short to the tab, which says it its own way */
   hideCutNote?: boolean;
 }
@@ -178,7 +178,7 @@ export function FlowBodyViewer({ flow, which, form, hideCutNote = false }: Props
     );
 
   let viewer: ReactNode;
-  let textViewer = false;
+  let ownsBar = false;
   if (decodeError != null) {
     // What failed to decode is as it was on the wire, compressed, so never text.
     viewer = <BinaryBody flow={flow} which={which} bytes={bytes} />;
@@ -196,8 +196,9 @@ export function FlowBodyViewer({ flow, which, form, hideCutNote = false }: Props
     viewer = <ImageBody bytes={bytes} mime={imageType} />;
   } else if (text == null) {
     viewer = <BinaryBody flow={flow} which={which} bytes={bytes} />;
-  } else if (prettyView === "form" && pretty) {
-    viewer = form;
+  } else if (prettyView === "form" && pretty && form != null) {
+    ownsBar = true;
+    viewer = form(modeSwitch);
   } else if (prettyView === "table" && pretty) {
     viewer = <CsvViewer text={text} className="pb-2" />;
   } else if (prettyView === "preview" && pretty) {
@@ -207,7 +208,7 @@ export function FlowBodyViewer({ flow, which, form, hideCutNote = false }: Props
       <WebPageViewer html={text} baseUrl={flow.url} />
     );
   } else {
-    textViewer = true;
+    ownsBar = true;
     viewer = (
       <FlowTextViewer
         flow={flow}
@@ -220,19 +221,13 @@ export function FlowBodyViewer({ flow, which, form, hideCutNote = false }: Props
     );
   }
 
-  // The text viewer draws the switch in its own bar, beside its filter; the rest get a bar here
-  if (modeSwitch != null && !textViewer) {
+  // The text viewer and the form draw the switch in their own bar, beside their own actions; the
+  // rest get a bar here. Each fills the tab content, so every bar has the same inset.
+  if (modeSwitch != null && !ownsBar) {
     viewer = (
       <div className={classNames(ACTIONS_BAR_CONTAINER, "h-full w-full")}>
         {viewer}
-        <ActionsBar
-          className={classNames(
-            // Beside the form's own bulk-view toggle in the corner, until that joins the bar
-            prettyView === "form" && pretty && "bottom-0! right-[calc(var(--height-sm)+0.25rem)]!",
-          )}
-        >
-          {modeSwitch}
-        </ActionsBar>
+        <ActionsBar>{modeSwitch}</ActionsBar>
       </div>
     );
   }
