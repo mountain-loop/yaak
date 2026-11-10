@@ -477,8 +477,11 @@ mod tests {
 
     #[test]
     fn a_removed_exclusion_no_longer_applies() {
-        let kept: Vec<&str> =
-            BUILT_IN_EXCLUSIONS.iter().map(|(e, _)| *e).filter(|e| *e != "!host:*.zoom.us").collect();
+        let kept: Vec<&str> = BUILT_IN_EXCLUSIONS
+            .iter()
+            .map(|(e, _)| *e)
+            .filter(|e| *e != "!host:*.zoom.us")
+            .collect();
         let mut entries = vec!["*"];
         entries.extend(kept);
         let p = policy(&entries);

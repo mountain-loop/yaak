@@ -1885,6 +1885,67 @@ mod tests {
         assert_eq!(hidden("@host:*.github.com OR @is:SYSTEM"), vec!["fl_daemon", "fl_node"]);
     }
 
+    /// Hiding encrypted connections leaves them out of the list and its count, the totals the
+    /// sidebar reads, and saved searches' counts, unless the search names them.
+    #[test]
+    fn hides_encrypted_connections() {
+        let dir = tempfile::tempdir().unwrap();
+        let db =
+            ProxyQueryManager::new(&dir.path().join("proxy.db"), &crate::db::test_key()).unwrap();
+        let flow = |id: &str, url: &str, tunnelled: bool, path: Option<&str>| Flow {
+            id: id.into(),
+            url: url.into(),
+            method: if tunnelled { "CONNECT" } else { "GET" }.into(),
+            tunnelled,
+            client_path: path.map(String::from),
+            ..Default::default()
+        };
+        for f in [
+            flow("fl_get", "https://api.example.com/v1", false, None),
+            flow("fl_tunnel", "https://bank.example.com", true, None),
+            flow("fl_daemon_tunnel", "https://p01.icloud.com", true, Some("/usr/libexec/trustd")),
+        ] {
+            db.with_tx(|tx| tx.upsert(&f, &yaak_database::UpdateSource::Background)).unwrap();
+        }
+        let filter = |query: &str, hide_system: bool| FlowFilter {
+            hide_encrypted: true,
+            hide_system,
+            ..FlowFilter::search(query)
+        };
+        let ids = |filter: FlowFilter| -> Vec<String> {
+            let mut ids: Vec<String> =
+                list(&db, &filter).unwrap().into_iter().map(|f| f.id).collect();
+            ids.sort();
+            ids
+        };
+        assert_eq!(ids(filter("", false)), vec!["fl_get"]);
+        assert_eq!(ids(filter("example", false)), vec!["fl_get"]);
+        assert_eq!(ids(filter("@is:encrypted", false)), vec!["fl_daemon_tunnel", "fl_tunnel"]);
+        assert_eq!(ids(filter("@is:encrypted", true)), vec!["fl_tunnel"]);
+        assert_eq!(ids(filter("@is:tunnelled", false)).len(), 2);
+
+        // The totals: everything stored, and what shows with encrypted connections hidden.
+        let page = sorted_page(&db, &FlowFilter { limit: Some(0), ..filter("", false) }).unwrap();
+        assert_eq!((page.total, page.matching), (3, Some(1)));
+        let page = sorted_page(&db, &FlowFilter::default()).unwrap();
+        assert_eq!((page.total, page.matching), (3, None));
+        assert!(FlowFilter { hide_encrypted: true, ..Default::default() }.narrows());
+        assert_eq!(
+            count_each(&db, &[filter("", false), filter("@is:encrypted", true)]).unwrap(),
+            [1, 1]
+        );
+
+        // Saved searches count as the list would show them.
+        let all = crate::saved_queries::create(&db, "All HTTPS", "@scheme:https").unwrap();
+        let count = |hidden: Hidden| {
+            let counts = crate::saved_queries::counts(&db, hidden).unwrap();
+            counts.into_iter().find(|c| c.id == all.id).unwrap().count
+        };
+        assert_eq!(count(Hidden::default()), 3);
+        assert_eq!(count(Hidden { system: false, encrypted: true }), 1);
+        assert_eq!(count(Hidden { system: true, encrypted: false }), 2);
+    }
+
     #[test]
     fn tells_system_daemons_apart() {
         assert!(is_system(None, Some("/usr/libexec/nsurlsessiond")));
@@ -1915,6 +1976,13 @@ mod tests {
         };
         assert_eq!(filter.to_query(), "query=post+%40status%3A4xx&hide_system=true&limit=20");
         assert_eq!(FlowFilter::from_query(&filter.to_query()).unwrap(), filter);
+        let filter = FlowFilter { hide_encrypted: true, ..filter };
+        assert_eq!(
+            filter.to_query(),
+            "query=post+%40status%3A4xx&hide_system=true&hide_encrypted=true&limit=20"
+        );
+        assert_eq!(FlowFilter::from_query(&filter.to_query()).unwrap(), filter);
+        assert!(FlowFilter::from_query("hide_encrypted=maybe").is_err());
         assert_eq!(FlowFilter::from_query("").unwrap(), FlowFilter::default());
         assert!(FlowFilter::from_query("limit=lots").is_err());
         assert!(FlowFilter::from_query("hide_system=maybe").is_err());

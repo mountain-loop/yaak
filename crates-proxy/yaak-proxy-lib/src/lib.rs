@@ -3610,7 +3610,14 @@ impl FlowSink {
                 self.write_stream_flow(&mut f);
                 in_flight.insert(id, f);
             }
-            ProxyEvent::TunnelEnd { id, sent, received, elapsed_ms, error, reconnect_requested } => {
+            ProxyEvent::TunnelEnd {
+                id,
+                sent,
+                received,
+                elapsed_ms,
+                error,
+                reconnect_requested,
+            } => {
                 self.tunnels.close(self.tunnel_run, id);
                 if let Some(mut f) = in_flight.remove(&id) {
                     f.flow.request_size = sent as i64;

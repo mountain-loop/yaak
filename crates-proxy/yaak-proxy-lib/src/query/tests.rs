@@ -381,6 +381,53 @@ fn headers_on_either_side_or_one() {
     );
 }
 
+/// `@is:encrypted` finds tunnelled connections, as `@is:tunnelled` did and still does, and
+/// `@is:rejected` refused handshakes; hiding encrypted connections leaves them out unless the
+/// query names them.
+#[test]
+fn encrypted_and_rejected() {
+    let rejected = Flow {
+        id: "fl_rejected".into(),
+        url: "https://my.1password.com".into(),
+        client_http_version: "HTTP/1.1".into(),
+        tls_rejected: Some("unknown_ca".into()),
+        error: Some("Rejected the proxy's certificate".into()),
+        elapsed_ms: Some(3),
+        started_at: (now() - Duration::minutes(5)).naive_utc(),
+        ..Default::default()
+    };
+    let mut flows = fixture();
+    flows.push(rejected);
+    let (_dir, db, flows) = db_of(flows);
+    let find = |query: &str, hidden: Hidden| {
+        let prepared = FlowQuery::at(query, hidden, now());
+        let sql = sql_ids(&db, &prepared);
+        assert_eq!(sql, memory_ids(&flows, &prepared), "the two disagree on {query:?}");
+        sql
+    };
+    let none = Hidden::default();
+    let encrypted = Hidden { system: false, encrypted: true };
+    assert_eq!(find("@is:encrypted", none), ids(&["fl_tunnel"]));
+    assert_eq!(find("@is:tunnelled", none), ids(&["fl_tunnel"]));
+    assert_eq!(find("@is:TUNNELLED", none), ids(&["fl_tunnel"]));
+    assert_eq!(find("@is:rejected", none), ids(&["fl_rejected"]));
+    assert!(find("@is:error", none).contains(&"fl_rejected".to_string()));
+    // Hidden, unless named.
+    let all = find("", none);
+    let shown = find("", encrypted);
+    assert_eq!(shown.len(), all.len() - 1);
+    assert!(!shown.contains(&"fl_tunnel".to_string()));
+    assert_eq!(find("@is:encrypted", encrypted), ids(&["fl_tunnel"]));
+    assert_eq!(find("@is:tunnelled", encrypted), ids(&["fl_tunnel"]));
+    assert_eq!(find("bank", encrypted), Vec::<String>::new());
+    // Both hidden.
+    let both = find("", Hidden { system: true, encrypted: true });
+    assert_eq!(both.len(), all.len() - 2);
+    assert_eq!(diagnostics("@is:encrypted @is:rejected @is:tunnelled"), vec![]);
+    assert!(FLAGS.contains(&"encrypted") && FLAGS.contains(&"rejected"));
+    assert!(!FLAGS.contains(&"tunnelled"), "an alias, not offered");
+}
+
 #[test]
 fn flags() {
     assert_eq!(finds("@is:system"), ids(&["fl_daemon"]));
@@ -701,6 +748,10 @@ fn sample(count: usize) -> Vec<Flow> {
                 cancelled: rng.chance(10),
                 saved_request_id: rng.chance(15).then(|| "rq_x".to_string()),
                 tunnelled,
+                tls_rejected: rng
+                    .chance(10)
+                    .then(|| rng.pick(&["unknown_ca", "hang_up"]).to_string())
+                    .filter(|_| !tunnelled),
                 agent_read: rng.chance(20),
                 ..Default::default()
             }
@@ -888,6 +939,12 @@ const BATTERY: &[&str] = &[
     "@nope:x",
     "-@nope:x",
     "@status:4xx OR @is:tunnelled",
+    "@is:encrypted",
+    "-@is:encrypted",
+    "@is:rejected",
+    "@is:rejected OR @is:encrypted",
+    "-@is:rejected @is:error",
+    "@is:e*",
     "(@status:4xx OR @is:error) -@method:post",
     "-(@status:* OR @is:pending)",
     "github -@host:github.com",
@@ -903,8 +960,9 @@ fn the_database_and_the_evaluator_find_the_same_flows() {
     let (_dir, db, flows) = db_of(sample(400));
     let mut checked = 0;
     for query in BATTERY {
-        for hide_system in [false, true] {
-            let prepared = FlowQuery::at(query, hide_system, now());
+        for (system, encrypted) in [(false, false), (true, false), (false, true), (true, true)] {
+            let hidden = Hidden { system, encrypted };
+            let prepared = FlowQuery::at(query, hidden, now());
             let sql = sql_ids(&db, &prepared);
             let memory = memory_ids(&flows, &prepared);
             if sql != memory {
@@ -915,14 +973,14 @@ fn the_database_and_the_evaluator_find_the_same_flows() {
                     .or(only_memory.first())
                     .map(|id| flows.iter().find(|f| &&f.id == id).cloned());
                 panic!(
-                    "{query:?} (hide_system {hide_system}): only in SQL {only_sql:?}, \
+                    "{query:?} ({hidden:?}): only in SQL {only_sql:?}, \
                     only in memory {only_memory:?}; e.g. {example:#?}"
                 );
             }
             checked += 1;
         }
     }
-    assert_eq!(checked, BATTERY.len() * 2);
+    assert_eq!(checked, BATTERY.len() * 4);
     // The battery means something only if the sample spreads its answers.
     let spread = BATTERY
         .iter()

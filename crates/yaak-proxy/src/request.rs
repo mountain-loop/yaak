@@ -28,12 +28,12 @@ use tokio_rustls::{LazyConfigAcceptor, TlsConnector};
 
 use crate::body::{BodyParser, CaptureBody, Direction};
 use crate::connection::serve_tls;
+use crate::decrypt::Verdict;
 use crate::grpc::{self, GrpcParser};
 use crate::messages::{MessageDirection, StreamKind};
 use crate::sse::SseParser;
 use crate::tunnel::{Counted, Rewind, is_own_connection, splice, tunnel};
 use crate::ws::{self, WsFlow};
-use crate::decrypt::Verdict;
 use crate::{ClientConn, Engine, ProxyEvent, TunnelReason};
 
 pub(crate) type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;

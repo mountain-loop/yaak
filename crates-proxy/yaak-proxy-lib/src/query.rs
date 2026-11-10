@@ -1007,7 +1007,10 @@ impl FlowColumns {
             return name.to_string();
         }
         match name {
-            "cancelled" | "tunnelled" | "agent_read" | "reconnect_requested"
+            "cancelled"
+            | "tunnelled"
+            | "agent_read"
+            | "reconnect_requested"
             | "tunnel_excluded_built_in" => "0".into(),
             _ => "NULL".into(),
         }

@@ -190,10 +190,9 @@ export function ProxyLayout() {
 function FlowsOrFirstRun({ flowLayout }: { flowLayout: SplitLayoutLayout }) {
   const locked = useAtomValue(lockedAtom);
   const noFlows = useAtomValue(noFlowsAtom) || locked != null;
-  const { caStatus, systemProxy } = useProxySetup();
+  const { systemProxy } = useProxySetup();
   const systemProxyEverOn = useAtomValue(systemProxyEverOnAtom);
   const incomplete = setupIncomplete({
-    trusted: caStatus.data?.trusted ?? null,
     systemProxySupported: systemProxy.data?.supported ?? null,
     systemProxyEverOn,
   });

@@ -1489,8 +1489,7 @@ async fn certificate_alert_passes_through_on_the_next_connection() {
 
     assert!(pinned.connect(name.clone(), h.connect_tunnel(port).await).await.is_err());
     let failed = h.events.recv_timeout(Duration::from_secs(10)).unwrap();
-    let ProxyEvent::HandshakeFailed { id: rejected, authority, rejection, connection, .. } =
-        failed
+    let ProxyEvent::HandshakeFailed { id: rejected, authority, rejection, connection, .. } = failed
     else {
         panic!("expected the refused handshake, got {failed:?}");
     };

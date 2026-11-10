@@ -861,6 +861,82 @@ async fn the_decrypt_list_reaches_the_cli_that_owns_the_engine() {
     }
 }
 
+/// While the CLI owns the engine, the app reads its open tunnels and pass-through set and
+/// reconnects tunnels there, through the control API.
+#[tokio::test(flavor = "multi_thread")]
+async fn open_tunnels_are_reconnected_in_the_cli_that_owns_the_engine() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let cli = ctx(dir.path(), client_dir.path()).with_owner(Owner::Cli);
+    let _server = ControlServer::start(cli.clone()).unwrap();
+    cli.start().unwrap();
+    let app = ctx(dir.path(), client_dir.path());
+
+    // An open tunnel, which the empty list leaves encrypted.
+    let echo = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let echo_port = echo.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        loop {
+            let (mut tcp, _) = echo.accept().await.unwrap();
+            tokio::spawn(async move {
+                let (mut read, mut write) = tcp.split();
+                let _ = tokio::io::copy(&mut read, &mut write).await;
+            });
+        }
+    });
+    let mut tcp = tokio::net::TcpStream::connect(("127.0.0.1", cli.port().unwrap())).await.unwrap();
+    let target = format!("localhost:{echo_port}");
+    tcp.write_all(format!("CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n\r\n").as_bytes())
+        .await
+        .unwrap();
+    let mut head = Vec::new();
+    while !head.ends_with(b"\r\n\r\n") {
+        head.push(tcp.read_u8().await.unwrap());
+    }
+    tcp.write_all(b"ping").await.unwrap();
+    let mut echoed = [0u8; 4];
+    tcp.read_exact(&mut echoed).await.unwrap();
+
+    rpc(&app, "edit_decrypt_list", json!({"add": ["host:localhost"]})).await.unwrap();
+    // Known once the CLI's event loop has seen it open.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let tunnels = loop {
+        let tunnels = rpc(&app, "list_reconnectable_tunnels", json!({})).await.unwrap();
+        if !tunnels.as_array().unwrap().is_empty() {
+            break tunnels;
+        }
+        assert!(Instant::now() < deadline, "the tunnel never showed");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    let saved = rpc(&app, "edit_decrypt_list", json!({"add": ["host:localhost"]})).await.unwrap();
+    assert_eq!(saved["stillEncrypted"], 1, "counted where the engine runs");
+    assert_eq!(tunnels.as_array().unwrap().len(), 1);
+    assert_eq!(tunnels[0]["host"], "localhost");
+    let scope = json!({"entry": "host:localhost"});
+    let closed = rpc(&app, "reconnect_tunnels", scope).await.unwrap();
+    assert_eq!(closed["closed"], 1);
+    let mut rest = Vec::new();
+    tcp.read_to_end(&mut rest).await.unwrap();
+
+    let set = rpc(&app, "list_passthrough", json!({})).await.unwrap();
+    assert_eq!(set["addresses"], json!([]));
+    let forgot = rpc(&app, "forget_passthrough", json!({"address": target})).await.unwrap();
+    assert_eq!(forgot, json!({"forgotten": false, "addresses": []}));
+
+    // The routes themselves.
+    let info = control::read(dir.path()).unwrap();
+    let http = reqwest::Client::builder().no_proxy().build().unwrap();
+    let get =
+        |path: &str| http.get(format!("{}{path}", info.base_url())).bearer_auth(&info.token).send();
+    let none: Value =
+        get("/tunnels/reconnectable?entry=host%3Alocalhost").await.unwrap().json().await.unwrap();
+    assert_eq!(none, json!([]));
+    assert_eq!(get("/tunnels/reconnectable?entry=host%3Aa+b").await.unwrap().status(), 400);
+    let set: Value = get("/passthrough").await.unwrap().json().await.unwrap();
+    assert_eq!(set, json!({"addresses": []}));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn the_decrypt_list_is_edited_over_the_control_api() {
     let dir = tempfile::tempdir().unwrap();

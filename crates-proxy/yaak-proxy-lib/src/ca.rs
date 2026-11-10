@@ -112,7 +112,8 @@ mod tests {
 
     #[test]
     fn a_cancelled_prompt_is_told_apart() {
-        let cancelled = "SecTrustSettingsSetTrustSettings: The authorization was canceled by the user.";
+        let cancelled =
+            "SecTrustSettingsSetTrustSettings: The authorization was canceled by the user.";
         assert!(is_cancelled(cancelled));
         assert!(!is_cancelled("SecCertificateCreateFromData: Unknown format in import."));
         assert!(!is_cancelled(""));
