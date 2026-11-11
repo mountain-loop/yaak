@@ -265,6 +265,18 @@ describe("the card of a refused handshake", () => {
     expect(c.foot).toEqual(["The next connection will be decrypted."]);
   });
 
+  test("no longer passed through but excluded since: no claim that it will be decrypted", () => {
+    const excluded = [...user("*", "!app:Acme"), ...BUILT_INS];
+    const c = card({ flow: refused, list: excluded, passthrough: [] });
+    expect(c.actions).toEqual([]);
+    expect(c.foot).toEqual([]);
+  });
+
+  test("an untrusted certificate keeps its line once no longer passed through", () => {
+    const c = card({ flow: refused, list: listed, trusted: false, passthrough: [] });
+    expect(c.foot).toEqual(["This host stays encrypted until the certificate is trusted."]);
+  });
+
   test("a program: its own trust store, Copy Environment first", () => {
     const python = {
       ...refused,

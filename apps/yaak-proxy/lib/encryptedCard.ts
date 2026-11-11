@@ -360,7 +360,14 @@ function rejectedCard(input: EncryptedCardInput): EncryptedCardModel {
     passedThrough === false
       ? null
       : { kind: "try_again", label: "Retry", hint: "next connection", icon: "refresh" };
-  const until = passedThrough === false ? "The next connection will be decrypted." : null;
+  // No longer passed through: the next connection is decrypted while the list still decrypts
+  // it. Excluded since, it stays encrypted, and there is nothing to add.
+  const until: string[] | null =
+    passedThrough === false
+      ? stop == null
+        ? []
+        : ["The next connection will be decrypted."]
+      : null;
 
   if (canTrust && trusted === false && decryptsAnything(list)) {
     return {
@@ -371,7 +378,8 @@ function rejectedCard(input: EncryptedCardInput): EncryptedCardModel {
         { kind: "trust", label: "Trust Certificate", hint: null, primary: true, icon: "shield" },
         ...(stop == null ? [] : [stop]),
       ],
-      foot: [until ?? "This host stays encrypted until the certificate is trusted."],
+      // Whether or not it is still passed through: untrusted, the next one is rejected too.
+      foot: ["This host stays encrypted until the certificate is trusted."],
     };
   }
 
@@ -392,7 +400,7 @@ function rejectedCard(input: EncryptedCardInput): EncryptedCardModel {
         ...(stop == null ? [] : [stop]),
         ...(tryAgain == null ? [] : [tryAgain]),
       ],
-      foot: until == null ? [`Paste it into a terminal, then rerun ${refuser.name}.`] : [until],
+      foot: until ?? [`Paste it into a terminal, then rerun ${refuser.name}.`],
     };
   }
   return {
@@ -410,6 +418,6 @@ function rejectedCard(input: EncryptedCardInput): EncryptedCardModel {
       ...(stop == null ? [] : [{ ...stop, primary: true }]),
       ...(tryAgain == null ? [] : [tryAgain]),
     ],
-    foot: [until ?? "This host stays encrypted until Yaak Proxy is relaunched."],
+    foot: until ?? ["This host stays encrypted until Yaak Proxy is relaunched."],
   };
 }
