@@ -1,5 +1,17 @@
 {
   "build": {
-    "features": []
+    "features": ["updater"]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVGRkFGMjQxRUNEOTQ3MzAKUldRd1I5bnNRZkw2NzRtMnRlWTN3R24xYUR3aGRsUjJzWGwvdHdEcGljb3ZJMUNlMjFsaHlqVU4K"
+    }
+  },
+  "bundle": {
+    "publisher": "Yaak",
+    "copyright": "Yaak",
+    "homepage": "https://yaak.app",
+    "category": "DeveloperTool",
+    "createUpdaterArtifacts": true
   }
 }

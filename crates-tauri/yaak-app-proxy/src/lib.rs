@@ -6,6 +6,7 @@ use yaak_proxy_lib::{MasterKeySource, ProxyCtx};
 use yaak_rpc::{RpcEventEmitter, RpcRouter};
 use yaak_window::window::CreateWindowConfig;
 
+mod updates;
 mod window_menu;
 
 fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) {
@@ -45,6 +46,14 @@ fn handle_menu_events<R: Runtime>(win: &WebviewWindow<R>) {
             window_menu::EXPORT_HAR_ID => {
                 if let Err(e) = webview_window.emit(window_menu::EXPORT_HAR_EVENT, ()) {
                     error!("Failed to emit the HAR export: {e}");
+                }
+            }
+            // To the window it was chosen in alone, which checks and shows what it finds
+            window_menu::CHECK_FOR_UPDATES_ID => {
+                if let Err(e) =
+                    webview_window.emit_to(w.label(), window_menu::CHECK_FOR_UPDATES_EVENT, ())
+                {
+                    error!("Failed to emit {}: {e}", window_menu::CHECK_FOR_UPDATES_EVENT);
                 }
             }
             window_menu::GO_BACK_ID | window_menu::GO_FORWARD_ID => {
@@ -165,11 +174,22 @@ fn set_go_menu(app: tauri::AppHandle, back: bool, forward: bool) {
 }
 
 pub fn run() {
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(yaak_mac_window::init())
+        .plugin(yaak_mac_window::init());
+
+    #[cfg(feature = "updater")]
+    {
+        builder = builder.plugin(tauri_plugin_updater::Builder::default().build());
+    }
+
+    builder
+        .manage(tokio::sync::Mutex::new(updates::ProxyUpdater::default()))
+        // The one update this process runs at a time, whichever window or trigger asks
+        .manage(yaak_updater::UpdateGate::default())
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
@@ -217,7 +237,14 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![rpc, set_go_menu, cmd_open_settings])
+        .invoke_handler(tauri::generate_handler![
+            rpc,
+            set_go_menu,
+            cmd_open_settings,
+            updates::cmd_updater_enabled,
+            updates::cmd_check_for_updates,
+            updates::cmd_restart
+        ])
         .build(tauri::generate_context!())
         .expect("error while building yaak proxy tauri application")
         .run(|app_handle, event| {
@@ -226,6 +253,8 @@ pub fn run() {
                 let ctx = app_handle.state::<ProxyCtx>();
                 ctx.shutdown();
                 ctx.stop_control_api();
+                // Relaunches after an update, once the system proxy is put back
+                yaak_updater::restart::relaunch_if_requested();
                 return;
             }
             if let RunEvent::Ready = event {

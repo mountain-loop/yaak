@@ -11507,6 +11507,7 @@ dependencies = [
  "yaak-tauri-utils",
  "yaak-templates",
  "yaak-tls",
+ "yaak-updater",
  "yaak-window",
  "yaak-ws",
 ]
@@ -11522,9 +11523,12 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-os",
+ "tauri-plugin-updater",
+ "tokio",
  "yaak-mac-window",
  "yaak-proxy-lib",
  "yaak-rpc",
+ "yaak-updater",
  "yaak-window",
 ]
 
@@ -12091,6 +12095,23 @@ dependencies = [
  "url",
  "yaak-models",
  "yasna 0.6.0",
+]
+
+[[package]]
+name = "yaak-updater"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.34",
+ "md5",
+ "nanoid",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin-dialog",
+ "tauri-plugin-updater",
+ "thiserror 2.0.21",
+ "tokio",
+ "ts-rs",
 ]
 
 [[package]]

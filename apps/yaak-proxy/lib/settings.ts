@@ -4,6 +4,7 @@ import { defaultDarkTheme, defaultLightTheme } from "@yaakapp-internal/theme/src
 import type {
   SettingsAppInfo,
   SettingsThemeOption,
+  SettingsUpdatesView,
   SettingsValues,
   SettingsView,
 } from "@yaakapp-internal/ui";
@@ -22,7 +23,8 @@ export const DEFAULT_SETTINGS_VALUES: SettingsValues = {
   coloredMethods: false,
   useNativeTitlebar: false,
   hideWindowControls: false,
-  updateChannel: "stable",
+  // Early access ships on Yaak's beta tags, so the proxy follows beta until it goes stable
+  updateChannel: "beta",
   autoupdate: true,
   autoDownloadUpdates: true,
   checkNotifications: true,
@@ -70,13 +72,15 @@ export function resolveAppearance(appearance: string, system: "light" | "dark"):
 
 /**
  * The proxy's settings as the shared tabs render them. The proxy has Yaak's two themes, no
- * installed-font list, updater or feedback prompts yet, and its license comes with the license
- * work, so those parts are left out, as are the Interface rows it doesn't act on.
+ * installed-font list or feedback prompts yet, and its license comes with the license work, so
+ * those parts are left out, as are the Interface rows it doesn't act on. `updates` is null in
+ * a build without the updater, which leaves its section out too.
  */
 export function proxySettingsView(
   values: SettingsValues,
   app: SettingsAppInfo,
   systemAppearance: "light" | "dark",
+  updates: SettingsUpdatesView | null = null,
 ): SettingsView {
   const light = THEMES.find((t) => t.id === values.themeLight && !t.dark) ?? lightOption();
   const dark = THEMES.find((t) => t.id === values.themeDark && t.dark) ?? darkOption();
@@ -93,7 +97,8 @@ export function proxySettingsView(
     },
     fonts: null,
     windowControlsSetting: false,
-    updates: null,
+    // The proxy fetches no notifications, so its Updates section has no row for them
+    updates: updates && { ...updates, notificationsSetting: false },
     feedbackPrompts: false,
     license: null,
     // Not acted on in the proxy yet: its editors take no keymap or wrap setting, its list draws

@@ -16,13 +16,14 @@ import {
   type SettingsTitlebar,
   Toasts,
 } from "@yaakapp-internal/ui";
-import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
+import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { settingsValuesAtom } from "../lib/interfaceSettings";
 import { openLink, revealPath } from "../lib/opener";
 import { proxySettingsView } from "../lib/settings";
 import { closeWindow, command, currentWindowLabel, getOsType, subscribe } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
+import { checkForUpdatesNow, updateCheckingAtom, updaterEnabled } from "../lib/updates";
 import {
   openSettingsVia,
   requestedSettingsTab,
@@ -125,9 +126,16 @@ export function SettingsContent({
   const [values, change] = useAtom(settingsValuesAtom);
   const app = useAppInfo();
   const systemAppearance = useSystemAppearance();
+  const store = useStore();
+  const checking = useAtomValue(updateCheckingAtom);
+  const { data: hasUpdater = false } = useQuery({
+    queryKey: ["updater_enabled"],
+    queryFn: updaterEnabled,
+    retry: false,
+  });
   const view = useMemo(
-    () => proxySettingsView(values, app, systemAppearance),
-    [values, app, systemAppearance],
+    () => proxySettingsView(values, app, systemAppearance, hasUpdater ? { checking } : null),
+    [values, app, systemAppearance, hasUpdater, checking],
   );
   const showToast = useShowToast();
   const callbacks = useMemo<SettingsCallbacks>(() => {
@@ -136,14 +144,14 @@ export function SettingsContent({
       onChange: (patch) => change(patch),
       // The proxy draws its own title bar always; the row isn't shown
       onApplyNativeTitlebar: (useNativeTitlebar) => change({ useNativeTitlebar }),
-      onCheckForUpdates: () => undefined,
+      onCheckForUpdates: () => void checkForUpdatesNow(store),
       onActivateLicense: async () => undefined,
       onDeactivateLicense: () => undefined,
       onOpenUrl: (url) => void openLink(url, fail),
       onRevealPath: (path) => void revealPath(path, fail),
       pricingUrl: (intent) => `https://yaak.app/pricing?intent=${encodeURIComponent(intent)}`,
     };
-  }, [change, showToast]);
+  }, [change, showToast, store]);
   const props = { view, callbacks };
 
   return (

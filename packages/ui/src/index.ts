@@ -3,6 +3,7 @@ export type { BannerProps } from "./components/Banner";
 export { Banner } from "./components/Banner";
 export type { ButtonProps } from "./components/Button";
 export { Button, CONTROL_TOOLTIP_DELAY } from "./components/Button";
+export { ButtonInfiniteLoading } from "./components/ButtonInfiniteLoading";
 export type { CheckboxProps } from "./components/Checkbox";
 export { Checkbox } from "./components/Checkbox";
 export type { CopyIconButtonProps } from "./components/CopyIconButton";
@@ -298,3 +299,17 @@ export { getNodeText } from "./lib/getNodeText";
 export { minPromiseMillis } from "./lib/minPromiseMillis";
 export type { ShowToastArgs, ToastInstance } from "./lib/toast";
 export { hideToast, hideToastById, showToast, toastsAtom } from "./lib/toast";
+export type {
+  ShowUpdateAvailableToastArgs,
+  ShowUpdateInstalledToastArgs,
+  UpdateToastInfo,
+  UpdateToastState,
+} from "./components/updates/updateToasts";
+export {
+  showUpdateAvailableToast,
+  showUpdateInstalledToast,
+  showUpdateStateToast,
+  UPDATE_STATE_TOAST_ID,
+  UPDATE_TOAST_ID,
+  updateStateMessage,
+} from "./components/updates/updateToasts";

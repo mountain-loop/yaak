@@ -129,6 +129,22 @@ describe("SettingsGeneral", () => {
     expect(withFeedback).toContain("Prompt for feedback");
   });
 
+  test("leaves out the notifications row only when the app asks", () => {
+    const shown = text(render(<SettingsGeneral view={stubView()} callbacks={callbacks} />));
+    expect(shown).toContain("Check for notifications");
+
+    const hidden = text(
+      render(
+        <SettingsGeneral
+          view={stubView({ updates: { checking: false, notificationsSetting: false } })}
+          callbacks={callbacks}
+        />,
+      ),
+    );
+    expect(hidden).toContain("Update Channel");
+    expect(hidden).not.toContain("Check for notifications");
+  });
+
   test("puts the app's banner under the heading and its own sections before App Info", () => {
     const t = text(
       render(
