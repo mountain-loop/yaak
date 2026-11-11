@@ -142,6 +142,7 @@ impl<'a> WriteDb<'a> {
         source: &UpdateSource,
     ) -> Result<HttpRequest> {
         self.delete_all_http_responses_for_request(m.id.as_str(), source)?;
+        self.delete_model_versions_for_model(m.id.as_str())?;
         self.delete(m, source)
     }
 
@@ -177,7 +178,9 @@ impl<'a> WriteDb<'a> {
         http_request: &HttpRequest,
         source: &UpdateSource,
     ) -> Result<HttpRequest> {
-        self.upsert(http_request, source)
+        let request = self.upsert(http_request, source)?;
+        self.move_model_versions_to_workspace(&request.id, &request.workspace_id)?;
+        Ok(request)
     }
 }
 

@@ -5,7 +5,9 @@ use rand::RngExt;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
-use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
+use yaak::send::{
+    SendHttpRequestWithPluginsParams, SendRequestSource, send_http_request_with_plugins,
+};
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::manager::HttpConnectionManager;
 use yaak_mcp::{HostResult, McpHost, WorkspaceInfo};
@@ -215,6 +217,8 @@ impl McpHost for CliMcpHost {
             query_manager: &self.query_manager,
             blob_manager: &self.blob_manager,
             request,
+            // The MCP server loads the request by id and passes the row on as it is
+            request_source: SendRequestSource::Stored,
             environment_id: environment_id.as_deref(),
             update_source: UpdateSource::Sync,
             cookie_jar_id,

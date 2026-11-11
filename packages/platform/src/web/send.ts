@@ -54,6 +54,8 @@ interface PreparedHttpSend {
   settings: HttpSendSettings;
   settingEvents: HttpResponseEventData[];
   cookieJar: CookieJar | null;
+  /** The version of the stored request this send was prepared from, if one was written. */
+  versionId: string | null;
 }
 
 /** The desktop writes progress at most this often while a body streams in. */
@@ -101,7 +103,9 @@ async function runSend(
     environmentId,
     cookieJarId,
   });
-  await response.patch({ url: prepared.request.url });
+  // The version comes from the same read of the request that was prepared, so the
+  // response can offer back exactly what it sent
+  await response.patch({ url: prepared.request.url, versionId: prepared.versionId });
 
   // The first line of the timeline says what did the sending and where. A
   // request through a proxy shows a different origin to the server than the
@@ -315,8 +319,16 @@ class TimelineWriter {
  * yaak-models), so an edit made while the send was in flight survives rather
  * than being written over by the send's stale snapshot.
  */
-async function persistCookies(db: WorkerConnection, jar: CookieJar, cookies: Cookie[]): Promise<void> {
-  await db.rpc("web_persist_send_cookies", { cookieJarId: jar.id, before: jar.cookies, after: cookies });
+async function persistCookies(
+  db: WorkerConnection,
+  jar: CookieJar,
+  cookies: Cookie[],
+): Promise<void> {
+  await db.rpc("web_persist_send_cookies", {
+    cookieJarId: jar.id,
+    before: jar.cookies,
+    after: cookies,
+  });
 }
 
 /**

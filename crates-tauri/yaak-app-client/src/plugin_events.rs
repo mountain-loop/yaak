@@ -19,6 +19,7 @@ use yaak::plugin_events::{
     GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
 use yaak::response_body::FileResponseBodyStore;
+use yaak::send::SendRequestSource;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::cookies::get_cookie_value_from_jar;
 use yaak_models::models::{HttpRequest, HttpResponse, Plugin};
@@ -486,6 +487,8 @@ pub(crate) async fn send_http_request_in_window<R: Runtime>(
     send_http_request_with_context(
         window,
         &http_request,
+        // A plugin may have rendered it, so it is versioned from the stored row
+        SendRequestSource::Supplied,
         &http_response,
         environment,
         cookie_jar,

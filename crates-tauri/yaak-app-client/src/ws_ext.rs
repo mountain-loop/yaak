@@ -21,6 +21,7 @@ use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
     WebsocketEventType,
 };
+use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader, RenderPurpose};
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -173,10 +174,15 @@ pub async fn cmd_ws_connect<R: Runtime>(
     .await?;
 
     let connection = app_handle.with_tx(|tx| {
+        // Capture the stored request, not the rendered one: what a restore should
+        // put back is what the user typed
+        let version_id =
+            tx.snapshot_request_for_send(&AnyRequest::WebsocketRequest(unrendered_request.clone()));
         tx.upsert_websocket_connection(
             &WebsocketConnection {
                 workspace_id: request.workspace_id.clone(),
                 request_id: request_id.to_string(),
+                version_id,
                 ..Default::default()
             },
             &UpdateSource::from_window_label(window.label()),

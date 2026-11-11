@@ -28,7 +28,7 @@ use tauri_plugin_log::{Builder, Target, TargetKind, log};
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
-use yaak::send::ResponseBody;
+use yaak::send::{ResponseBody, SendRequestSource};
 use yaak_commands::resolve::resolve_grpc_request;
 use yaak_commands::responses::locate_response_body;
 use yaak_common::command::new_checked_command;
@@ -40,6 +40,7 @@ use yaak_models::models::{
     CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent, GrpcEventType,
     HttpRequest, HttpResponse, HttpResponseState, Workspace,
 };
+use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::util::{BatchUpsertResult, ImportDestination, ImportPlan, UpdateSource};
 use yaak_plugins::events::{
     Color, ErrorResponse, FilterResponse, InternalEvent, InternalEventPayload, PluginContext,
@@ -332,6 +333,10 @@ async fn cmd_grpc_go<R: Runtime>(
     let client_cert = find_client_certificate(&request.url, &settings.client_certificates);
 
     let conn = app_handle.with_tx(|tx| {
+        // Capture the stored request, not the rendered one: what a restore should
+        // put back is what the user typed
+        let version_id =
+            tx.snapshot_request_for_send(&AnyRequest::GrpcRequest(unrendered_request.clone()));
         tx.upsert_grpc_connection(
             &GrpcConnection {
                 workspace_id: request.workspace_id.clone(),
@@ -340,6 +345,7 @@ async fn cmd_grpc_go<R: Runtime>(
                 elapsed: 0,
                 state: GrpcConnectionState::Initialized,
                 url: request.url.clone(),
+                version_id,
                 ..Default::default()
             },
             &UpdateSource::from_window_label(window.label()),
@@ -967,7 +973,16 @@ async fn cmd_send_ephemeral_request<R: Runtime>(
     });
 
     let sent =
-        send_http_request(&window, &request, &response, environment, cookie_jar, &mut cancel_rx)
+        // No id, so no version either way; it is not a stored row
+        send_http_request(
+            &window,
+            &request,
+            SendRequestSource::Supplied,
+            &response,
+            environment,
+            cookie_jar,
+            &mut cancel_rx,
+        )
             .await?;
 
     // Blanking the request id above is what makes this send unsaved, so the
@@ -1123,9 +1138,12 @@ async fn cmd_send_http_request<R: Runtime>(
         None => None,
     };
 
+    // `request` is the row loaded above, so the version is taken from it rather than
+    // re-read once plugins have started, which an edit could beat
     let r = match send_http_request(
         &window,
         &request,
+        SendRequestSource::Stored,
         &response,
         environment,
         cookie_jar,

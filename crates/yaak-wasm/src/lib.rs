@@ -32,12 +32,14 @@ use yaak_models::blob_manager::{BlobManager, BodyChunk};
 use yaak_models::cookies::apply_cookie_changes;
 use yaak_models::models::{
     AnyModel, Cookie, CookieJar, HttpRequest, HttpResponseEvent, HttpResponseEventData,
-    HttpSendSettings,
+    HttpSendSettings, ModelVersionReason, RequestVersionComparison,
 };
 use yaak_models::models_ops;
+use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::render::render_http_request;
 use yaak_models::util::{ModelPayload, UpdateSource};
+use yaak_models::versions::version_document;
 use yaak_templates::{RenderOptions, TemplateCallback};
 
 /// Names inside the VFS, not paths on any disk. Two files because the desktop
@@ -225,6 +227,19 @@ struct UpsertIntrospectionReq {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SnapshotRequestReq {
+    request_id: String,
+    reason: ModelVersionReason,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VersionIdReq {
+    version_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExportDataReq {
     workspace_ids: Vec<String>,
     include_private_environments: bool,
@@ -337,6 +352,35 @@ fn dispatch(
                 })
                 .map_err(js_error)?;
             to_json(id)
+        }
+
+        "models_snapshot_request" => {
+            let req: SnapshotRequestReq = from_js(payload)?;
+            to_json(
+                host.queries
+                    .with_tx(|tx| tx.snapshot_request_by_id(&req.request_id, req.reason))
+                    .map_err(js_error)?,
+            )
+        }
+
+        "models_request_version" => {
+            let req: VersionIdReq = from_js(payload)?;
+            let db = host.queries.connect();
+            let version = db.get_model_version(&req.version_id).map_err(js_error)?;
+            let request = db.get_any_request(&version.model_id).map_err(js_error)?;
+            let current_document =
+                version_document(&request.to_value().map_err(js_error)?).map_err(js_error)?;
+            let differs = !db.request_matches_version(&version).map_err(js_error)?;
+            to_json(RequestVersionComparison { version, current_document, differs })
+        }
+
+        "models_restore_request_version" => {
+            let req: VersionIdReq = from_js(payload)?;
+            let restored = host
+                .queries
+                .with_tx(|tx| tx.restore_request_version(&req.version_id, source))
+                .map_err(js_error)?;
+            to_json(AnyModel::from(restored))
         }
 
         "models_get_settings" => to_json(host.queries.connect().get_settings()),
@@ -499,6 +543,9 @@ struct PreparedHttpSend {
     setting_events: Vec<HttpResponseEventData>,
     /// The jar the send starts with, so the tab can write it back with the proxy's changes.
     cookie_jar: Option<CookieJar>,
+    /// The version of the stored row this send was prepared from, taken from the same
+    /// read, so the response names exactly what was sent. `None` if it couldn't be written.
+    version_id: Option<String>,
 }
 
 /// A template callback for a host with no plugins. Variables render; a function is a clear
@@ -541,9 +588,19 @@ pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
     let req: PrepareHttpSendReq = from_js(payload)?;
 
     // Everything from the database first, then release the host borrow before rendering.
-    let (request, environment_chain, settings, cookie_jar) = with_host(|host| {
+    let (request, environment_chain, settings, cookie_jar, version_id) = with_host(|host| {
         let db = host.queries.connect();
         let request = db.get_http_request(&req.request_id).map_err(js_error)?;
+        // Version this read of the row, the one being sent, rather than reading it again
+        // where an edit could land in between. Failing to write history fails nothing.
+        let version_id = host
+            .queries
+            .with_tx(|tx| {
+                Ok::<_, yaak_models::error::Error>(
+                    tx.snapshot_request_for_send(&AnyRequest::HttpRequest(request.clone())),
+                )
+            })
+            .unwrap_or(None);
         let environment_chain = db
             .resolve_environments(
                 &request.workspace_id,
@@ -560,7 +617,7 @@ pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
             None => None,
         };
         let request = HttpRequest { authentication_type, authentication, headers, ..request };
-        Ok((request, environment_chain, settings, cookie_jar))
+        Ok((request, environment_chain, settings, cookie_jar, version_id))
     })?;
 
     let rendered = render_http_request(
@@ -591,6 +648,7 @@ pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
         settings: HttpSendSettings::from(&settings),
         setting_events: settings.timeline_events(),
         cookie_jar,
+        version_id,
     };
     // JSON-compatible, as `rpc` does: the tab posts this to the proxy with `JSON.stringify`,
     // and the default serializer's `Map` for the request body would stringify to `{}`.
