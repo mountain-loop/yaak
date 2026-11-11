@@ -127,11 +127,11 @@
   },
   "devDependencies": {
     "@rolldown/plugin-babel": "^0.3.0",
-    "@tailwindcss/postcss": "^4.3.2",
+    "@tailwindcss/postcss": "^4.3.4",
     "@tauri-apps/cli": "npm:@tauri-apps/cli-cef@3.0.0-alpha.6",
     "@types/babel__core": "^7.20.5",
-    "@vitejs/plugin-react": "^6.1.2",
-    "@yaakapp/cli": "2026.9.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "@yaakapp/cli": "2026.9.1",
     "babel-plugin-react-compiler": "^1.0.0",
     "dotenv-cli": "^11.1.0",
     "nodejs-file-downloader": "^4.13.0",
@@ -141,7 +141,7 @@
     "tar": "^7.5.22",
     "typescript": "^5.8.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@^1.4.0",
-    "vite-plus": "^1.4.0",
+    "vite-plus": "^1.5.0",
     "vitest": "^4.1.12",
     "yauzl": "^3.4.0"
   },
