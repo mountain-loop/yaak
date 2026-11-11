@@ -1,11 +1,5 @@
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
-import {
-  Banner,
-  CONTROL_TOOLTIP_DELAY,
-  EmptyStateText,
-  LoadingIcon,
-  Tooltip,
-} from "@yaakapp-internal/ui";
+import { Banner, EmptyStateText, IconTooltip, LoadingIcon } from "@yaakapp-internal/ui";
 import type { HttpBodyResult } from "@yaakapp-internal/ui/httpTypes";
 import type { ReactNode } from "react";
 import type { FlowBodyData } from "../lib/flowViews";
@@ -42,11 +36,13 @@ export function FlowRequestBody({ body, viewer, requestSize }: Props) {
     return (
       <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
         <Banner color="notice" className="text-sm mb-2">
-          <Tooltip wrap content="The app sent all of it" delay={CONTROL_TOOLTIP_DELAY}>
-            <span>
-              First {formatSize(body.data.storedSize)} of {formatSize(requestSize)} kept
-            </span>
-          </Tooltip>
+          <span className="flex items-center gap-1.5">
+            The first {formatSize(body.data.storedSize)} of {formatSize(requestSize)} is shown.
+            <IconTooltip
+              iconSize="sm"
+              content="The body was truncated at the capture limit. The app sent all of it."
+            />
+          </span>
         </Banner>
         <div className="min-h-0">{viewer}</div>
       </div>

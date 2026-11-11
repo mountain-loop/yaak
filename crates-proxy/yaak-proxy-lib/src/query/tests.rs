@@ -391,7 +391,7 @@ fn encrypted_and_rejected() {
         url: "https://my.1password.com".into(),
         client_http_version: "HTTP/1.1".into(),
         tls_rejected: Some("unknown_ca".into()),
-        error: Some("Rejected the proxy's certificate".into()),
+        error: Some("Certificate rejected by the app".into()),
         elapsed_ms: Some(3),
         started_at: (now() - Duration::minutes(5)).naive_utc(),
         ..Default::default()

@@ -126,8 +126,7 @@ export function EncryptedCard({ flow }: { flow: Flow }) {
         <div className="mx-auto max-w-[27rem] py-10 grid gap-2">
           <div className="text-sm text-text mb-1">
             <LineText line={model.why} />
-            {model.whySub != null && <span className="text-text-subtle"> · {model.whySub}</span>}
-            <Tooltip wrap content={ABOUT} delay={CONTROL_TOOLTIP_DELAY}>
+            <Tooltip wrap content={model.tooltip ?? ABOUT} delay={CONTROL_TOOLTIP_DELAY}>
               <IconButton
                 size="2xs"
                 icon="info"
@@ -137,11 +136,6 @@ export function EncryptedCard({ flow }: { flow: Flow }) {
               />
             </Tooltip>
           </div>
-          {model.fact != null && (
-            <div className="text-sm text-text-subtle -mt-1 mb-1">
-              <LineText line={model.fact} />
-            </div>
-          )}
           {model.actions.map((action) => (
             <ActionButton
               key={action.label}
@@ -162,7 +156,7 @@ export function EncryptedCard({ flow }: { flow: Flow }) {
             />
           ))}
           {model.foot.length > 0 && (
-            <div className="text-xs text-text-subtlest mt-0.5">{model.foot.join(" · ")}</div>
+            <div className="text-xs text-text-subtlest mt-0.5">{model.foot.join(" ")}</div>
           )}
           {flow.error != null && flow.tlsRejected == null && (
             <div className="text-xs text-danger mt-1">{flow.error}</div>

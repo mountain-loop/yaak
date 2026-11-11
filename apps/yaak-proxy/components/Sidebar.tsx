@@ -175,7 +175,7 @@ export function Sidebar() {
           onSelect: () => void revealPath(path, fail),
         },
         {
-          label: "Copy path",
+          label: "Copy Path",
           leftSlot: <Icon icon="copy" />,
           hidden: item.kind !== "folder",
           onSelect: () => {
@@ -203,9 +203,9 @@ export function Sidebar() {
           onSelect: async () => {
             try {
               await navigator.clipboard.writeText(copyRowsText(items));
-              showToast({ message: "Copied value" });
+              showToast({ message: "Copied to clipboard" });
             } catch (err) {
-              showToast({ message: `Failed to copy value: ${String(err)}`, color: "danger" });
+              showToast({ message: `Failed to copy: ${String(err)}`, color: "danger" });
             }
           },
         },
@@ -239,7 +239,7 @@ export function Sidebar() {
                 void applyDecrypt({
                   edit: everythingEdit(true),
                   message: "Decrypting everything",
-                  sub: "Except Apple services and apps that pin",
+                  sub: "Excluded hosts and apps stay encrypted.",
                 }),
             },
           ],

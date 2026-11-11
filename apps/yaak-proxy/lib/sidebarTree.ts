@@ -347,7 +347,7 @@ export function buildSidebarTree(
   for (const site of domains.children.values()) domains.item.count += site.children.size;
 
   root.children?.push({
-    item: { id: ALL_ID, kind: "all", label: "All traffic", count: total, query: "" },
+    item: { id: ALL_ID, kind: "all", label: "All Traffic", count: total, query: "" },
     parent: root,
     depth: 1,
     draggable: false,

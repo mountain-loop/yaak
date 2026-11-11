@@ -225,7 +225,7 @@ describe("flowResponseToView", () => {
 
   test("says when the client gave up before a response", () => {
     const view = flowResponseToView({ ...flow, status: null, elapsedMs: null, cancelled: true });
-    expect(view?.error).toBe("Cancelled by the client");
+    expect(view?.error).toBe("Cancelled by the app");
   });
 });
 

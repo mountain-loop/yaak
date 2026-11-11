@@ -159,7 +159,7 @@ export const FlowListHeader = memo(function FlowListHeader({
           : {}),
       };
     }),
-    { label: "Add Column…", icon: "plus", onSelect: () => openAddColumn(true) },
+    { label: "Add Column", icon: "plus", onSelect: () => openAddColumn(true) },
     { type: "separator" },
     { label: "Reset Sort", disabled: sort.length === 0, onSelect: onResetSort },
     { label: "Reset Column Widths", onSelect: () => setPrefs((p) => resetWidths(p)) },
@@ -179,7 +179,7 @@ export const FlowListHeader = memo(function FlowListHeader({
       { label: "Sort Descending", onSelect: () => sortBy(true) },
       { label: "Add to Sort Ascending", onSelect: () => addTo(false) },
       { label: "Add to Sort Descending", onSelect: () => addTo(true) },
-      { label: "Clear Sorting", disabled: sort.length === 0, onSelect: onResetSort },
+      { label: "Reset Sort", disabled: sort.length === 0, onSelect: onResetSort },
       { type: "separator" },
       {
         label: "Move Left",

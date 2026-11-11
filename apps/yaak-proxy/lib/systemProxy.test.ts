@@ -14,12 +14,12 @@ describe("systemProxySwitch", () => {
   test("says whether this Mac's traffic is routed now", () => {
     expect(systemProxySwitch({ ...off, routing: true })).toEqual({
       checked: true,
-      description: "Routing this Mac's web traffic through Yaak Proxy",
+      description: "Traffic from every app will be recorded.",
       failed: false,
     });
     expect(systemProxySwitch(off)).toEqual({
       checked: false,
-      description: "Not routing. Only apps pointed at port 9090 are captured",
+      description: "Only traffic sent to port 9090 will be recorded.",
       failed: false,
     });
   });
@@ -27,7 +27,7 @@ describe("systemProxySwitch", () => {
   test("shows the new value while the password prompt is up", () => {
     expect(systemProxySwitch({ ...off, pending: true })).toEqual({
       checked: true,
-      description: "Waiting for your password",
+      description: "Waiting for macOS",
       failed: false,
     });
   });
@@ -41,9 +41,9 @@ describe("systemProxySwitch", () => {
   });
 
   test("snaps back on a cancelled prompt and says so", () => {
-    expect(systemProxySwitch({ ...off, error: "Cancelled in the password dialog" })).toEqual({
+    expect(systemProxySwitch({ ...off, error: "The password prompt was cancelled." })).toEqual({
       checked: false,
-      description: "Cancelled in the password prompt",
+      description: "The password prompt was cancelled.",
       failed: true,
     });
     expect(systemProxySwitch({ ...off, error: "networksetup failed" }).description).toBe(
@@ -53,27 +53,32 @@ describe("systemProxySwitch", () => {
 });
 
 describe("helperRow", () => {
-  test("offers each next step, and says which way changes go", () => {
+  test("offers each next step, and says what the helper is for", () => {
     expect(helperRow("not_registered", "admin_prompt")).toMatchObject({
-      title: "Helper: not installed",
+      description: "The helper is not installed.",
       action: "install",
     });
     expect(helperRow("requires_approval", "admin_prompt")).toMatchObject({
-      title: "Helper: awaiting approval",
+      description: "The helper is awaiting approval.",
       action: "approve",
     });
     const enabled = helperRow("enabled", "helper");
-    expect(enabled).toMatchObject({ title: "Helper: enabled", action: "unregister" });
-    expect(enabled.description).toMatch(/No password/);
+    expect(enabled).toMatchObject({
+      description: "The helper is installed.",
+      action: "unregister",
+    });
+    expect(enabled.tooltip).toMatch(/without a password prompt/);
   });
 
   test("says when the password prompt still has settings to put back", () => {
-    expect(helperRow("enabled", "admin_prompt").description).toMatch(/password prompt/);
+    expect(helperRow("enabled", "admin_prompt").tooltip).toBe(
+      "One more password prompt is needed to restore the system proxy settings.",
+    );
   });
 
   test("offers to install when macOS can't find it, rather than blaming a dev build", () => {
     expect(helperRow("not_found", "admin_prompt")).toMatchObject({
-      title: "Helper: not found by macOS",
+      description: "macOS could not find the helper.",
       action: "install",
     });
   });
@@ -89,13 +94,13 @@ describe("helperRow", () => {
     for (const state of states) {
       for (const backend of ["helper", "admin_prompt"] as const) {
         const row = helperRow(state, backend);
-        expect(row.title.length).toBeLessThanOrEqual(30);
         expect(row.description.length).toBeLessThanOrEqual(60);
+        expect(row.tooltip.length).toBeLessThanOrEqual(80);
       }
     }
   });
 
-  test("has a titled row for every state the backend sends", () => {
+  test("has a row for every state the backend sends", () => {
     // A missing key here fails the typecheck, so a new state can't be left out.
     const states: Record<HelperState, true> = {
       unavailable: true,
@@ -106,7 +111,7 @@ describe("helperRow", () => {
     };
     for (const state of Object.keys(states) as HelperState[]) {
       for (const backend of ["helper", "admin_prompt", "sudo"] as const) {
-        expect(helperRow(state, backend).title).toMatch(/^Helper: \S/);
+        expect(helperRow(state, backend).description).toMatch(/helper.*\.$/);
       }
     }
   });
@@ -114,15 +119,15 @@ describe("helperRow", () => {
   test("still gives a row for a state this build doesn't know", () => {
     const row = helperRow("from_the_future" as HelperState, "admin_prompt");
     expect(row).toEqual({
-      title: "Helper: from_the_future",
-      description: "Changes use the password prompt.",
+      description: "The helper is from_the_future.",
+      tooltip: "The helper changes the system proxy without a password prompt.",
       action: null,
     });
   });
 
   test("says plainly that a dev build cannot use it", () => {
     expect(helperRow("unavailable", "admin_prompt")).toMatchObject({
-      title: "Helper: not in dev builds",
+      description: "The helper is not available in dev builds.",
       action: null,
     });
   });

@@ -411,8 +411,8 @@ export function subjectName(subject: DecryptSubject): string {
 }
 
 /**
- * Several subjects named together: one by its name, several of a kind counted, `3 Sites` in a
- * menu and `3 sites` in a toast, and mixed kinds as `3 Selected`
+ * Several subjects named together: one by its name, several of a kind counted, `3 Domains` in a
+ * menu and `3 domains` in a toast, and mixed kinds as `3 Selected`
  */
 function subjectsName(subjects: DecryptSubject[]): { title: string; text: string } {
   const [first] = subjects;
@@ -423,7 +423,7 @@ function subjectsName(subjects: DecryptSubject[]): { title: string; text: string
   const kinds = new Set(subjects.map((s) => s.kind));
   const n = subjects.length;
   if (kinds.size > 1) return { title: `${n} Selected`, text: `${n} selected` };
-  const noun = first?.kind === "app" ? "Apps" : first?.kind === "site" ? "Sites" : "Hosts";
+  const noun = first?.kind === "app" ? "Apps" : first?.kind === "site" ? "Domains" : "Hosts";
   return { title: `${n} ${noun}`, text: `${n} ${noun.toLowerCase()}` };
 }
 
@@ -473,8 +473,8 @@ export function decryptFilterOptions(seen: SeenTargets | null | undefined): Filt
     replaceValueOnly: true,
     negation: { prefix: "!", info: "Exclude" },
     fields: [
-      { name: "host", values: seen?.hosts ?? [], info: "Host or *.site" },
-      { name: "app", values: [...apps], info: "App name or bundle id" },
+      { name: "host", values: seen?.hosts ?? [], info: "Host or *.domain" },
+      { name: "app", values: [...apps], info: "App name or bundle ID" },
     ],
   };
 }

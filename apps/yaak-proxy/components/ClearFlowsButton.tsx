@@ -47,27 +47,14 @@ export function ClearFlowsButton() {
       <IconButton
         className="pointer-events-auto"
         icon="trash"
-        title={
-          locked != null
-            ? "Clear flows (traffic is locked)"
-            : total === 0
-              ? "Clear flows (none yet)"
-              : hotkey == null
-                ? "Clear flows"
-                : `Clear flows ${hotkey}`
-        }
+        title={action === "disabled" || hotkey == null ? "Clear flows" : `Clear flows ${hotkey}`}
         tooltip
         size="sm"
         iconColor="secondary"
         disabled={action === "disabled"}
         onClick={start}
       />
-      <Dialog
-        open={confirming}
-        onClose={() => setConfirming(false)}
-        size="sm"
-        title="Clear traffic?"
-      >
+      <Dialog open={confirming} onClose={() => setConfirming(false)} size="sm" title="Clear Flows">
         {confirming && (
           <ConfirmClear
             total={total}
@@ -103,8 +90,8 @@ function ConfirmClear({
     <form id={formId} className="flex flex-col gap-3" onSubmit={handleSubmit}>
       <p>
         {total === 1
-          ? "1 flow will be removed."
-          : `${total.toLocaleString()} flows will be removed.`}
+          ? "Permanently clear 1 flow?"
+          : `Permanently clear ${total.toLocaleString()} flows?`}
       </p>
       <Checkbox checked={dontAskAgain} title="Don't ask again" onChange={setDontAskAgain} />
       <DialogFooter

@@ -271,7 +271,7 @@ describe("syncSidebarSelection", () => {
 
   test("All traffic is exclusive either way round", () => {
     const { store, selected, idOf, choose } = sidebar();
-    const [all, github] = [idOf("All traffic"), idOf("github.com")];
+    const [all, github] = [idOf("All Traffic"), idOf("github.com")];
     choose([github]);
     choose([github, all]);
     expect(store.get(selected)).toEqual([all]);

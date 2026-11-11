@@ -672,7 +672,7 @@ droppedHeaders: Array<DroppedHeader>,
  */
 keptHeaders: number, 
 /**
- * The body as it is saved: "JSON", "form URL-encoded with 7 fields". None without a body.
+ * The body as it is saved: "JSON", "a URL-encoded form with 7 fields". None without a body.
  */
 body: string | null, 
 /**

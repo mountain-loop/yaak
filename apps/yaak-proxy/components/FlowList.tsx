@@ -914,9 +914,9 @@ function encryptedReason(flow: Flow): string {
         ? "Encrypted: excluded by default"
         : `Encrypted: excluded by ${flow.tunnelExcludedBy}`;
     case "rejected":
-      return "Encrypted: passed through after a client rejected the certificate";
+      return "Encrypted: an app rejected the certificate";
     default:
-      return "Encrypted: not on the decrypt list";
+      return "Encrypted: decryption is not enabled";
   }
 }
 
@@ -929,12 +929,12 @@ function FlowMark({ flow }: { flow: Flow }) {
   const open = isOpenStream(flow);
   const rejected = flow.tlsRejected != null;
   const states: string[] = [];
-  if (rejected) states.push("Rejected the proxy's certificate");
+  if (rejected) states.push("Certificate rejected by the app");
   else if (flow.error != null) states.push(`Failed: ${flow.error}`);
   if (flow.cancelled) states.push("Cancelled by the app");
   if (flow.tunnelled) states.push(encryptedReason(flow));
   if (open) states.push("Streaming");
-  if (flow.responseTruncated) states.push("Body cut at the capture limit");
+  if (flow.responseTruncated) states.push("Body truncated at the capture limit");
   if (flow.savedRequestId != null) states.push("Saved to Yaak");
   const mark = (
     <span className="flex items-center justify-center">
@@ -1369,9 +1369,9 @@ function useCellActions(): (flow: Flow, column: ColumnId) => DropdownItem[] {
           onSelect: async () => {
             try {
               await navigator.clipboard.writeText(value);
-              showToast({ message: "Copied value" });
+              showToast({ message: "Copied to clipboard" });
             } catch (err) {
-              showToast({ message: `Failed to copy value: ${String(err)}`, color: "danger" });
+              showToast({ message: `Failed to copy: ${String(err)}`, color: "danger" });
             }
           },
         });

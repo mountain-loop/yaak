@@ -481,7 +481,7 @@ function StreamEventDetail({
       />
       {event.truncated || event.error ? (
         <Banner color={event.error ? "danger" : "notice"} className="mb-2 text-sm">
-          {event.error ?? "The message is cut at the capture limit."}
+          {event.error ?? "The message was truncated at the capture limit."}
         </Banner>
       ) : (
         <span aria-hidden />

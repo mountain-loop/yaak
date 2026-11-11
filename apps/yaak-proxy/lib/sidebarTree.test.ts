@@ -50,7 +50,7 @@ describe("buildSidebarTree", () => {
 
   test("groups apps, programs by folder, sites and System", () => {
     expect((root.children ?? []).flatMap((c) => shape(c))).toEqual([
-      "All traffic 40",
+      "All Traffic 40",
       "Apps 3",
       "  node (fieldwork) 2",
       "    github.com 2",
@@ -338,7 +338,7 @@ describe("saved searches", () => {
     ];
     const root = buildSidebarTree(flows, 4, saved);
     expect((root.children ?? []).slice(0, 2).flatMap((c) => shape(c))).toEqual([
-      "All traffic 4",
+      "All Traffic 4",
       "Saved 0",
       "  Errors 12",
       "  Stripe 0",

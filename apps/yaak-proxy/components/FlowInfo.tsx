@@ -65,8 +65,8 @@ export function FlowInfo({ flow }: { flow: Flow }) {
             "Started",
             format(utcTimestamp(flow.startedAt), "MMM d, yyyy, h:mm:ss.SSS a"),
           ),
-          row("headers", "Headers", ms(flow.elapsedHeadersMs)),
-          row("total", "Total", ms(flow.elapsedMs)),
+          row("headers", "Latency", ms(flow.elapsedHeadersMs)),
+          row("total", "Time", ms(flow.elapsedMs)),
         ]}
       </Section>
       <Section title="Size">
@@ -75,11 +75,11 @@ export function FlowInfo({ flow }: { flow: Flow }) {
           row("response_size", "Response", formatSize(flow.responseSize)),
         ]}
       </Section>
-      <Section title="Record">
+      <Section title="Flow">
         {[
           row("number", "Number", `#${flow.number}`, { copy: true }),
           row("id", "ID", flow.id, { copy: true }),
-          row("saved", "Saved As", flow.savedRequestId, { copy: true }),
+          row("saved", "Yaak Request ID", flow.savedRequestId, { copy: true }),
         ]}
       </Section>
       <Timeline flow={flow} />

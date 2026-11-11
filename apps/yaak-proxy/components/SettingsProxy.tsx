@@ -6,6 +6,7 @@ import {
   Dialog,
   DialogFooter,
   Icon,
+  IconTooltip,
   RadioDropdown,
   SettingRow,
   SettingRowBoolean,
@@ -58,27 +59,30 @@ export function SettingsProxy() {
   const elsewhere = proxyState?.otherOwner != null;
 
   return (
-    <SettingsPage title="Proxy" description="Listening, decryption, traffic and terminals">
+    <SettingsPage
+      title="Proxy"
+      description="Configure the port, decryption, recorded traffic, and terminal environment."
+    >
       <SettingsList className="space-y-8">
         <SettingsSection title="Proxy">
           <PortRow disabled={elsewhere} />
           <SettingRowSelect<HttpVersion>
             name="httpVersion"
             title="HTTP version"
-            description="For new connections"
+            description="The change applies to new connections."
             value={proxyState?.httpVersion ?? "auto"}
             disabled={elsewhere}
             onChange={(httpVersion) => setHttpVersion.mutate({ httpVersion })}
             options={[
-              { label: "Auto", value: "auto" },
+              { label: "Automatic", value: "auto" },
               { label: "HTTP/1.1 only", value: "http1Only" },
             ]}
           />
           {systemProxy.data?.supported === true && (
             <>
               <SettingRowBoolean
-                title="Override system proxy"
-                description="At launch"
+                title="Override system proxy at launch"
+                description="Traffic from every app will be recorded."
                 checked={proxyState?.systemProxyAtLaunch ?? true}
                 disabled={setAtLaunch.isPending}
                 onChange={(enabled) => setAtLaunch.mutate({ enabled })}
@@ -147,7 +151,7 @@ function PortRow({ disabled }: { disabled: boolean }) {
     setPort.mutate({ port });
   };
   return (
-    <SettingRow title="Port" description="Restarts the proxy">
+    <SettingRow title="Port" description="Changing the port restarts the proxy.">
       <PlainInput
         hideLabel
         size="sm"
@@ -184,7 +188,10 @@ function HelperRow({ status }: { status: SystemProxyStatus }) {
         unregister.error != null ? (
           <span className="text-danger">{unregister.error.message}</span>
         ) : (
-          `${capitalize(row.title.replace(/^Helper: /, ""))}. ${row.description}`
+          <span className="inline-flex items-center gap-1.5">
+            {row.description}
+            <IconTooltip iconSize="sm" content={row.tooltip} />
+          </span>
         )
       }
     >
@@ -200,7 +207,7 @@ function HelperRow({ status }: { status: SystemProxyStatus }) {
             ? "Install"
             : row.action === "approve"
               ? "Approve"
-              : "Unregister"}
+              : "Uninstall"}
         </Button>
       )}
     </SettingRow>
@@ -217,7 +224,7 @@ function TrafficRow() {
   return (
     <SettingRowSelect<TrafficRetention>
       name="traffic"
-      title="Captured traffic"
+      title="Recorded traffic"
       selectClassName="w-56!"
       value={proxyState?.traffic ?? "clearOnLaunch"}
       disabled={proxyState?.otherOwner != null}
@@ -240,7 +247,7 @@ function KeepTrafficRow() {
   });
   const keep = proxyState?.keepTrafficBytes ?? null;
   return (
-    <SettingRow title="Size limit" description="Oldest flows dropped past it">
+    <SettingRow title="Size limit" description="The oldest flows will be cleared first.">
       <div className="flex items-center gap-3">
         {size.data != null && (
           <span className="text-sm text-text-subtle tabular-nums whitespace-nowrap">
@@ -280,21 +287,24 @@ function ResetRow() {
     onSuccess: () => {
       setConfirming(false);
       void queryClient.invalidateQueries();
-      showToast({ message: "Captured data reset" });
+      showToast({ message: "Recorded data reset" });
     },
     onSettled: () => void refreshProxyState(store),
   });
   return (
-    <SettingRow title="Reset captured data" description="Deletes all flows and their keys">
+    <SettingRow
+      title="Reset recorded data"
+      description="All traffic and its encryption keys will be deleted."
+    >
       <Button size="xs" variant="border" color="danger" onClick={() => setConfirming(true)}>
-        Reset…
+        Reset
       </Button>
       <Dialog
         open={confirming}
         onClose={() => setConfirming(false)}
         size="sm"
-        title="Reset captured data?"
-        description="Every captured flow and the keys that encrypt them are deleted."
+        title="Reset Recorded Data"
+        description="Permanently delete all traffic and its encryption keys?"
       >
         {reset.error != null && <p className="text-danger text-sm">{reset.error.message}</p>}
         <DialogFooter
@@ -351,8 +361,8 @@ function TerminalRow() {
           className="ml-auto"
           title={
             os === "macos"
-              ? "A new Terminal window with these set"
-              : "Not available on this platform yet"
+              ? "A new Terminal window will open with these variables set."
+              : "Opening a terminal is only supported on macOS."
           }
           disabled={caPath == null || os !== "macos"}
           isLoading={openTerminal.isPending}
@@ -363,7 +373,7 @@ function TerminalRow() {
           Open Terminal
         </Button>
       </div>
-      <p className="mt-1 text-sm text-text-subtle">Proxies one terminal instead of the system</p>
+      <p className="mt-1 text-sm text-text-subtle">Traffic from one terminal will be recorded.</p>
       {caPath != null && (
         <SettingSnippet
           className="mt-3"
@@ -373,8 +383,4 @@ function TerminalRow() {
       )}
     </div>
   );
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }

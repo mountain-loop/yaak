@@ -10,6 +10,7 @@ import {
   CsvViewer,
   HexdumpViewer,
   Icon,
+  IconTooltip,
   ImageViewer,
   LARGE_BODY_BYTES,
   languageFromContentType,
@@ -238,14 +239,20 @@ export function FlowBodyViewer({ flow, which, form, hideCutNote = false }: Props
     <div className="h-full grid grid-rows-[auto_auto_minmax(0,1fr)]">
       {decodeError != null && (
         <Banner color="danger" className="text-sm mb-2">
-          {decodeError}. Showing the body as it was on the wire.
+          {decodeError}. The body is shown as it was received.
         </Banner>
       )}
       {truncated && !hideCutNote && (
         <Banner color="notice" className="text-sm mb-2">
-          {wireTruncated || decodeError != null
-            ? `Showing the first ${formatSize(storedSize)} of ${formatSize(wireSize)}, the capture limit. The app received all of it.`
-            : `Showing the first ${formatSize(bytes.length)} of the decoded body, the capture limit. The app received all of it.`}
+          <span className="flex items-center gap-1.5">
+            {wireTruncated || decodeError != null
+              ? `The first ${formatSize(storedSize)} of ${formatSize(wireSize)} is shown.`
+              : `The first ${formatSize(bytes.length)} of the decoded body is shown.`}
+            <IconTooltip
+              iconSize="sm"
+              content="The body was truncated at the capture limit. The app received all of it."
+            />
+          </span>
         </Banner>
       )}
       <div className="min-h-0 row-start-3">{viewer}</div>

@@ -184,7 +184,7 @@ impl GrpcParser {
         message.truncated = true;
         message.compressed = compressed;
         message.error = Some(format!(
-            "The body ended partway through this message, {} of its {length} bytes in",
+            "The body ended after {} of this message's {length} bytes.",
             length - remaining
         ));
         Some(message)
@@ -318,7 +318,7 @@ mod tests {
         assert_eq!(messages.len(), 1);
         let cut = parser.end().expect("the unfinished message");
         assert_eq!((&cut.data[..], cut.size, cut.truncated), (&b"hal"[..], 10, true));
-        assert!(cut.error.as_deref().unwrap().contains("3 of its 10 bytes"));
+        assert!(cut.error.as_deref().unwrap().contains("3 of this message's 10 bytes"));
         // Nothing unfinished: nothing more.
         assert!(parser.end().is_none());
         // A trailers frame cut short is still a trailers frame.

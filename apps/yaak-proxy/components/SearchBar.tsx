@@ -205,7 +205,7 @@ export const SearchBar = memo(function SearchBar() {
                   <Dropdown
                     items={[
                       {
-                        label: "Save search",
+                        label: "Save Search",
                         leftSlot: <Icon icon="bookmark" />,
                         onSelect: () =>
                           setSavedDialog({
@@ -275,7 +275,7 @@ function FilterHistory({
 
   const items: DropdownItem[] =
     history.length === 0
-      ? [{ label: "No recent filters", disabled: true }]
+      ? [{ label: "No recent searches", disabled: true }]
       : [
           ...history.map((filter): DropdownItem => ({
             label: (
@@ -311,7 +311,7 @@ function FilterHistory({
       <IconButton
         size="xs"
         icon="search"
-        title="Recent filters"
+        title="Recent searches"
         tooltip
         iconColor="secondary"
         disabled={disabled}

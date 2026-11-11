@@ -31,18 +31,17 @@ export function FlowListEmpty() {
       <div className="text-text text-sm">{recording ? "No flows yet" : "Recording is paused"}</div>
       <div className="text-sm text-text-subtle max-w-[26rem]">
         {!running
-          ? "The proxy is not running. Retry from the menu by the state."
+          ? "Retry from the status menu to start the proxy."
           : !recording
-            ? "Traffic passes through without being stored."
-            : `Recording on port ${port ?? "--"}. Flows appear as apps send requests.`}
+            ? "Traffic passes through without being recorded."
+            : `Traffic sent to port ${port ?? "--"} will be recorded.`}
       </div>
     </EmptyStateText>
   );
 }
 
 /**
- * The list's last row while recording is paused, where the next flow would appear: since when,
- * and that nothing is stored.
+ * The list's last row while recording is paused, where the next flow would appear: since when.
  */
 export function PausedRow({ style }: { style?: React.CSSProperties }) {
   const pausedAt = useAtomValue(pausedAtAtom);
@@ -56,8 +55,7 @@ export function PausedRow({ style }: { style?: React.CSSProperties }) {
     >
       <Icon icon="circle_pause" size="sm" className="text-text-subtlest" />
       <span className="truncate">
-        {pausedAt == null ? "Paused." : `Paused at ${timeOf(pausedAt)}.`} Traffic passes through
-        without being stored.
+        {pausedAt == null ? "Recording is paused." : `Recording was paused at ${timeOf(pausedAt)}.`}
       </span>
       <Hotkey action="recording_toggle" variant="text" className="ml-auto" />
     </div>
@@ -102,11 +100,10 @@ function NoResults({ text }: { text: string }) {
       className="not-italic !h-auto py-3 px-4 text-sm text-text-subtle"
     >
       <div className="text-center leading-relaxed">
-        No flows match.
-        {wider.length > 0 && " Found matches for "}
+        {wider.length === 0 ? "No results" : "No results, but found matches for "}
         {wider.map((w, i) => (
           <span key={w.text}>
-            {i > 0 && (i === wider.length - 1 ? ", or " : ", ")}
+            {i > 0 && " or "}
             <button type="button" className="hover:underline" onClick={() => setText(w.text)}>
               <InlineCode>{w.text === "" ? "all traffic" : w.text}</InlineCode>
             </button>{" "}

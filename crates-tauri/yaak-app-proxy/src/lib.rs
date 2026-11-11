@@ -140,7 +140,7 @@ async fn cmd_open_settings(
 
     let main = app_handle
         .get_webview_window(MAIN_WINDOW_LABEL)
-        .ok_or("The main window is not open to open Settings over")?;
+        .ok_or("Failed to open Settings: the main window is closed")?;
     let win = yaak_window::window::create_child_window(
         &main,
         "/",

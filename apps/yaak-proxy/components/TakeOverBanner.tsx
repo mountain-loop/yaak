@@ -29,11 +29,11 @@ export function TakeOverBanner() {
       <span className="truncate">
         {!cli ? (
           // Stopping another app halts its engine without releasing it, so it can't be taken over.
-          "Another Yaak Proxy window owns the engine. Quit it to use this one."
+          "Quit the other copy to use this one."
         ) : takeOver.error != null ? (
           <span className="text-danger">{takeOver.error.message}</span>
         ) : (
-          `pid ${other.pid}, since ${since}. Flows still list here, read from the capture database.`
+          `pid ${other.pid}, since ${since}`
         )}
       </span>
       {cli && (
@@ -44,7 +44,7 @@ export function TakeOverBanner() {
           isLoading={takeOver.isPending}
           onClick={() => takeOver.mutate({})}
         >
-          Take over
+          Take Over
         </Button>
       )}
     </div>

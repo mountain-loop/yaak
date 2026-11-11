@@ -233,7 +233,7 @@ impl ProxyCtx {
 
     fn lock_reason(&self) -> String {
         if self.encrypting().is_some() {
-            return "traffic captured before this version is being encrypted.".to_string();
+            return "traffic recorded before this version is being encrypted.".to_string();
         }
         let reason = self.lock_reason.lock().unwrap_or_else(PoisonError::into_inner).clone();
         reason.unwrap_or_else(|| "its key has not been read yet.".to_string())
@@ -275,8 +275,7 @@ impl ProxyCtx {
             && owner.pid != std::process::id()
         {
             return Err(format!(
-                "{}, so the traffic it stored can't be encrypted yet. Take over or quit it, then \
-                retry.",
+                "{}. Take over or quit it, then retry.",
                 control::already_owned(&owner)
             ));
         }
@@ -720,7 +719,7 @@ impl ProxyCtx {
             .map_err(|e| e.to_string())?;
             if !released {
                 return Err(format!(
-                    "The proxy in {} (pid {}) stopped but did not let go of it",
+                    "Failed to take over from {} (pid {})",
                     control::owner_name(owner.owner),
                     owner.pid
                 ));
@@ -808,7 +807,7 @@ impl ProxyCtx {
     pub fn set_system_proxy(&self, enabled: bool) -> Result<SystemProxyStatus, String> {
         let Some(port) = self.port() else {
             if enabled {
-                return Err("The proxy is not running, so there is nothing to route to".into());
+                return Err("The proxy is not running".into());
             }
             // Clears one left pointing at the configured port; asks for nothing otherwise.
             self.change_system_proxy(false, self.settings()?.port, false)?;
@@ -2246,7 +2245,7 @@ pub struct SavePreview {
     /// Headers saved as captured, Authorization among them.
     #[ts(type = "number")]
     pub kept_headers: usize,
-    /// The body as it is saved: "JSON", "form URL-encoded with 7 fields". None without a body.
+    /// The body as it is saved: "JSON", "a URL-encoded form with 7 fields". None without a body.
     pub body: Option<String>,
     /// What does not carry over exactly, one sentence each.
     pub warnings: Vec<String>,
@@ -2784,8 +2783,8 @@ async fn preview_save(ctx: ProxyCtx, req: PreviewSaveRequest) -> Result<SavePrev
         "application/x-www-form-urlencoded" => {
             let fields = request.body.get("form").and_then(|f| f.as_array()).map_or(0, Vec::len);
             match fields {
-                1 => "form URL-encoded with 1 field".to_string(),
-                n => format!("form URL-encoded with {n} fields"),
+                1 => "a URL-encoded form with 1 field".to_string(),
+                n => format!("a URL-encoded form with {n} fields"),
             }
         }
         _ => "text".to_string(),
@@ -3184,8 +3183,7 @@ async fn count_saved_queries(
 // -- Event loop --
 
 /// Why the engine cannot be taken over from another app.
-pub const ANOTHER_APP_OWNS: &str =
-    "Another Yaak Proxy window owns the engine. Quit it to use this one.";
+pub const ANOTHER_APP_OWNS: &str = "Quit the other Yaak Proxy to use this one.";
 
 /// How long taking over waits for the owner to let go of the engine.
 const TAKE_OVER_WAIT: Duration = Duration::from_secs(10);
@@ -3229,11 +3227,10 @@ const STOPPED_MID_STREAM: &str = "Yaak Proxy stopped before the stream ended";
 const STOPPED_MID_TUNNEL: &str = "Yaak Proxy stopped before the connection closed";
 
 /// Why a failed handshake's flow can't be saved as a request.
-pub(crate) const NOT_A_REQUEST: &str =
-    "Not a request: the client's TLS handshake failed before it sent one";
+pub(crate) const NOT_A_REQUEST: &str = "The TLS handshake failed before any request was sent";
 
 /// The error of a flow recording a client's refusal of the proxy's certificate.
-const REJECTED_CERTIFICATE: &str = "Rejected the proxy's certificate";
+const REJECTED_CERTIFICATE: &str = "Certificate rejected by the app";
 
 /// A flow between its `RequestStart` and its end, with its bodies being written as they
 /// stream.

@@ -33,8 +33,8 @@ export function useSaveFlowBody(): (flow: Flow, which: FlowBody) => Promise<void
         if (path == null) return;
         const saved = await rpc("save_flow_body", { flowId: flow.id, which, path });
         const notes = [
-          saved.raw ? "as it was on the wire, since it failed to decode" : null,
-          saved.truncated ? "cut at the capture limit" : null,
+          saved.raw ? "as received, since it failed to decode" : null,
+          saved.truncated ? "truncated at the capture limit" : null,
         ].filter((n) => n != null);
         showToast({
           message: `Saved ${formatSize(saved.size)}${notes.length > 0 ? `, ${notes.join(", ")}` : ""}`,
@@ -135,9 +135,9 @@ export function useFlowActions(): (flow: Flow) => DropdownItem[] {
             return;
           }
           await navigator.clipboard.writeText(value);
-          showToast({ message: `Copied ${label}` });
+          showToast({ message: "Copied to clipboard" });
         } catch (err) {
-          showToast({ message: `Failed to copy ${label}: ${String(err)}`, color: "danger" });
+          showToast({ message: `Failed to copy: ${String(err)}`, color: "danger" });
         }
       };
       const noResponse = (flow.error != null || flow.cancelled) && flow.status == null;
@@ -173,7 +173,7 @@ export function useFlowActions(): (flow: Flow) => DropdownItem[] {
               // A command that sends other bytes than the app did would mislead.
               if (body == null) {
                 showToast({
-                  message: "Body is binary or truncated; export HAR instead",
+                  message: "The body is binary or truncated. Export as HAR instead.",
                   color: "info",
                 });
                 return;
@@ -209,12 +209,12 @@ export function useFlowActions(): (flow: Flow) => DropdownItem[] {
           onSelect: () => saveBody(flow, "response"),
         },
         {
-          label: "Export HAR",
+          label: "Export as HAR",
           icon: "download",
           onSelect: async () => {
             try {
               const written = await exportHar({ ids: [flow.id] }, "flow.har");
-              if (written != null) showToast({ message: "Exported the flow as HAR" });
+              if (written != null) showToast({ message: "Exported 1 flow as HAR" });
             } catch (err) {
               showToast({ message: `Failed to export HAR: ${String(err)}`, color: "danger" });
             }

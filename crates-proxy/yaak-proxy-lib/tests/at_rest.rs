@@ -189,7 +189,7 @@ fn stores_nothing_in_plaintext_and_reads_back_with_the_key() {
     )
     .err()
     .unwrap();
-    assert!(err.contains("couldn't read its key from the keychain"), "{err}");
+    assert!(err.contains("Failed to read the encryption key from the keychain"), "{err}");
     // Nor without any key at all.
     let raw = rusqlite::Connection::open(dir.path().join(PROXY_DB)).unwrap();
     let err = raw.query_row("SELECT count(*) FROM flows", [], |r| r.get::<_, i64>(0)).unwrap_err();
@@ -366,8 +366,8 @@ fn a_refused_key_refuses_capture() {
     let err = ctx.start().unwrap_err();
     assert_eq!(
         err,
-        "Yaak Proxy stores traffic encrypted and couldn't read its key from the keychain: \
-        Encryption error: User canceled the operation. Allow it access, then retry."
+        "Failed to read the encryption key from the keychain: Encryption error: User canceled \
+        the operation"
     );
     assert_eq!(ctx.start_error().as_deref(), Some(err.as_str()));
     assert_eq!(ctx.port(), None);
@@ -426,8 +426,8 @@ fn waits_for_an_older_owner_before_converting() {
     std::fs::write(&control, serde_json::to_string(&owner).unwrap()).unwrap();
 
     let ctx = open_ctx(dir.path(), MasterKeySource::memory());
-    assert!(ctx.load_ca().err().unwrap().contains("can't be encrypted yet"));
-    assert!(ctx.start().unwrap_err().starts_with("The proxy is already running in the yaak CLI"));
+    assert!(ctx.load_ca().err().unwrap().contains("Take over or quit it, then retry."));
+    assert!(ctx.start().unwrap_err().starts_with("The proxy is already running in the CLI"));
     for name in [PROXY_DB, BLOBS_DB] {
         assert_eq!(file_state(&dir.path().join(name)).unwrap(), FileState::Plain);
     }
@@ -489,7 +489,7 @@ fn a_lost_data_key_is_not_replaced() {
     std::fs::remove_file(dir.path().join(DATA_KEY)).unwrap();
     let ctx = open_ctx(dir.path(), keys);
     let err = ctx.start().unwrap_err();
-    assert!(err.starts_with("The proxy's captured traffic is encrypted, but its key is missing"));
+    assert!(err.starts_with("The encryption key is missing from"));
     assert!(!dir.path().join(DATA_KEY).exists());
     assert_eq!(std::fs::read_to_string(dir.path().join("ca/ca.pem")).unwrap(), pem);
     assert!(ctx.db().is_err(), "locked");

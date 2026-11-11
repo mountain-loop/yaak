@@ -20,7 +20,7 @@ describe("opener", () => {
     await revealPath("/data/app.yaak.proxy", report);
     expect(opener.revealItemInDir).toHaveBeenCalledWith("/data/app.yaak.proxy");
     expect(report).toHaveBeenCalledWith(
-      "Failed to show /data/app.yaak.proxy: not allowed: opener.reveal_item_in_dir",
+      "Failed to reveal /data/app.yaak.proxy: not allowed: opener.reveal_item_in_dir",
     );
   });
 
@@ -43,6 +43,6 @@ describe("opener", () => {
   test("names the file manager by platform", () => {
     expect(revealLabel("macos")).toBe("Reveal in Finder");
     expect(revealLabel("windows")).toBe("Show in Explorer");
-    expect(revealLabel("linux")).toBe("Show in Folder");
+    expect(revealLabel("linux")).toBe("Show in File Manager");
   });
 });

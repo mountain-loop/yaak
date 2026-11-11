@@ -164,12 +164,12 @@ async fn a_refused_handshake_is_one_flow_per_address() {
     assert_eq!(rejected.url, url);
     assert_eq!(rejected.method, "");
     assert_eq!(rejected.tls_rejected.as_deref(), Some("unknown_ca"));
-    assert_eq!(rejected.error.as_deref(), Some("Rejected the proxy's certificate"));
+    assert_eq!(rejected.error.as_deref(), Some("Certificate rejected by the app"));
     assert!(!rejected.tunnelled);
     assert!(rejected.elapsed_ms.is_some(), "ended, not pending");
     // No request was sent, so there is none to save.
     let preview = rpc(&ctx, "preview_save", json!({"flowId": rejected.id})).await;
-    assert!(preview.unwrap_err().starts_with("Not a request"));
+    assert!(preview.unwrap_err().starts_with("The TLS handshake failed"));
 
     // Passed through from now on, naming the refusal.
     let _tunnel = open_tunnel(&ctx, &target).await;

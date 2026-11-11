@@ -153,12 +153,12 @@ mod imp {
         }
         // SAFETY: unregisters the plist bundled with this app.
         unsafe { service.unregisterAndReturnError() }
-            .map_err(|e| format!("Failed to remove the helper: {}", e.localizedDescription()))?;
+            .map_err(|e| format!("Failed to uninstall the helper: {}", e.localizedDescription()))?;
         Ok(state_of(&service))
     }
 
     fn unavailable() -> String {
-        "The helper is only available in the installed app, not a dev build".to_string()
+        "The helper is not available in dev builds".to_string()
     }
 
     /// Sends one request and reads its response.
@@ -181,13 +181,15 @@ mod imp {
         let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
         let mut line = serde_json::to_string(request).map_err(|e| e.to_string())?;
         line.push('\n');
-        (&stream).write_all(line.as_bytes()).map_err(|e| format!("The helper hung up: {e}"))?;
+        (&stream)
+            .write_all(line.as_bytes())
+            .map_err(|e| format!("The helper disconnected: {e}"))?;
         let mut reply = String::new();
         BufReader::new(&stream)
             .read_line(&mut reply)
-            .map_err(|e| format!("The helper did not answer: {e}"))?;
+            .map_err(|e| format!("The helper did not respond: {e}"))?;
         let response: Response = serde_json::from_str(&reply)
-            .map_err(|e| format!("The helper's answer was not understood: {e}"))?;
+            .map_err(|e| format!("The helper sent an invalid response: {e}"))?;
         response.into_result()
     }
 
@@ -214,12 +216,12 @@ pub fn state() -> HelperState {
 
 #[cfg(not(target_os = "macos"))]
 pub fn diagnose() -> String {
-    "The helper is only available on macOS".to_string()
+    "The helper is only supported on macOS".to_string()
 }
 
 #[cfg(not(target_os = "macos"))]
 pub fn register() -> Result<HelperState, String> {
-    Err("The helper is only available on macOS".to_string())
+    Err("The helper is only supported on macOS".to_string())
 }
 
 #[cfg(not(target_os = "macos"))]

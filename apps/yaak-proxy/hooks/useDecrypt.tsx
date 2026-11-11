@@ -46,7 +46,7 @@ export function useTrustCertificate() {
       showToast({
         id: "decrypt",
         color: "danger",
-        message: `Certificate not trusted: ${err.message}`,
+        message: `Failed to trust certificate: ${err.message}`,
       }),
   });
 }

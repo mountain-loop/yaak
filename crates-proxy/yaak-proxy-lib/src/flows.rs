@@ -719,7 +719,7 @@ pub fn delete_all(db: &ProxyQueryManager) -> Result<(), String> {
         }
         Ok::<_, yaak_database::Error>(())
     })
-    .map_err(|e| format!("Failed to delete captured traffic: {e}"))
+    .map_err(|e| format!("Failed to delete recorded traffic: {e}"))
 }
 
 /// Flows deleted per transaction while deleting cleared ones, so a flow being written never

@@ -106,10 +106,10 @@ describe("the toast after a choice", () => {
   test("offers Reconnect for the entry when open connections stay encrypted", () => {
     expect(choiceToast(choice, 3)).toEqual({
       message: "Decrypting www.google.com",
-      sub: "3 open connections stay encrypted",
+      sub: "3 open connections stay encrypted.",
       reconnect: ["host:www.google.com"],
     });
-    expect(choiceToast(choice, 1).sub).toBe("1 open connection stays encrypted");
+    expect(choiceToast(choice, 1).sub).toBe("1 open connection stays encrypted.");
   });
 
   test("Reconnect for an exclusion taken off names the exclusion, as the engine reads it", () => {

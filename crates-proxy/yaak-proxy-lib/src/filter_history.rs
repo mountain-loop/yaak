@@ -18,7 +18,7 @@ pub struct FilterHistoryEntry {
 }
 
 fn failed(what: &str, e: impl std::fmt::Display) -> String {
-    format!("Failed to {what} the filter history: {e}")
+    format!("Failed to {what} the search history: {e}")
 }
 
 /// Every filter kept, most recently applied first. Empty for a database from before the

@@ -9,8 +9,8 @@ import { syncNavigation, syncSidebarSelection } from "../lib/navigation";
 import { syncFlows, syncProxyState } from "../lib/store";
 
 const LOCKED =
-  "Traffic is locked: Yaak Proxy stores traffic encrypted and couldn't read its key from the " +
-  "keychain: Encryption error: User canceled the operation. Allow it access, then retry.";
+  "Traffic is locked: Failed to read the encryption key from the keychain: Encryption error: " +
+  "User canceled the operation";
 
 const STATE: GetProxyStateResponse = {
   state: "stopped",

@@ -40,8 +40,8 @@ export function SaveDialog() {
       open
       onClose={close}
       size="dynamic"
-      title="Save as Yaak request"
-      description="A new request in Yaak with this flow's method, URL, headers and body."
+      title="Save as Yaak Request"
+      description="A new request will be created in Yaak."
       className="w-[36rem]"
     >
       {workspaces.error != null ? (
@@ -103,7 +103,7 @@ function SaveForm({
             message: (
               <>
                 Saved <b className="font-semibold">{saved.name || unnamed}</b> to {workspace.name}
-                {folderName == null ? "." : `, in ${folderName}.`} Yaak picks it up within a second.
+                {folderName == null ? "" : `, in ${folderName}`}
               </>
             ),
           });
@@ -113,11 +113,7 @@ function SaveForm({
   };
 
   if (workspaces.length === 0) {
-    return (
-      <Banner color="notice">
-        Yaak has no workspaces yet. Create one in Yaak, then save here.
-      </Banner>
-    );
+    return <Banner color="notice">Create a workspace in Yaak first.</Banner>;
   }
 
   if (p == null) {
@@ -209,13 +205,10 @@ function SaveForm({
       </div>
       {save.error != null && <Banner color="danger">{save.error.message}</Banner>}
       <DialogFooter
-        leftSlot={
-          <span className="text-xs text-text-subtlest">Yaak picks it up within a second</span>
-        }
         actions={[
           { label: "Cancel", onClick: onClose },
           {
-            label: "Save request",
+            label: "Save Request",
             form: SAVE_FORM_ID,
             color: "primary",
             isLoading: save.isPending,
@@ -243,15 +236,19 @@ function NoYaakDialog({ flow, onClose }: { flow: Flow; onClose: () => void }) {
   return (
     <Dialog open onClose={onClose} size="dynamic" className="w-[32rem]">
       <DialogFooter
-        leftSlot={<span className="text-xs text-text-subtlest">Or keep the flow as a file</span>}
+        leftSlot={
+          <span className="text-xs text-text-subtlest">
+            The flow can be exported as a file instead.
+          </span>
+        }
         actions={[
           {
-            label: "Export HAR",
+            label: "Export as HAR",
             onClick: async () => {
               try {
                 if ((await exportHar({ ids: [flow.id] }, "flow.har")) != null) {
                   onClose();
-                  showToast({ message: "Exported the flow as HAR" });
+                  showToast({ message: "Exported 1 flow as HAR" });
                 }
               } catch (err) {
                 showToast({ message: `Failed to export HAR: ${String(err)}`, color: "danger" });
@@ -262,11 +259,10 @@ function NoYaakDialog({ flow, onClose }: { flow: Flow; onClose: () => void }) {
         ]}
       />
       <div className="pt-6 pb-2">
-        <div className="text-lg font-semibold mb-1.5">Saving needs Yaak</div>
+        <div className="text-lg font-semibold mb-1.5">Yaak Required</div>
         <div className="text-sm text-text-subtle leading-relaxed">
-          This flow becomes a request in one of Yaak's workspaces, and Yaak has not been opened on
-          this Mac. Yaak is free for personal use and opens the request with the same viewers you
-          see here.
+          This flow will be saved as a request in one of Yaak's workspaces, but Yaak has not been
+          opened on this computer.
         </div>
       </div>
     </Dialog>
@@ -308,18 +304,18 @@ function folderOptions(folders: FolderSummary[]): { id: string; name: string }[]
 function reasonLabel(reason: DropReason): string {
   switch (reason) {
     case "set_by_sending":
-      return "Yaak sets it when it sends";
+      return "Yaak sets it when it sends the request.";
     case "hop_by_hop":
-      return "Only meant for the proxy";
+      return "It was only meant for the proxy.";
     case "body_decoded":
-      return "The body is saved decoded";
+      return "The body is saved decoded.";
   }
 }
 
 function droppedSummary(reasons: DropReason[]): string {
   const unique = [...new Set(reasons)];
   if (unique.length === 1 && unique[0] === "set_by_sending") {
-    return "Yaak sets these itself when it sends";
+    return "Yaak sets these itself when it sends the request.";
   }
-  return "Yaak sets these itself, or they only meant something to the proxy";
+  return "Yaak sets these, or they were meant for the proxy.";
 }

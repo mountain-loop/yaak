@@ -157,7 +157,7 @@ function mixedScene(): Flow[] {
       tunnelled: false,
       tunnelReason: null,
       tlsRejected: "bad_certificate",
-      error: "Rejected the proxy's certificate",
+      error: "Certificate rejected by the app",
       elapsedMs: 6,
       requestSize: 517,
       responseSize: 0,

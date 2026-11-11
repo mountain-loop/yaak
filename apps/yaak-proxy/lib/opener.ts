@@ -8,7 +8,7 @@ export async function revealPath(path: string, report: ReportFailure): Promise<v
   try {
     await revealItemInDir(path);
   } catch (err) {
-    report(`Failed to show ${path}: ${String(err)}`);
+    report(`Failed to reveal ${path}: ${String(err)}`);
   }
 }
 
@@ -25,5 +25,5 @@ export async function openLink(url: string, report: ReportFailure): Promise<void
 export function revealLabel(os: string): string {
   if (os === "macos") return "Reveal in Finder";
   if (os === "windows") return "Show in Explorer";
-  return "Show in Folder";
+  return "Show in File Manager";
 }

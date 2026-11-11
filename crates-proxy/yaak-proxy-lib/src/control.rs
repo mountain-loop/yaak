@@ -395,7 +395,7 @@ pub(crate) fn already_owned(owner: &ControlInfo) -> String {
 pub(crate) fn owner_name(owner: Owner) -> &'static str {
     match owner {
         Owner::App => "Yaak Proxy",
-        Owner::Cli => "the yaak CLI",
+        Owner::Cli => "the CLI",
     }
 }
 

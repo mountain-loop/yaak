@@ -287,7 +287,7 @@ mod imp {
                     .map_err(|e| format!("Failed to run osascript: {e}"))?;
                 // -128 is the dialog's Cancel button.
                 if String::from_utf8_lossy(&output.stderr).contains("(-128)") {
-                    return Err("Cancelled in the password dialog".to_string());
+                    return Err("The password prompt was cancelled.".to_string());
                 }
                 check(&output, "osascript")
             }
@@ -647,7 +647,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(SNAPSHOT_FILE);
         let ns = fake();
-        let cancel = |_: &[Vec<String>]| Err("Cancelled in the password dialog".to_string());
+        let cancel = |_: &[Vec<String>]| Err("The password prompt was cancelled.".to_string());
         assert!(set_scripted(&ns, cancel, true, 9090, &path).is_err());
         assert!(!path.exists());
         assert!(ns.changes.lock().unwrap().is_empty());
@@ -663,7 +663,7 @@ mod tests {
         set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
         // A second enable, the engine on a new port, must not save ours as the user's.
         set_scripted(&ns, runner(&ns, &prompts), true, 9191, &path).unwrap();
-        let cancel = |_: &[Vec<String>]| Err("Cancelled in the password dialog".to_string());
+        let cancel = |_: &[Vec<String>]| Err("The password prompt was cancelled.".to_string());
         assert!(set_scripted(&ns, cancel, true, 9191, &path).is_err());
         assert!(path.exists(), "a cancelled re-enable keeps the original snapshot");
         set_scripted(&ns, runner(&ns, &prompts), false, 9191, &path).unwrap();

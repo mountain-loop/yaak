@@ -235,7 +235,7 @@ function useAppInfo() {
           ? "Reveal in Finder"
           : os === "windows"
             ? "Show in Explorer"
-            : "Show in Folder",
+            : "Show in File Manager",
     }),
     [data, os],
   );

@@ -65,24 +65,20 @@ export function ProxyStatus() {
     status === "encrypting" ? (
       <MenuRow
         icon={<LoadingIcon size="sm" className="text-text-subtle" />}
-        title={`Encrypting stored traffic, ${encrypting}`}
-        description="Traffic captured before this version is being encrypted on disk. Recording starts when it's done."
+        title={`Encrypting recorded traffic, ${encrypting}`}
+        description="Recording will start once encryption finishes."
       />
     ) : status === "cli" && other != null ? (
       <MenuRow
         icon={<StateDot state="cli" />}
         title="Running from the CLI"
-        description={`Started by yaak proxy start, pid ${other.pid}, since ${timeOf(other.startedAt)}.${other.proxyPort == null ? "" : ` Port ${other.proxyPort}.`}`}
+        description={`The proxy was started by the CLI at ${timeOf(other.startedAt)}.`}
       />
     ) : status === "recording" || status === "paused" ? (
       <MenuRow
         icon={<StateDot state={status} />}
         title={recording ? `Recording on port ${port}` : `Paused on port ${port}`}
-        description={
-          recording
-            ? "Every flow is stored as it passes."
-            : "Traffic passes through untouched, and nothing is stored."
-        }
+        description={recording ? null : "Traffic passes through without being recorded."}
       />
     ) : (
       <MenuRow
@@ -90,7 +86,7 @@ export function ProxyStatus() {
         title="Not running"
         description={
           <span className="text-danger">
-            {retry.error?.message ?? proxyState?.startError ?? "The proxy has not started."}
+            {retry.error?.message ?? proxyState?.startError ?? "The proxy failed to start."}
           </span>
         }
         action={
@@ -156,9 +152,7 @@ export function ProxyStatus() {
                 {systemSwitch.description}
               </span>
               {helperNotice && (
-                <span className="block text-notice">
-                  macOS asks for your password each time until the helper is approved in Settings.
-                </span>
+                <span className="block text-notice">macOS will ask for a password each time.</span>
               )}
             </>
           }
@@ -258,8 +252,8 @@ function DecryptEverythingRow({ broken }: { broken: boolean }) {
         trusting
           ? "Waiting for macOS"
           : on
-            ? "Except Apple services and apps that pin"
-            : (listSummary(list) ?? "Nothing listed")
+            ? "Excluded hosts and apps stay encrypted."
+            : (listSummary(list) ?? "No hosts or apps")
       }
       action={
         <KeepMenuOpen>
@@ -274,7 +268,7 @@ function DecryptEverythingRow({ broken }: { broken: boolean }) {
                   ? {
                       edit: everythingEdit(true),
                       message: "Decrypting everything",
-                      sub: "Except Apple services and apps that pin",
+                      sub: "Excluded hosts and apps stay encrypted.",
                     }
                   : { edit: everythingEdit(false), message: "Stopped decrypting everything" },
               )
@@ -350,7 +344,7 @@ export function useCopyEnvironment() {
     try {
       await navigator.clipboard.writeText(environmentExports(port, caPath));
       showToast({
-        message: "Copied the environment. Paste it into a terminal to proxy what runs there.",
+        message: "Copied the environment. Paste it into a terminal.",
       });
     } catch (err) {
       showToast({ message: `Failed to copy: ${String(err)}`, color: "danger" });
@@ -429,6 +423,7 @@ function MenuRow({
 }: {
   icon: ReactNode;
   title: string;
+  /** Under the title; null for a title that says it all */
   description: ReactNode;
   action?: ReactNode;
 }) {
@@ -437,7 +432,9 @@ function MenuRow({
       <span className="h-5 flex items-center justify-center">{icon}</span>
       <div>
         <div className="text-sm text-text">{title}</div>
-        <div className="text-xs text-text-subtle mt-0.5">{description}</div>
+        {description != null && (
+          <div className="text-xs text-text-subtle mt-0.5">{description}</div>
+        )}
       </div>
       <span className="self-center">{action}</span>
     </div>

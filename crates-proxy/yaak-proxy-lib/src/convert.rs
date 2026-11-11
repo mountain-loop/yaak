@@ -65,14 +65,11 @@ pub fn flow_to_request(flow: &Flow, body: &DecodedBody) -> Conversion {
     let (headers, dropped_headers) = split_headers(flow, body);
     let has_authorization = headers.iter().any(|h| h.name.eq_ignore_ascii_case("authorization"));
     if has_authorization {
-        warnings.push("The Authorization header is saved as captured, in plain text.".into());
+        warnings.push("The Authorization header is saved in plain text.".into());
     }
     let (body_type, body_fields) = request_body(flow, body, &mut warnings);
     if body.truncated {
-        warnings.push(format!(
-            "The body was cut at the capture limit, so only its first {} bytes are saved.",
-            body.data.len()
-        ));
+        warnings.push(format!("Only the first {} bytes of the body are saved.", body.data.len()));
     }
 
     // No name, as in Yaak, which then shows the URL.
@@ -169,10 +166,7 @@ fn request_body(
     let content_type = find_header(&flow.request_headers, "content-type").unwrap_or_default();
     let mime = content_type.split(';').next().unwrap_or_default().trim().to_ascii_lowercase();
     let Ok(text) = std::str::from_utf8(&body.data) else {
-        warnings.push(
-            "The body is binary and is saved as text, so bytes that are not UTF-8 are replaced."
-                .into(),
-        );
+        warnings.push("The body is binary and may be altered when saved.".into());
         return text_body(BODY_TYPE_OTHER, &String::from_utf8_lossy(&body.data));
     };
 
@@ -195,9 +189,7 @@ fn request_body(
         );
     }
     if mime == "multipart/form-data" {
-        warnings.push(
-            "The multipart body is saved as text with its Content-Type, not as form fields.".into(),
-        );
+        warnings.push("The multipart body is saved as text, not form fields.".into());
     }
     text_body(BODY_TYPE_OTHER, text)
 }
@@ -300,10 +292,7 @@ mod tests {
                 ("Proxy-Authorization", DropReason::HopByHop),
             ]
         );
-        assert_eq!(
-            c.warnings,
-            vec!["The Authorization header is saved as captured, in plain text."]
-        );
+        assert_eq!(c.warnings, vec!["The Authorization header is saved in plain text."]);
     }
 
     #[test]
@@ -463,9 +452,6 @@ mod tests {
         let c = flow_to_request(&f, &data);
         assert_eq!(names(&c.request), vec!["Content-Type"]);
         assert_eq!(c.dropped_headers[0].reason, DropReason::BodyDecoded);
-        assert_eq!(
-            c.warnings,
-            vec!["The body was cut at the capture limit, so only its first 4 bytes are saved."]
-        );
+        assert_eq!(c.warnings, vec!["Only the first 4 bytes of the body are saved."]);
     }
 }

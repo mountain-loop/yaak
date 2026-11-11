@@ -1,4 +1,4 @@
-import { Button, Icon, InlineCode, LoadingIcon } from "@yaakapp-internal/ui";
+import { Button, Icon, IconTooltip, InlineCode, LoadingIcon } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import type { ReactNode } from "react";
@@ -49,7 +49,7 @@ export function FirstRun() {
         <div className="text-xl font-semibold mb-1.5">Set up Yaak Proxy</div>
         <div className="text-text-subtle text-sm leading-relaxed mb-4">
           {systemSupported
-            ? "Two steps, once. Then every app on this Mac sends its traffic here."
+            ? "Traffic from every app on this Mac will be recorded."
             : "Traffic appears here as apps send it."}
         </div>
         <div className="rounded-lg border border-border-subtle bg-surface divide-y divide-border-subtle">
@@ -57,12 +57,12 @@ export function FirstRun() {
             <Step
               n={1}
               state={systemState}
-              title={systemOn ? "System proxy on" : "Turn on the system proxy"}
+              title={systemOn ? "System proxy overridden" : "Override system proxy"}
               description={
                 otherOwner && !systemOn
                   ? proxyState?.otherOwner?.owner === "cli"
-                    ? "The CLI owns the proxy. Take over to turn this on from here."
-                    : "Another Yaak Proxy window owns the engine. Quit it to use this one."
+                    ? "Take over from the CLI to change this."
+                    : "Quit the other Yaak Proxy to use this one."
                   : systemSwitch.description
               }
               action={
@@ -73,7 +73,7 @@ export function FirstRun() {
                     color={systemState === "fail" ? "default" : "primary"}
                     onClick={() => setSystemProxy.mutate({ enabled: true })}
                   >
-                    {systemState === "fail" ? "Try Again" : "Turn On"}
+                    {systemState === "fail" ? "Retry" : "Enable"}
                   </Button>
                 ) : null
               }
@@ -84,20 +84,20 @@ export function FirstRun() {
             state={trafficState}
             title={
               encrypting != null
-                ? `Encrypting stored traffic, ${encrypting}`
+                ? `Encrypting recorded traffic, ${encrypting}`
                 : trafficState === "wait"
                   ? "Waiting for traffic"
                   : "See traffic"
             }
             description={
               encrypting != null
-                ? "Traffic captured before this version is being encrypted on disk. Recording starts when it's done."
+                ? "Recording will start once encryption finishes."
                 : trafficState === "fail"
-                  ? (retry.error?.message ?? proxyState?.startError ?? "The proxy has not started.")
+                  ? (retry.error?.message ?? proxyState?.startError ?? "The proxy failed to start.")
                   : !recording
-                    ? "Recording is paused, so traffic passes through without being stored."
+                    ? "Recording is paused."
                     : trafficState === "wait"
-                      ? "Open a website or send a request, and its flow appears here."
+                      ? "Open a website or send a request to begin."
                       : "Flows appear here as apps send requests."
             }
             action={
@@ -123,7 +123,7 @@ export function FirstRun() {
           />
         </div>
         <div className="flex items-center gap-3 mt-4 text-sm text-text-subtle">
-          <span>Only need one terminal or one app? Copy the environment instead.</span>
+          <span>To proxy a single terminal instead, copy the environment.</span>
           <Button
             size="2xs"
             variant="border"
@@ -135,12 +135,14 @@ export function FirstRun() {
           </Button>
         </div>
         <div className="mt-2 text-sm text-text-subtle">
-          Working with an agent? <InlineCode>yaak mcp</InlineCode> gives it the proxy's flows and
-          actions.
+          Agents can connect through <InlineCode>yaak mcp</InlineCode>.
         </div>
-        <div className="mt-2 text-sm text-text-subtle">
-          Captured traffic is encrypted on disk with a key kept in your keychain, so macOS may ask
-          to let Yaak Proxy use it.
+        <div className="flex items-center gap-1.5 mt-2 text-sm text-text-subtle">
+          Recorded traffic is encrypted on disk.
+          <IconTooltip
+            iconSize="sm"
+            content="The key is kept in the system keychain, so the system may ask to let Yaak Proxy use it."
+          />
         </div>
       </div>
     </div>

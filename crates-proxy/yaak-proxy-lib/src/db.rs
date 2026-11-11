@@ -154,10 +154,7 @@ fn any_encrypted(data_dir: &Path) -> bool {
 }
 
 fn missing_data_key(data_dir: &Path) -> String {
-    format!(
-        "The proxy's captured traffic is encrypted, but its key is missing from {}",
-        data_dir.display()
-    )
+    format!("The encryption key is missing from {}.", data_dir.display())
 }
 
 /// Both databases, opened together.
@@ -324,12 +321,11 @@ pub fn encrypt_existing(
     Ok(converted)
 }
 
-const KEY_UNAVAILABLE: &str =
-    "Yaak Proxy stores traffic encrypted and couldn't read its key from the keychain";
+const KEY_UNAVAILABLE: &str = "Failed to read the encryption key from the keychain";
 
 /// Why the databases cannot be opened, or the CA made, without the data key.
 pub fn key_unavailable(reason: &str) -> String {
-    format!("{KEY_UNAVAILABLE}: {reason}. Allow it access, then retry.")
+    format!("{KEY_UNAVAILABLE}: {reason}")
 }
 
 /// `reason` is [`key_unavailable`]'s: the keychain would not give up the key.

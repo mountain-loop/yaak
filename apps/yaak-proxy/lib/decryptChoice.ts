@@ -81,7 +81,7 @@ export function choiceToast(choice: DecryptChoice, stillEncrypted: number): Choi
   const reconnect = reconnectEntries(choice.edit);
   return {
     message: choice.message,
-    sub: `${n} open ${stillEncrypted === 1 ? "connection stays" : "connections stay"} encrypted`,
+    sub: `${n} open ${stillEncrypted === 1 ? "connection stays" : "connections stay"} encrypted.`,
     reconnect,
   };
 }

@@ -348,13 +348,13 @@ impl FrameParser {
             Some(inflater) if !inflater.failed => {
                 if let Err(e) = inflater.inflate(chunk, &mut message.payload) {
                     inflater.failed = true;
-                    message.error = Some(format!("Failed to inflate the message: {e}"));
+                    message.error = Some(format!("Failed to decompress the message: {e}"));
                 }
             }
             Some(_) => {
                 message.payload.push(chunk);
                 message.error.get_or_insert_with(|| {
-                    "Not inflated: an earlier message failed to, which lost the context".into()
+                    "This message was not decompressed because an earlier one failed.".into()
                 });
             }
             None => message.payload.push(chunk),
@@ -396,7 +396,7 @@ impl FrameParser {
                 && let Err(e) = inflater.inflate(&DEFLATE_TAIL, &mut assembly.payload)
             {
                 inflater.failed = true;
-                assembly.error = Some(format!("Failed to inflate the message: {e}"));
+                assembly.error = Some(format!("Failed to decompress the message: {e}"));
             }
             if inflater.no_context_takeover && !inflater.failed {
                 inflater.decompress.reset(false);

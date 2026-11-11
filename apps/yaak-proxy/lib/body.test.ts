@@ -231,7 +231,7 @@ describe("flowBodyQueryOptions", () => {
 
 describe("a body that isn't there", () => {
   test("a WebSocket's note reaches the viewer, which points at its messages", () => {
-    const note = "A WebSocket has no body after its 101 response. Its frames are its messages.";
+    const note = "A WebSocket has no body";
     const body = viewerBody({ data: "", truncated: false, storedSize: 0, note });
     expect(body.note).toBe(note);
     expect(emptyBodyText("response", body.note)).toBe("No body. See Messages.");

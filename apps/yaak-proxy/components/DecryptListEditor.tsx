@@ -26,7 +26,8 @@ import {
   everythingEdit,
   normalizeEntry,
 } from "../lib/decrypt";
-import { revealPath } from "../lib/opener";
+import { revealLabel, revealPath } from "../lib/opener";
+import { getOsType } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
 
 /**
@@ -75,21 +76,23 @@ export function DecryptionSettings() {
       <CertificateRow />
       <SettingRowBoolean
         title="Decrypt everything"
-        description="Except built-in exclusions"
+        description="Excluded hosts and apps stay encrypted."
         checked={everything}
         disabled={busy}
         onChange={(on) =>
           void change(
             everythingEdit(on),
             on ? "Decrypting everything" : "Stopped decrypting everything",
-            on ? "Except Apple services and apps that pin" : undefined,
+            on ? "Excluded hosts and apps stay encrypted." : undefined,
           )
         }
       />
       <div className="py-4 grid gap-2">
         <div className="flex items-center text-text">
           Hosts and apps
-          <span className="ml-auto text-sm text-text-subtlest">New connections</span>
+          <span className="ml-auto text-sm text-text-subtlest">
+            Changes apply to new connections.
+          </span>
         </div>
         <EntryInput
           seenRef={seenRef}
@@ -106,7 +109,7 @@ export function DecryptionSettings() {
         />
         <div className="rounded-md border border-border-subtle divide-y divide-border-subtle">
           {own.length === 0 && (
-            <div className="px-3 py-2 text-sm text-text-subtle">Nothing listed</div>
+            <div className="px-3 py-2 text-sm text-text-subtle">No hosts or apps</div>
           )}
           {own.map((e) => (
             <EntryRow key={e.entry} entry={e} disabled={busy} onRemove={() => remove(e.entry)} />
@@ -156,7 +159,7 @@ function CertificateRow() {
               )
             }
           >
-            Reveal
+            {revealLabel(getOsType())}
           </Button>
         )}
       </div>
@@ -286,7 +289,7 @@ function EntryInput({
       if (disabledRef.current) return true;
       const entry = normalizeEntry(text);
       if (entry == null) {
-        setError("Not a host or app");
+        setError("Invalid host or app");
         return true;
       }
       setError(null);
@@ -299,20 +302,18 @@ function EntryInput({
   }, [seenRef]);
 
   return (
-    <Tooltip wrap content="Applies to new connections" delay={CONTROL_TOOLTIP_DELAY}>
-      <div className="grid gap-1">
-        <Input
-          label="Add entry"
-          hideLabel
-          size="sm"
-          stateKey={null}
-          language={null}
-          placeholder="Add host or app"
-          extensions={extensions}
-          onChange={() => setError(null)}
-        />
-        {error != null && <div className="text-xs text-danger">{error}</div>}
-      </div>
-    </Tooltip>
+    <div className="grid gap-1">
+      <Input
+        label="Add entry"
+        hideLabel
+        size="sm"
+        stateKey={null}
+        language={null}
+        placeholder="Add host or app"
+        extensions={extensions}
+        onChange={() => setError(null)}
+      />
+      {error != null && <div className="text-xs text-danger">{error}</div>}
+    </div>
   );
 }

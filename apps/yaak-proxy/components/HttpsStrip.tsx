@@ -24,7 +24,7 @@ const STRIP =
 
 /**
  * Above the list while nothing is decrypted: says once that HTTPS is encrypted, and offers
- * Decrypt Everything, or Choose… for apps and sites one at a time. Goes once anything is on
+ * Decrypt Everything, or Choose for apps and sites one at a time. Goes once anything is on
  * the list, or when dismissed; comes back, with Trust, while the list decrypts something the
  * certificate isn't trusted for.
  */
@@ -33,7 +33,7 @@ export function HttpsStrip() {
   const flows = useAtomValue(sidebarFlowsAtom);
   const caStatus = useRpcQuery("ca_status", {});
   const [dismissed, setDismissed] = useLocalStorage("https_strip_dismissed", false);
-  // Kept while Choose… is open, so checking a row there leaves the menu where it is.
+  // Kept while Choose is open, so checking a row there leaves the menu where it is.
   const [choosing, setChoosing] = useState(false);
   const { apply } = useDecrypt();
   const trusting = useTrusting();
@@ -56,7 +56,7 @@ export function HttpsStrip() {
       <div className={STRIP}>
         <Icon icon="shield_off" size="sm" color="warning" className="shrink-0" />
         <span className="text-text shrink-0">Certificate not trusted</span>
-        <span className="truncate">Required to decrypt</span>
+        <span className="truncate">The certificate must be trusted to decrypt traffic.</span>
         <Button
           size="2xs"
           color="primary"
@@ -93,7 +93,7 @@ export function HttpsStrip() {
         });
       },
     })),
-    { type: "separator", label: "Sites", hidden: options.sites.length === 0 },
+    { type: "separator", label: "Domains", hidden: options.sites.length === 0 },
     ...options.sites.map((site): DropdownItem => ({
       label: <span className="font-mono text-xs">*.{site.site}</span>,
       keepOpenOnSelect: true,
@@ -109,7 +109,7 @@ export function HttpsStrip() {
     })),
     { type: "separator" },
     {
-      label: "Edit List in Settings…",
+      label: "Decryption Settings",
       leftSlot: <Icon icon="settings" />,
       onSelect: () => openSettings(SETTINGS_TAB_PROXY),
     },
@@ -124,7 +124,7 @@ export function HttpsStrip() {
       <div className="ml-auto flex items-center gap-1.5 shrink-0">
         <Tooltip
           wrap
-          content="New connections, except Apple services and apps that pin"
+          content="New connections will be decrypted, except for excluded hosts and apps."
           delay={CONTROL_TOOLTIP_DELAY}
         >
           <Button
@@ -136,7 +136,7 @@ export function HttpsStrip() {
               void apply({
                 edit: everythingEdit(true),
                 message: "Decrypting everything",
-                sub: "Except Apple services and apps that pin",
+                sub: "Excluded hosts and apps stay encrypted.",
               })
             }
           >
@@ -145,14 +145,14 @@ export function HttpsStrip() {
         </Tooltip>
         <Dropdown items={items} onOpen={() => setChoosing(true)} onClose={() => setChoosing(false)}>
           <Button size="2xs" variant="border">
-            Choose…
+            Choose
           </Button>
         </Dropdown>
         <IconButton
           size="xs"
           icon="x"
           iconColor="secondary"
-          title="Not now"
+          title="Dismiss"
           tooltip
           onClick={() => setDismissed(true)}
         />

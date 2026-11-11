@@ -323,7 +323,9 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
             )}
           >
             <Icon icon="scissors" size="xs" />
-            {body.data == null ? "Body cut" : `First ${formatSize(body.data.storedSize)} kept`}
+            {body.data == null
+              ? "Body truncated"
+              : `First ${formatSize(body.data.storedSize)} recorded`}
           </span>
         ) : undefined
       }

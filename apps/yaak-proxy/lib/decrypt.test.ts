@@ -194,7 +194,7 @@ describe("the sidebar menu", () => {
     expect(decryptMenuAction([], [site])?.label).toBe("Decrypt *.google.com");
     expect(decryptMenuAction([], [dia])?.label).toBe("Decrypt Dia");
     expect(decryptMenuAction([], [site, { kind: "site", site: "x.com" }])?.label).toBe(
-      "Decrypt 2 Sites",
+      "Decrypt 2 Domains",
     );
     expect(decryptMenuAction([], [dia, a, site])?.label).toBe("Decrypt 3 Selected");
   });
