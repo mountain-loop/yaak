@@ -56,7 +56,7 @@ impl UpdateGate {
         let mut gate = self.lock();
         match gate.begin_check() {
             Ok(()) => Ok(CheckToken { gate: self.clone(), ended: false }),
-            Err(state) => Err(Busy { state, offer: gate.offer.clone() }),
+            Err(state) => Err(Busy::new(state, gate.offer.clone()).with_gate(self.clone())),
         }
     }
 
@@ -67,11 +67,36 @@ impl UpdateGate {
 }
 
 /// A check refused, with where the update stands, to show the user who asked.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone)]
 pub struct Busy {
     pub state: UpdateState,
     /// The prompt on offer, to show again, wired to the run that waits for it
     pub(crate) offer: Option<UpdateInfo>,
+    /// The gate, to note the windows the prompt is shown in again
+    pub(crate) gate: Option<UpdateGate>,
+}
+
+impl Busy {
+    pub(crate) fn new(state: UpdateState, offer: Option<UpdateInfo>) -> Self {
+        Self { state, offer, gate: None }
+    }
+
+    pub(crate) fn with_gate(mut self, gate: UpdateGate) -> Self {
+        self.gate = Some(gate);
+        self
+    }
+}
+
+impl std::fmt::Debug for Busy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Busy").field("state", &self.state).field("offer", &self.offer).finish()
+    }
+}
+
+impl PartialEq for Busy {
+    fn eq(&self, other: &Self) -> bool {
+        self.state == other.state && self.offer == other.offer
+    }
 }
 
 /// The one check in flight. Dropping it, as a failed or empty check does, frees the gate.
@@ -111,8 +136,11 @@ pub(crate) struct Gate {
     state: UpdateState,
     /// The prompt the current run shows, while it waits on the user
     offer: Option<UpdateInfo>,
-    /// Cancels the current run while it waits on the user, so a newer version can replace it
+    /// Cancels the current run while it waits on the user, so a newer version can replace it.
+    /// Kept through a background download, which returns to waiting on the user.
     cancel: Option<Box<dyn FnOnce() + Send>>,
+    /// The windows showing the current run's prompt, each told when it installs
+    windows: Vec<String>,
 }
 
 impl Gate {
@@ -138,17 +166,19 @@ impl Gate {
         }
     }
 
-    /// A check found `version`. Ends the check, and decides whether a run starts.
-    pub(crate) fn offer(&mut self, version: &str) -> OfferDecision {
+    /// A check from window `label` found `version`. Ends the check, and decides whether a run
+    /// starts.
+    pub(crate) fn offer(&mut self, version: &str, label: &str) -> OfferDecision {
         self.checking = false;
         match &self.state {
             UpdateState::Idle => {}
             UpdateState::Offered { version: offered } if offered == version => {
-                if let Some(info) = &self.offer {
-                    return OfferDecision::Reshow(info.clone());
+                if let Some(info) = self.offer.clone() {
+                    self.add_window(label);
+                    return OfferDecision::Reshow(info);
                 }
                 // Not shown yet (the run is still preparing its prompt): nothing to add
-                return OfferDecision::Busy(Busy { state: self.state.clone(), offer: None });
+                return OfferDecision::Busy(Busy::new(self.state.clone(), None));
             }
             UpdateState::Offered { .. } if self.cancel.is_some() => {
                 // A newer version replaces the prompt the user hasn't taken
@@ -157,13 +187,14 @@ impl Gate {
                 }
             }
             state => {
-                return OfferDecision::Busy(Busy { state: state.clone(), offer: None });
+                return OfferDecision::Busy(Busy::new(state.clone(), None));
             }
         }
         self.run += 1;
         self.state = UpdateState::Offered { version: version.to_string() };
         self.offer = None;
         self.cancel = None;
+        self.windows.clear();
         OfferDecision::Start { run: self.run }
     }
 
@@ -173,21 +204,33 @@ impl Gate {
             return false;
         }
         if !matches!(state, UpdateState::Offered { .. }) {
-            // Past waiting on the user: no prompt to show again, nothing to cancel
+            // Not waiting on the user now: no prompt to show again until it waits once more
             self.offer = None;
-            self.cancel = None;
         }
         self.state = state;
         true
     }
 
-    /// Run `run` shows `info` and waits on the user; `cancel` stops it if a newer version comes.
-    pub(crate) fn offered(&mut self, run: u64, info: UpdateInfo) -> bool {
+    /// Run `run` shows `info` in window `label` and waits on the user.
+    pub(crate) fn offered(&mut self, run: u64, info: UpdateInfo, label: &str) -> bool {
         if !self.advance(run, UpdateState::Offered { version: info.version.clone() }) {
             return false;
         }
         self.offer = Some(info);
+        self.windows = vec![label.to_string()];
         true
+    }
+
+    /// The current run's prompt is showing in window `label` too.
+    pub(crate) fn add_window(&mut self, label: &str) {
+        if !self.windows.iter().any(|w| w == label) {
+            self.windows.push(label.to_string());
+        }
+    }
+
+    /// The windows showing run `run`'s prompt.
+    pub(crate) fn windows(&self, run: u64) -> Vec<String> {
+        if run == self.run { self.windows.clone() } else { Vec::new() }
     }
 
     /// The prompt is gone (the window didn't answer, so a native dialog asks instead): nothing
@@ -214,6 +257,7 @@ impl Gate {
         self.state = UpdateState::Idle;
         self.offer = None;
         self.cancel = None;
+        self.windows.clear();
     }
 }
 
@@ -229,8 +273,13 @@ impl RunGuard {
         self.gate.lock().advance(self.run, state)
     }
 
-    pub(crate) fn offered(&self, info: UpdateInfo) -> bool {
-        self.gate.lock().offered(self.run, info)
+    pub(crate) fn offered(&self, info: UpdateInfo, label: &str) -> bool {
+        self.gate.lock().offered(self.run, info, label)
+    }
+
+    /// The windows showing this run's prompt.
+    pub(crate) fn windows(&self) -> Vec<String> {
+        self.gate.lock().windows(self.run)
     }
 
     pub(crate) fn withdraw_offer(&self) {
@@ -287,8 +336,8 @@ mod tests {
     fn checks_wait_while_downloading_and_installing() {
         let mut gate = Gate::default();
         gate.begin_check().unwrap();
-        let run = started(gate.offer("2.0.0"));
-        assert!(gate.offered(run, info("2.0.0", "r1")));
+        let run = started(gate.offer("2.0.0", "main_0"));
+        assert!(gate.offered(run, info("2.0.0", "r1"), "main_0"));
 
         assert!(gate.advance(run, UpdateState::Downloading { version: version("2.0.0") }));
         assert_eq!(gate.begin_check(), Err(UpdateState::Downloading { version: version("2.0.0") }));
@@ -300,7 +349,7 @@ mod tests {
     fn an_installed_update_is_never_downloaded_again() {
         let mut gate = Gate::default();
         gate.begin_check().unwrap();
-        let run = started(gate.offer("2.0.0"));
+        let run = started(gate.offer("2.0.0", "main_0"));
         assert!(gate.advance(run, UpdateState::Installed { version: version("2.0.0") }));
         // The run's task ends; the install stands until the app relaunches
         gate.finish(run);
@@ -312,12 +361,12 @@ mod tests {
     fn the_same_version_found_again_shows_the_same_prompt() {
         let mut gate = Gate::default();
         gate.begin_check().unwrap();
-        let run = started(gate.offer("2.0.0"));
-        assert!(gate.offered(run, info("2.0.0", "r1")));
+        let run = started(gate.offer("2.0.0", "main_0"));
+        assert!(gate.offered(run, info("2.0.0", "r1"), "main_0"));
 
         // Another window's check, while the prompt waits
         assert_eq!(gate.begin_check(), Ok(()));
-        assert_eq!(gate.offer("2.0.0"), OfferDecision::Reshow(info("2.0.0", "r1")));
+        assert_eq!(gate.offer("2.0.0", "main_0"), OfferDecision::Reshow(info("2.0.0", "r1")));
         // Still the one run, still waiting
         assert_eq!(gate.current(), UpdateState::Offered { version: version("2.0.0") });
         assert!(gate.advance(run, UpdateState::Downloading { version: version("2.0.0") }));
@@ -327,14 +376,14 @@ mod tests {
     fn a_newer_version_replaces_an_offer_not_taken() {
         let mut gate = Gate::default();
         gate.begin_check().unwrap();
-        let first = started(gate.offer("2.0.0"));
-        assert!(gate.offered(first, info("2.0.0", "r1")));
+        let first = started(gate.offer("2.0.0", "main_0"));
+        assert!(gate.offered(first, info("2.0.0", "r1"), "main_0"));
         let cancelled = Arc::new(AtomicBool::new(false));
         let flag = cancelled.clone();
         gate.set_cancel(first, Box::new(move || flag.store(true, Ordering::SeqCst)));
 
         gate.begin_check().unwrap();
-        let second = started(gate.offer("2.1.0"));
+        let second = started(gate.offer("2.1.0", "main_0"));
         assert!(cancelled.load(Ordering::SeqCst), "the first run is cancelled");
         assert_ne!(first, second);
 
@@ -345,16 +394,64 @@ mod tests {
     }
 
     #[test]
+    fn a_newer_version_replaces_an_offer_after_its_background_download() {
+        let mut gate = Gate::default();
+        gate.begin_check().unwrap();
+        let first = started(gate.offer("2.0.0", "main_0"));
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let flag = cancelled.clone();
+        gate.set_cancel(first, Box::new(move || flag.store(true, Ordering::SeqCst)));
+        // A background check downloads first, then waits on the user with its prompt
+        assert!(gate.advance(first, UpdateState::Downloading { version: version("2.0.0") }));
+        assert!(gate.advance(first, UpdateState::Offered { version: version("2.0.0") }));
+        assert!(gate.offered(first, info("2.0.0", "r1"), "main_0"));
+
+        gate.begin_check().unwrap();
+        let second = started(gate.offer("2.1.0", "main_0"));
+        assert!(cancelled.load(Ordering::SeqCst), "the downloaded offer is replaced");
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn every_window_showing_the_prompt_hears_it_installed() {
+        let gate = UpdateGate::default();
+        let token = gate.begin_check().unwrap();
+        let run = started(gate.lock().offer("2.0.0", "main_0"));
+        drop(token);
+        assert!(gate.lock().offered(run, info("2.0.0", "r1"), "main_0"));
+
+        // Settings checks and is shown the same prompt; so is a window refused mid-check
+        gate.begin_check().unwrap();
+        assert!(matches!(gate.lock().offer("2.0.0", "settings"), OfferDecision::Reshow(_)));
+        let in_flight = gate.begin_check().unwrap();
+        let busy = gate.begin_check().err().unwrap();
+        if let Some(g) = &busy.gate {
+            g.lock().add_window("main_1");
+        }
+        drop(in_flight);
+        // Shown again in the main window adds nothing new
+        gate.lock().add_window("main_0");
+        assert_eq!(gate.lock().windows(run), vec!["main_0", "settings", "main_1"]);
+
+        // A newer run starts with only the window it is shown in
+        gate.begin_check().unwrap();
+        gate.lock().set_cancel(run, Box::new(|| {}));
+        let next = started(gate.lock().offer("2.1.0", "main_0"));
+        assert!(gate.lock().windows(next).is_empty());
+        assert!(gate.lock().windows(run).is_empty(), "the old run's windows are gone");
+    }
+
+    #[test]
     fn a_check_that_finds_the_user_installing_starts_nothing() {
         let mut gate = Gate::default();
         gate.begin_check().unwrap();
-        let run = started(gate.offer("2.0.0"));
-        assert!(gate.offered(run, info("2.0.0", "r1")));
+        let run = started(gate.offer("2.0.0", "main_0"));
+        assert!(gate.offered(run, info("2.0.0", "r1"), "main_0"));
 
         // A check starts while the prompt waits, then the user chooses Install
         gate.begin_check().unwrap();
         assert!(gate.advance(run, UpdateState::Downloading { version: version("2.0.0") }));
-        match gate.offer("2.0.0") {
+        match gate.offer("2.0.0", "main_0") {
             OfferDecision::Busy(busy) => {
                 assert_eq!(busy.state, UpdateState::Downloading { version: version("2.0.0") });
                 assert_eq!(busy.offer, None);
@@ -368,7 +465,7 @@ mod tests {
     fn a_run_that_ends_without_installing_frees_the_gate() {
         let mut gate = Gate::default();
         gate.begin_check().unwrap();
-        let run = started(gate.offer("2.0.0"));
+        let run = started(gate.offer("2.0.0", "main_0"));
         assert!(gate.advance(run, UpdateState::Downloading { version: version("2.0.0") }));
         // The download or install failed, or the user skipped it
         gate.finish(run);
@@ -380,13 +477,13 @@ mod tests {
     fn a_withdrawn_prompt_is_not_shown_again() {
         let mut gate = Gate::default();
         gate.begin_check().unwrap();
-        let run = started(gate.offer("2.0.0"));
-        assert!(gate.offered(run, info("2.0.0", "r1")));
+        let run = started(gate.offer("2.0.0", "main_0"));
+        assert!(gate.offered(run, info("2.0.0", "r1"), "main_0"));
         gate.set_cancel(run, Box::new(|| panic!("the dialog's run was cancelled")));
         // The window never answered, so the native dialog took over
         gate.withdraw_offer(run);
         gate.begin_check().unwrap();
-        match gate.offer("2.0.0") {
+        match gate.offer("2.0.0", "main_0") {
             OfferDecision::Busy(busy) => {
                 assert_eq!(busy.state, UpdateState::Offered { version: version("2.0.0") })
             }
@@ -394,16 +491,16 @@ mod tests {
         }
         // Nor does a newer version cancel the dialog, which may be installing
         gate.begin_check().unwrap();
-        assert!(matches!(gate.offer("2.1.0"), OfferDecision::Busy(_)));
+        assert!(matches!(gate.offer("2.1.0", "main_0"), OfferDecision::Busy(_)));
     }
 
     #[test]
     fn a_busy_check_carries_the_prompt_to_show_again() {
         let gate = UpdateGate::default();
         let token = gate.begin_check().unwrap();
-        let run = started(gate.lock().offer("2.0.0"));
+        let run = started(gate.lock().offer("2.0.0", "main_0"));
         drop(token);
-        assert!(gate.lock().offered(run, info("2.0.0", "r1")));
+        assert!(gate.lock().offered(run, info("2.0.0", "r1"), "main_0"));
 
         // One check in flight while the prompt waits; a second trigger is refused, carrying
         // the prompt so the user who asked sees it rather than a new one

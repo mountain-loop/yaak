@@ -172,7 +172,7 @@ impl CheckToken {
         let decision = {
             let mut locked = gate.lock();
             self.ended = true;
-            locked.offer(&update.version)
+            locked.offer(&update.version, window.label())
         };
         match decision {
             OfferDecision::Start { run } => {
@@ -205,7 +205,13 @@ impl Busy {
     pub fn show<R: Runtime>(&self, window: &WebviewWindow<R>) {
         let label = window.label();
         let shown = match (&self.offer, &self.state) {
-            (Some(info), _) => window.emit_to(label, UPDATE_AVAILABLE_EVENT, info),
+            (Some(info), _) => {
+                // So this window hears when the update installs, whichever window installs it
+                if let Some(gate) = &self.gate {
+                    gate.lock().add_window(label);
+                }
+                window.emit_to(label, UPDATE_AVAILABLE_EVENT, info)
+            }
             (None, UpdateState::Installed { version }) => {
                 window.emit_to(label, UPDATE_INSTALLED_EVENT, version)
             }
@@ -286,7 +292,7 @@ async fn prompt_and_install<R: Runtime>(
             run.advance(UpdateState::Installed { version });
 
             info!("Installed {}", update.version);
-            finish_integrated_update(window, update).await;
+            finish_integrated_update(window, update, &run.windows()).await;
         }
         Err(e) => {
             warn!("Failed to notify frontend, falling back: {e}",);
@@ -297,11 +303,19 @@ async fn prompt_and_install<R: Runtime>(
     };
 }
 
-async fn finish_integrated_update<R: Runtime>(window: &WebviewWindow<R>, update: &Update) {
-    if let Err(e) =
-        window.emit_to(window.label(), UPDATE_INSTALLED_EVENT, update.version.to_string())
-    {
-        warn!("Failed to notify frontend of update install: {}", e);
+/// Tells each window that showed the prompt, `windows`, that the update installed, so any of
+/// them offers the relaunch; the run's own window when no other showed it.
+async fn finish_integrated_update<R: Runtime>(
+    window: &WebviewWindow<R>,
+    update: &Update,
+    windows: &[String],
+) {
+    let own = [window.label().to_string()];
+    let windows = if windows.is_empty() { &own[..] } else { windows };
+    for label in windows {
+        if let Err(e) = window.emit_to(label, UPDATE_INSTALLED_EVENT, update.version.to_string()) {
+            warn!("Failed to notify frontend of update install: {}", e);
+        }
     }
 }
 
@@ -357,7 +371,7 @@ async fn start_integrated_update<R: Runtime>(
         .emit_to(window.label(), UPDATE_AVAILABLE_EVENT, &info)
         .map_err(|e| Error::GenericError(format!("Failed to emit update_available: {e}")))?;
     // So a later check, from any window, shows this prompt again rather than a new one
-    run.offered(info);
+    run.offered(info, window.label());
 
     // 3) Two-stage timeout: first wait for ack, then wait for final action
     // --- Phase 1: wait for ACK with timeout ---
