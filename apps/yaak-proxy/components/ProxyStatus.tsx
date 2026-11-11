@@ -119,7 +119,7 @@ export function ProxyStatus() {
   const address = port == null ? null : `127.0.0.1:${port}`;
   const items: DropdownItem[] = [
     {
-      label: <span className="font-mono">{address}</span>,
+      label: <span className="font-mono text-editor">{address}</span>,
       hidden: address == null,
       keepOpenOnSelect: true,
       rightSlot: copied ? (
