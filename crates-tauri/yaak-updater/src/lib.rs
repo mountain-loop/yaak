@@ -371,7 +371,13 @@ async fn start_integrated_update<R: Runtime>(
         .emit_to(window.label(), UPDATE_AVAILABLE_EVENT, &info)
         .map_err(|e| Error::GenericError(format!("Failed to emit update_available: {e}")))?;
     // So a later check, from any window, shows this prompt again rather than a new one
-    run.offered(info, window.label());
+    run.offered(info.clone(), window.label());
+    // Windows still showing a prompt this run replaced show this one in its place
+    for label in run.windows().iter().filter(|l| *l != window.label()) {
+        if let Err(e) = window.emit_to(label, UPDATE_AVAILABLE_EVENT, &info) {
+            warn!("Failed to replace the update prompt in {label}: {e}");
+        }
+    }
 
     // 3) Two-stage timeout: first wait for ack, then wait for final action
     // --- Phase 1: wait for ACK with timeout ---

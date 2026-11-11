@@ -284,8 +284,9 @@ mod race_tests {
                     );
                     continue;
                 }
+                let version = served_version().clone();
                 let body = format!(
-                    r#"{{"version":"99.0.0","url":"http://127.0.0.1:{port}/Yaak.Proxy_aarch64.app.tar.gz","signature":"unused"}}"#
+                    r#"{{"version":"{version}","url":"http://127.0.0.1:{port}/Yaak.Proxy_aarch64.app.tar.gz","signature":"unused"}}"#
                 );
                 let _ = write!(
                     stream,
@@ -300,10 +301,23 @@ mod race_tests {
     /// Where a test app keeps its downloads, removed after each test.
     const TEST_IDENTIFIER: &str = "app.yaak.proxy.updates-test";
 
-    /// One test at a time, since they share the endpoint variable and the downloads directory.
+    /// The version the test server offers, 99.0.0 unless a test publishes a newer one.
+    fn served_version() -> std::sync::MutexGuard<'static, String> {
+        static VERSION: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+        let mut version = VERSION.lock().unwrap_or_else(|e| e.into_inner());
+        if version.is_empty() {
+            *version = "99.0.0".to_string();
+        }
+        version
+    }
+
+    /// One test at a time, since they share the endpoint variable, the served version and the
+    /// downloads directory.
     fn serial() -> std::sync::MutexGuard<'static, ()> {
         static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+        let guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        *served_version() = "99.0.0".to_string();
+        guard
     }
 
     fn mock_app(port: u16) -> tauri::App<MockRuntime> {
@@ -497,6 +511,43 @@ mod race_tests {
         }
 
         answer(&app, &reply, serde_json::json!({ "type": "action", "action": "skip" }));
+        wait_for_idle(&app);
+    }
+
+    /// A newer version found from Settings, while the main window's prompt for the older one
+    /// waits, replaces that prompt in both windows, so neither keeps an Install button whose
+    /// run is gone.
+    #[test]
+    fn a_newer_version_replaces_the_prompt_in_every_window() {
+        let _serial = serial();
+        let app = mock_app(serve_update());
+        let _clean = CleanUp(app.handle().clone());
+        let main = window(&app, "main_0");
+        let settings = window(&app, "settings");
+        let rx = record(&[&main, &settings]);
+
+        assert_eq!(user_check(&main), Ok(true));
+        let first = drain(&rx);
+        let old_reply = reply_id(prompts(&first)[0]);
+        ack(&app, &old_reply);
+
+        *served_version() = "99.1.0".to_string();
+        assert_eq!(user_check(&settings), Ok(true));
+        let replaced = drain(&rx);
+        let new_prompts = prompts(&replaced);
+        assert_eq!(new_prompts.len(), 2, "{replaced:?}");
+        let mut windows: Vec<_> = new_prompts.iter().map(|p| p.window.as_str()).collect();
+        windows.sort();
+        assert_eq!(windows, vec!["main_0", "settings"]);
+        let new_reply = reply_id(new_prompts[0]);
+        for prompt in &new_prompts {
+            assert_eq!(prompt.payload["version"], "99.1.0");
+            assert_eq!(reply_id(prompt), new_reply, "one run answers both");
+        }
+        assert_ne!(new_reply, old_reply);
+
+        ack(&app, &new_reply);
+        answer(&app, &new_reply, serde_json::json!({ "type": "action", "action": "skip" }));
         wait_for_idle(&app);
     }
 

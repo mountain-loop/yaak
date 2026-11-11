@@ -139,8 +139,11 @@ pub(crate) struct Gate {
     /// Cancels the current run while it waits on the user, so a newer version can replace it.
     /// Kept through a background download, which returns to waiting on the user.
     cancel: Option<Box<dyn FnOnce() + Send>>,
-    /// The windows showing the current run's prompt, each told when it installs
+    /// The windows showing the current run's prompt, each told when it installs. A run that
+    /// replaces another takes over its windows, so none is left with a stale prompt.
     windows: Vec<String>,
+    /// The current run's prompt was withdrawn for a native dialog, which nothing may cancel
+    withdrawn: bool,
 }
 
 impl Gate {
@@ -170,8 +173,8 @@ impl Gate {
     /// starts.
     pub(crate) fn offer(&mut self, version: &str, label: &str) -> OfferDecision {
         self.checking = false;
-        match &self.state {
-            UpdateState::Idle => {}
+        let windows = match &self.state {
+            UpdateState::Idle => Vec::new(),
             UpdateState::Offered { version: offered } if offered == version => {
                 if let Some(info) = self.offer.clone() {
                     self.add_window(label);
@@ -181,20 +184,24 @@ impl Gate {
                 return OfferDecision::Busy(Busy::new(self.state.clone(), None));
             }
             UpdateState::Offered { .. } if self.cancel.is_some() => {
-                // A newer version replaces the prompt the user hasn't taken
+                // A newer version replaces the prompt the user hasn't taken, in every window
+                // showing it
                 if let Some(cancel) = self.cancel.take() {
                     cancel();
                 }
+                std::mem::take(&mut self.windows)
             }
             state => {
                 return OfferDecision::Busy(Busy::new(state.clone(), None));
             }
-        }
+        };
         self.run += 1;
         self.state = UpdateState::Offered { version: version.to_string() };
         self.offer = None;
         self.cancel = None;
-        self.windows.clear();
+        self.withdrawn = false;
+        self.windows = windows;
+        self.add_window(label);
         OfferDecision::Start { run: self.run }
     }
 
@@ -217,7 +224,7 @@ impl Gate {
             return false;
         }
         self.offer = Some(info);
-        self.windows = vec![label.to_string()];
+        self.add_window(label);
         true
     }
 
@@ -239,11 +246,15 @@ impl Gate {
         if run == self.run {
             self.offer = None;
             self.cancel = None;
+            self.withdrawn = true;
         }
     }
 
+    /// Registers how to cancel run `run`. Its task may already have moved on, into a background
+    /// download, by the time this is called; the handle is kept all the same, and only used
+    /// while the run waits on the user.
     pub(crate) fn set_cancel(&mut self, run: u64, cancel: Box<dyn FnOnce() + Send>) {
-        if run == self.run && matches!(self.state, UpdateState::Offered { .. }) {
+        if run == self.run && !self.withdrawn {
             self.cancel = Some(cancel);
         }
     }
@@ -433,12 +444,54 @@ mod tests {
         gate.lock().add_window("main_0");
         assert_eq!(gate.lock().windows(run), vec!["main_0", "settings", "main_1"]);
 
-        // A newer run starts with only the window it is shown in
+        // A newer run takes over every window showing the old prompt, and the one that found it
         gate.begin_check().unwrap();
         gate.lock().set_cancel(run, Box::new(|| {}));
-        let next = started(gate.lock().offer("2.1.0", "main_0"));
-        assert!(gate.lock().windows(next).is_empty());
-        assert!(gate.lock().windows(run).is_empty(), "the old run's windows are gone");
+        let next = started(gate.lock().offer("2.1.0", "main_2"));
+        assert_eq!(gate.lock().windows(next), vec!["main_0", "settings", "main_1", "main_2"]);
+        assert!(gate.lock().windows(run).is_empty(), "the old run has no windows left");
+    }
+
+    #[test]
+    fn a_fresh_run_starts_with_the_window_that_found_it() {
+        let mut gate = Gate::default();
+        gate.begin_check().unwrap();
+        let run = started(gate.offer("2.0.0", "settings"));
+        assert_eq!(gate.windows(run), vec!["settings"]);
+        // Its task fails or the user skips: the next run starts afresh
+        gate.finish(run);
+        gate.begin_check().unwrap();
+        let next = started(gate.offer("2.0.0", "main_0"));
+        assert_eq!(gate.windows(next), vec!["main_0"]);
+    }
+
+    #[test]
+    fn a_cancel_registered_after_a_background_download_began_is_kept() {
+        let mut gate = Gate::default();
+        gate.begin_check().unwrap();
+        let first = started(gate.offer("2.0.0", "main_0"));
+        // The task starts downloading on another worker before its cancel is registered
+        assert!(gate.advance(first, UpdateState::Downloading { version: version("2.0.0") }));
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let flag = cancelled.clone();
+        gate.set_cancel(first, Box::new(move || flag.store(true, Ordering::SeqCst)));
+        assert!(gate.advance(first, UpdateState::Offered { version: version("2.0.0") }));
+        assert!(gate.offered(first, info("2.0.0", "r1"), "main_0"));
+
+        gate.begin_check().unwrap();
+        started(gate.offer("2.1.0", "main_0"));
+        assert!(cancelled.load(Ordering::SeqCst), "a newer version still replaces it");
+    }
+
+    #[test]
+    fn a_cancel_registered_after_the_prompt_was_withdrawn_is_refused() {
+        let mut gate = Gate::default();
+        gate.begin_check().unwrap();
+        let run = started(gate.offer("2.0.0", "main_0"));
+        gate.withdraw_offer(run);
+        gate.set_cancel(run, Box::new(|| panic!("the native dialog's run was cancelled")));
+        gate.begin_check().unwrap();
+        assert!(matches!(gate.offer("2.1.0", "main_0"), OfferDecision::Busy(_)));
     }
 
     #[test]
