@@ -1,10 +1,11 @@
-//! The update flow Yaak and Yaak Proxy share. Each app asks its own update endpoint, with its
-//! own headers, and hands an [`Update`] it finds to [`prompt_and_install`], which asks the
-//! window (or a native dialog, when the window doesn't answer), downloads, installs and tells
-//! the window it can relaunch through [`restart`].
+//! The update flow Yaak and Yaak Proxy share. Each app claims its [`UpdateGate`] before
+//! asking its own update endpoint, with its own headers, and hands an [`Update`] it finds to
+//! [`CheckToken::offer`]. That runs at most one update per process: it asks the window (or a
+//! native dialog, when the window doesn't answer), downloads, installs and tells the window it
+//! can relaunch through [`restart`].
 
 use std::fmt::{Display, Formatter};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use log::{debug, error, info, warn};
@@ -15,7 +16,11 @@ use tauri_plugin_updater::Update;
 use tokio::time::sleep;
 use ts_rs::TS;
 
+mod gate;
 pub mod restart;
+
+pub use gate::{Busy, CheckToken, UpdateGate, UpdateState};
+use gate::{OfferDecision, RunGuard};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -39,6 +44,10 @@ pub const UPDATE_AVAILABLE_EVENT: &str = "update_available";
 
 /// The event the window hears of an installed update by, with its version.
 pub const UPDATE_INSTALLED_EVENT: &str = "update_installed";
+
+/// The event a window hears where the update stands by, with an [`UpdateState`], when the user
+/// asks for a check while one is already in hand.
+pub const UPDATE_STATE_EVENT: &str = "update_state";
 
 const MAX_UPDATE_CHECK_HOURS_STABLE: u64 = 12;
 const MAX_UPDATE_CHECK_HOURS_BETA: u64 = 3;
@@ -141,19 +150,85 @@ pub enum UpdateResponseAction {
     Skip,
 }
 
-/// Offers `update` in `window` and, if the user takes it, downloads and installs it. Returns
-/// once that is settled; spawn it so the check that found the update can answer first.
-///
-/// `install` says whether this install can apply the update itself; when it can't, the window
-/// is only told how to update. A background check downloads first when `auto_download` is set,
-/// so the prompt can offer to install at once.
-pub async fn prompt_and_install<R: Runtime>(
+impl CheckToken {
+    /// The check found `update`: offer it in `window` and, if the user takes it, download and
+    /// install it, in a task of its own so the check can answer first. At most one such run
+    /// exists per process. Finding the version already on offer shows that same prompt again;
+    /// finding it while it downloads, installs or has installed starts nothing, and shows the
+    /// user where it stands when they asked.
+    ///
+    /// `install` says whether this install can apply the update itself; when it can't, the
+    /// window is only told how to update. A background check downloads first when
+    /// `auto_download` is set, so the prompt can offer to install at once.
+    pub fn offer<R: Runtime>(
+        mut self,
+        window: &WebviewWindow<R>,
+        update: Update,
+        trigger: UpdateTrigger,
+        auto_download: bool,
+        install: UpdateInstall,
+    ) {
+        let gate = self.gate.clone();
+        let decision = {
+            let mut locked = gate.lock();
+            self.ended = true;
+            locked.offer(&update.version)
+        };
+        match decision {
+            OfferDecision::Start { run } => {
+                let w = window.clone();
+                let guard = RunGuard { gate: gate.clone(), run };
+                let task = tauri::async_runtime::spawn(async move {
+                    prompt_and_install(&w, &update, trigger, auto_download, install, guard).await;
+                });
+                gate.lock().set_cancel(run, Box::new(move || task.abort()));
+            }
+            OfferDecision::Reshow(info) => {
+                debug!("{} is on offer already; showing its prompt again", info.version);
+                if let Err(e) = window.emit_to(window.label(), UPDATE_AVAILABLE_EVENT, &info) {
+                    warn!("Failed to emit update_available: {e}");
+                }
+            }
+            OfferDecision::Busy(busy) => {
+                info!("Found {}, but the update is {:?} already", update.version, busy.state);
+                if trigger == UpdateTrigger::User {
+                    busy.show(window);
+                }
+            }
+        }
+    }
+}
+
+impl Busy {
+    /// Shows the user who asked for a check where the update stands, rather than a new prompt:
+    /// the prompt on offer, the relaunch offer once installed, or the state in between.
+    pub fn show<R: Runtime>(&self, window: &WebviewWindow<R>) {
+        let label = window.label();
+        let shown = match (&self.offer, &self.state) {
+            (Some(info), _) => window.emit_to(label, UPDATE_AVAILABLE_EVENT, info),
+            (None, UpdateState::Installed { version }) => {
+                window.emit_to(label, UPDATE_INSTALLED_EVENT, version)
+            }
+            (None, state) => window.emit_to(label, UPDATE_STATE_EVENT, state),
+        };
+        if let Err(e) = shown {
+            warn!("Failed to show where the update stands: {e}");
+        }
+    }
+}
+
+/// Offers `update` in `window` and, if the user takes it, downloads and installs it, as run
+/// `run` of the gate. Returns once that is settled; the run ends as `run` is dropped.
+async fn prompt_and_install<R: Runtime>(
     window: &WebviewWindow<R>,
     update: &Update,
     trigger: UpdateTrigger,
     auto_download: bool,
     install: UpdateInstall,
+    run: RunGuard,
 ) {
+    let version = update.version.to_string();
+
     // Only hand the artifact to the updater plugin when this install can apply it itself;
     // otherwise tell the user how to update instead
     if install != UpdateInstall::Integrated {
@@ -167,35 +242,57 @@ pub async fn prompt_and_install<R: Runtime>(
         update.raw_json.get("install_mode").map(|v| v.as_str()).unwrap_or_default()
             == Some("native");
     if native_install_mode {
-        start_native_update(window, update).await;
+        start_native_update(window, update, &run).await;
         return;
     }
 
     // If it's a background update, try downloading it first
     if trigger == UpdateTrigger::Background && auto_download {
+        if !run.advance(UpdateState::Downloading { version: version.clone() }) {
+            return;
+        }
         info!("Downloading update {} in background", update.version);
         if let Err(e) = download_update_idempotent(window, update).await {
             error!("Failed to download {}: {}", update.version, e);
         }
+        if !run.advance(UpdateState::Offered { version: version.clone() }) {
+            return;
+        }
     }
 
-    match start_integrated_update(window, update).await {
+    match start_integrated_update(window, update, &run).await {
         Ok(UpdateResponseAction::Skip) => {
             info!("Confirmed {}: skipped", update.version);
         }
         Ok(UpdateResponseAction::Install) => {
             info!("Confirmed {}: install", update.version);
-            if let Err(e) = install_update_maybe_download(window, update).await {
+            if !run.advance(UpdateState::Downloading { version: version.clone() }) {
+                return;
+            }
+            let downloaded = match download_update_idempotent(window, update).await {
+                Ok(path) => path,
+                Err(e) => {
+                    error!("Failed to install: {e}");
+                    return;
+                }
+            };
+            if !run.advance(UpdateState::Installing { version: version.clone() }) {
+                return;
+            }
+            if let Err(e) = install_downloaded(window, update, &downloaded) {
                 error!("Failed to install: {e}");
                 return;
             };
+            run.advance(UpdateState::Installed { version });
 
             info!("Installed {}", update.version);
             finish_integrated_update(window, update).await;
         }
         Err(e) => {
             warn!("Failed to notify frontend, falling back: {e}",);
-            start_native_update(window, update).await;
+            // Nothing can show the window's prompt again, nor replace it, from here
+            run.withdraw_offer();
+            start_native_update(window, update, &run).await;
         }
     };
 }
@@ -211,6 +308,7 @@ async fn finish_integrated_update<R: Runtime>(window: &WebviewWindow<R>, update:
 async fn start_integrated_update<R: Runtime>(
     window: &WebviewWindow<R>,
     update: &Update,
+    run: &RunGuard,
 ) -> Result<UpdateResponseAction> {
     let download_path = ensure_download_dir(window)?.join(download_file_name(update));
     debug!("Download path: {}", download_path.display());
@@ -258,6 +356,8 @@ async fn start_integrated_update<R: Runtime>(
     window
         .emit_to(window.label(), UPDATE_AVAILABLE_EVENT, &info)
         .map_err(|e| Error::GenericError(format!("Failed to emit update_available: {e}")))?;
+    // So a later check, from any window, shows this prompt again rather than a new one
+    run.offered(info);
 
     // 3) Two-stage timeout: first wait for ack, then wait for final action
     // --- Phase 1: wait for ACK with timeout ---
@@ -302,7 +402,11 @@ fn notify_external_update<R: Runtime>(
     }
 }
 
-async fn start_native_update<R: Runtime>(window: &WebviewWindow<R>, update: &Update) {
+async fn start_native_update<R: Runtime>(
+    window: &WebviewWindow<R>,
+    update: &Update,
+    run: &RunGuard,
+) {
     // If the frontend doesn't respond, fallback to native dialogs
     let confirmed = window
         .dialog()
@@ -317,8 +421,13 @@ async fn start_native_update<R: Runtime>(window: &WebviewWindow<R>, update: &Upd
         return;
     }
 
+    let version = update.version.to_string();
+    if !run.advance(UpdateState::Installing { version: version.clone() }) {
+        return;
+    }
     match update.download_and_install(|_, _| {}, || {}).await {
         Ok(()) => {
+            run.advance(UpdateState::Installed { version });
             if window
                 .dialog()
                 .message("Would you like to restart the app?")
@@ -359,12 +468,13 @@ pub async fn download_update_idempotent<R: Runtime>(
     Ok(dl_path)
 }
 
-pub async fn install_update_maybe_download<R: Runtime>(
+/// Installs `update` from the file it was downloaded to, then removes the downloads.
+fn install_downloaded<R: Runtime>(
     window: &WebviewWindow<R>,
     update: &Update,
+    dl_path: &Path,
 ) -> Result<()> {
-    let dl_path = download_update_idempotent(window, update).await?;
-    let update_bytes = std::fs::read(&dl_path)?;
+    let update_bytes = std::fs::read(dl_path)?;
     update.install(update_bytes.as_slice())?;
     delete_download_dir(window);
     Ok(())

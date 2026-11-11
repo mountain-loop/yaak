@@ -3,13 +3,13 @@ use std::time::Instant;
 use crate::error::Result;
 use crate::models_ext::QueryManagerExt;
 use log::info;
-use tauri::{Runtime, WebviewWindow};
+use tauri::{Manager, Runtime, WebviewWindow};
 use tauri_plugin_updater::{Update, UpdaterExt};
 use tokio::task::block_in_place;
 
 use url::Url;
 use yaak_api::get_system_proxy_url;
-use yaak_updater::{UpdateInstall, prompt_and_install};
+use yaak_updater::{UpdateGate, UpdateInstall};
 pub use yaak_updater::{UpdateMode, UpdateTrigger};
 
 use crate::is_dev;
@@ -31,6 +31,20 @@ impl YaakUpdater {
         auto_download: bool,
         update_trigger: UpdateTrigger,
     ) -> Result<bool> {
+        // One check and one update at a time, whichever window or trigger asks. The user who
+        // asks while one is in hand sees where it stands, so there's no "no update" to show.
+        let token = match window.state::<UpdateGate>().begin_check() {
+            Ok(token) => token,
+            Err(busy) => {
+                info!("Not checking for updates: the update is {:?}", busy.state);
+                if update_trigger == UpdateTrigger::User {
+                    busy.show(window);
+                    return Ok(true);
+                }
+                return Ok(false);
+            }
+        };
+
         let settings = window.db().get_settings();
         let update_key = format!("{:x}", md5::compute(settings.id));
         self.last_check = Some(Instant::now());
@@ -70,11 +84,8 @@ impl YaakUpdater {
         let result = match update_check_result? {
             None => false,
             Some(update) => {
-                let w = window.clone();
-                tauri::async_runtime::spawn(async move {
-                    let install = update_install_method(&update);
-                    prompt_and_install(&w, &update, update_trigger, auto_download, install).await;
-                });
+                let install = update_install_method(&update);
+                token.offer(window, update, update_trigger, auto_download, install);
                 true
             }
         };

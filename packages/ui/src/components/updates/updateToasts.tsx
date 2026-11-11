@@ -129,6 +129,46 @@ export function showUpdateAvailableToast(
   });
 }
 
+/** The toast saying where an update already in hand stands, apart from its prompt */
+export const UPDATE_STATE_TOAST_ID = "update-state";
+
+/** Where an app's update stands, as its updater reports it */
+export type UpdateToastState =
+  | { state: "idle" }
+  | { state: "checking" }
+  | { state: "offered" | "downloading" | "installing" | "installed"; version: string };
+
+/** What the user who asked for a check is told while an update is already in hand */
+export function updateStateMessage(appName: string, state: UpdateToastState): string | null {
+  switch (state.state) {
+    case "idle":
+      return null;
+    case "checking":
+      return "Already checking for updates.";
+    case "offered":
+      return `${appName} ${state.version} is available.`;
+    case "downloading":
+      return `${appName} ${state.version} is downloading.`;
+    case "installing":
+      return `${appName} ${state.version} is installing.`;
+    case "installed":
+      return `${appName} ${state.version} is installed. Relaunch to start using it.`;
+  }
+}
+
+/**
+ * Tells the user who asked for a check where the update already in hand stands, instead of
+ * starting another. The prompt it belongs to, if any, keeps its own toast.
+ */
+export function showUpdateStateToast(
+  store: Store,
+  { appName, state }: { appName: string; state: UpdateToastState },
+) {
+  const message = updateStateMessage(appName, state);
+  if (message == null) return null;
+  return showToast(store, { id: UPDATE_STATE_TOAST_ID, color: "info", message });
+}
+
 export interface ShowUpdateInstalledToastArgs {
   appName: string;
   version: string;

@@ -188,6 +188,8 @@ pub fn run() {
 
     builder
         .manage(tokio::sync::Mutex::new(updates::ProxyUpdater::default()))
+        // The one update this process runs at a time, whichever window or trigger asks
+        .manage(yaak_updater::UpdateGate::default())
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");

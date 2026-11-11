@@ -32,3 +32,8 @@ yaak-proxy-lib = { workspace = true }
 yaak-rpc = { workspace = true }
 yaak-updater = { workspace = true }
 yaak-window = { workspace = true }
+
+[dev-dependencies]
+# A mock app for the update checks' tests
+tauri = { workspace = true, features = ["test"] }
+tokio = { workspace = true, features = ["macros", "rt"] }

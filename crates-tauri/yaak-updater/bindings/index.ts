@@ -19,3 +19,14 @@ export type UpdateInstall = "integrated" | "flatpak" | "manual";
 export type UpdateResponse = { type: "ack" } | { type: "action"; action: UpdateResponseAction };
 
 export type UpdateResponseAction = "install" | "skip";
+
+/**
+ * Where this process's update stands.
+ */
+export type UpdateState =
+  | { state: "idle" }
+  | { state: "checking" }
+  | { state: "offered"; version: string }
+  | { state: "downloading"; version: string }
+  | { state: "installing"; version: string }
+  | { state: "installed"; version: string };

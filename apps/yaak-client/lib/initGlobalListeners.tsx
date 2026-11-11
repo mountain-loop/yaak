@@ -7,13 +7,14 @@ import type {
 } from "@yaakapp-internal/plugins";
 import { updateAllPlugins } from "@yaakapp-internal/plugins";
 import type { PluginUpdateNotification, YaakNotification } from "@yaakapp-internal/tauri-client";
-import type { UpdateInfo, UpdateResponse } from "@yaakapp-internal/tauri-updater";
+import type { UpdateInfo, UpdateResponse, UpdateState } from "@yaakapp-internal/tauri-updater";
 import {
   ButtonInfiniteLoading,
   HStack,
   Icon,
   showUpdateAvailableToast as showUpdateAvailableToastIn,
   showUpdateInstalledToast as showUpdateInstalledToastIn,
+  showUpdateStateToast as showUpdateStateToastIn,
   VStack,
 } from "@yaakapp-internal/ui";
 import { openSettings } from "../commands/openSettings";
@@ -136,6 +137,11 @@ export function initGlobalListeners() {
   platform.listen<UpdateInfo>("update_available", async (payload) => {
     console.log("Got update available", payload);
     void showUpdateAvailableToast(payload);
+  });
+
+  // A check asked for while an update is already in hand says where it stands
+  platform.listen<UpdateState>("update_state", (state) => {
+    showUpdateStateToastIn(jotaiStore, { appName: "Yaak", state });
   });
 
   platform.listen<YaakNotification>("notification", (payload) => {

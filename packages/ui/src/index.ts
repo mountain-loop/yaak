@@ -303,9 +303,13 @@ export type {
   ShowUpdateAvailableToastArgs,
   ShowUpdateInstalledToastArgs,
   UpdateToastInfo,
+  UpdateToastState,
 } from "./components/updates/updateToasts";
 export {
   showUpdateAvailableToast,
   showUpdateInstalledToast,
+  showUpdateStateToast,
+  UPDATE_STATE_TOAST_ID,
   UPDATE_TOAST_ID,
+  updateStateMessage,
 } from "./components/updates/updateToasts";

@@ -1333,6 +1333,8 @@ pub fn run() {
             // Add updater
             let yaak_updater = YaakUpdater::new();
             app.manage(Mutex::new(yaak_updater));
+            // The one update this process runs at a time, whichever window or trigger asks
+            app.manage(yaak_updater::UpdateGate::default());
 
             // Add notifier
             let yaak_notifier = YaakNotifier::new();

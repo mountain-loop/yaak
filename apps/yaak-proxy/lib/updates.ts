@@ -1,11 +1,12 @@
 import { getVersion } from "@tauri-apps/api/app";
-import type { UpdateInfo, UpdateResponse } from "@yaakapp-internal/tauri-updater";
+import type { UpdateInfo, UpdateResponse, UpdateState } from "@yaakapp-internal/tauri-updater";
 import {
   minPromiseMillis,
   type SettingsValues,
   showToast,
   showUpdateAvailableToast,
   showUpdateInstalledToast,
+  showUpdateStateToast,
 } from "@yaakapp-internal/ui";
 import { atom, type createStore } from "jotai";
 import { settingsValuesAtom } from "./interfaceSettings";
@@ -19,6 +20,8 @@ const APP_NAME = "Yaak Proxy";
 /** The events the updater sends the window that checked, as Yaak's are named */
 const UPDATE_AVAILABLE_EVENT = "update_available";
 const UPDATE_INSTALLED_EVENT = "update_installed";
+/** Where an update already in hand stands, for a check asked for meanwhile */
+const UPDATE_STATE_EVENT = "update_state";
 
 /** The app menu's Check for Updates…, sent to the window it was chosen in */
 const CHECK_FOR_UPDATES_EVENT = "menu_check_for_updates";
@@ -107,6 +110,9 @@ export async function syncUpdates(store: Store, { background }: { background: bo
   if (!(await updaterEnabled().catch(() => false))) return;
   subscribeHere<UpdateInfo>(UPDATE_AVAILABLE_EVENT, (info) => {
     offerUpdate(store, info).catch(console.error);
+  });
+  subscribeHere<UpdateState>(UPDATE_STATE_EVENT, (state) => {
+    showUpdateStateToast(store, { appName: APP_NAME, state });
   });
   subscribeHere<string>(UPDATE_INSTALLED_EVENT, (version) => {
     showUpdateInstalledToast(store, {

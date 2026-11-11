@@ -6,7 +6,10 @@ import { toastsAtom } from "../../lib/toast";
 import {
   showUpdateAvailableToast,
   showUpdateInstalledToast,
+  showUpdateStateToast,
+  UPDATE_STATE_TOAST_ID,
   UPDATE_TOAST_ID,
+  updateStateMessage,
 } from "./updateToasts";
 
 function text(node: ReactNode) {
@@ -92,5 +95,34 @@ describe("update toasts", () => {
     const { message, action } = shown(store);
     expect(message).toBe("Yaak Proxy 2026.11.0 was installed Start using the new version now?");
     expect(action).toBe("Relaunch Yaak Proxy");
+  });
+
+  test("says where an update already in hand stands, apart from its prompt", () => {
+    const store = createStore();
+    showUpdateStateToast(store, {
+      appName: "Yaak Proxy",
+      state: { state: "downloading", version: "2026.11.0" },
+    });
+    const { toast, message } = shown(store);
+    expect(toast.id).toBe(UPDATE_STATE_TOAST_ID);
+    expect(toast.id).not.toBe(UPDATE_TOAST_ID);
+    expect(message).toBe("Yaak Proxy 2026.11.0 is downloading.");
+  });
+
+  test("words each state, and shows nothing for idle", () => {
+    expect(updateStateMessage("Yaak", { state: "checking" })).toBe("Already checking for updates.");
+    expect(updateStateMessage("Yaak", { state: "offered", version: "1.0.0" })).toBe(
+      "Yaak 1.0.0 is available.",
+    );
+    expect(updateStateMessage("Yaak", { state: "installing", version: "1.0.0" })).toBe(
+      "Yaak 1.0.0 is installing.",
+    );
+    expect(updateStateMessage("Yaak", { state: "installed", version: "1.0.0" })).toBe(
+      "Yaak 1.0.0 is installed. Relaunch to start using it.",
+    );
+    const store = createStore();
+    expect(showUpdateStateToast(store, { appName: "Yaak", state: { state: "idle" } })).toBeNull();
+    vi.runAllTimers();
+    expect(store.get(toastsAtom)).toEqual([]);
   });
 });
