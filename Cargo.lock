@@ -7208,7 +7208,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3a6e4decc9842a6638f85d95c25c6ad95e65367a9ad8845b7cae7241a7d9aa1"
 dependencies = [
  "serde",
- "ts-rs",
+ "ts-rs 11.1.0",
 ]
 
 [[package]]
@@ -9924,10 +9924,20 @@ version = "11.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4994acea2522cd2b3b85c1d9529a55991e3ad5e25cdcd3de9d505972c4379424"
 dependencies = [
+ "thiserror 2.0.21",
+ "ts-rs-macros 11.1.0",
+]
+
+[[package]]
+name = "ts-rs"
+version = "12.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "756050066659291d47a554a9f558125db17428b073c5ffce1daf5dcb0f7231d8"
+dependencies = [
  "chrono",
  "serde_json",
  "thiserror 2.0.21",
- "ts-rs-macros",
+ "ts-rs-macros 12.0.1",
 ]
 
 [[package]]
@@ -9935,6 +9945,18 @@ name = "ts-rs-macros"
 version = "11.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee6ff59666c9cbaec3533964505d39154dc4e0a56151fdea30a09ed0301f62e2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+ "termcolor",
+]
+
+[[package]]
+name = "ts-rs-macros"
+version = "12.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38d90eea51bc7988ef9e674bf80a85ba6804739e535e9cab48e4bb34a8b652aa"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -11479,7 +11501,7 @@ dependencies = [
  "tokio-stream",
  "tokio-tungstenite",
  "tokio-util",
- "ts-rs",
+ "ts-rs 12.0.1",
  "url",
  "uuid",
  "yaak",
@@ -11646,7 +11668,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
- "ts-rs",
+ "ts-rs 12.0.1",
  "uuid",
 ]
 
@@ -11670,7 +11692,7 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "thiserror 2.0.21",
- "ts-rs",
+ "ts-rs 12.0.1",
 ]
 
 [[package]]
@@ -11686,7 +11708,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
- "ts-rs",
+ "ts-rs 12.0.1",
  "url",
  "yaak-common",
  "yaak-models",
@@ -11714,7 +11736,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-reflection",
- "ts-rs",
+ "ts-rs 12.0.1",
  "uuid",
  "yaak-common",
  "yaak-tls",
@@ -11765,7 +11787,7 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "thiserror 2.0.21",
- "ts-rs",
+ "ts-rs 12.0.1",
  "yaak-api",
  "yaak-common",
  "yaak-models",
@@ -11830,7 +11852,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.21",
- "ts-rs",
+ "ts-rs 12.0.1",
  "urlencoding",
  "yaak-core",
  "yaak-database",
@@ -11875,7 +11897,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tokio-tungstenite",
- "ts-rs",
+ "ts-rs 12.0.1",
  "yaak-common",
  "yaak-crypto",
  "yaak-models",
@@ -11922,7 +11944,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "ts-rs",
+ "ts-rs 12.0.1",
 ]
 
 [[package]]
@@ -11962,7 +11984,7 @@ dependencies = [
  "tokio-rustls",
  "tonic",
  "tonic-reflection",
- "ts-rs",
+ "ts-rs 12.0.1",
  "url",
  "yaak-common",
  "yaak-crypto",
@@ -11986,7 +12008,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "ts-rs",
+ "ts-rs 12.0.1",
  "wasm-bindgen",
 ]
 
@@ -11997,7 +12019,7 @@ dependencies = [
  "log 0.4.34",
  "serde",
  "serde_json",
- "ts-rs",
+ "ts-rs 12.0.1",
 ]
 
 [[package]]
@@ -12005,7 +12027,7 @@ name = "yaak-rpc-schema"
 version = "0.0.0"
 dependencies = [
  "serde",
- "ts-rs",
+ "ts-rs 12.0.1",
  "yaak-git",
  "yaak-grpc",
  "yaak-models",
@@ -12021,7 +12043,7 @@ name = "yaak-sse"
 version = "0.1.0"
 dependencies = [
  "serde",
- "ts-rs",
+ "ts-rs 12.0.1",
 ]
 
 [[package]]
@@ -12040,7 +12062,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
- "ts-rs",
+ "ts-rs 12.0.1",
  "yaak-models",
 ]
 
@@ -12076,7 +12098,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
- "ts-rs",
+ "ts-rs 12.0.1",
  "wasm-bindgen",
 ]
 
@@ -12111,7 +12133,7 @@ dependencies = [
  "tauri-plugin-updater",
  "thiserror 2.0.21",
  "tokio",
- "ts-rs",
+ "ts-rs 12.0.1",
 ]
 
 [[package]]
@@ -12152,7 +12174,7 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http 0.7.1",
- "ts-rs",
+ "ts-rs 12.0.1",
  "url",
  "uuid",
  "yaak-http",
