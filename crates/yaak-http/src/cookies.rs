@@ -261,9 +261,9 @@ fn path_matches(request_path: &str, cookie_path: &str) -> bool {
     false
 }
 
-/// Check if two cookies match (same name and domain)
+/// Check if two cookies match (same name, domain and path, RFC 6265 Section 5.3)
 fn cookies_match(a: &Cookie, b: &Cookie) -> bool {
-    if a.name != b.name {
+    if a.name != b.name || a.path != b.path {
         return false;
     }
 
@@ -399,6 +399,31 @@ mod tests {
         // Should not match different domain
         let other_url = Url::parse("https://other.com/").unwrap();
         assert!(store.get_cookie_header(&other_url).is_none());
+    }
+
+    #[test]
+    fn test_cookies_with_different_paths_do_not_overwrite_each_other() {
+        let store = CookieStore::new();
+        let url = Url::parse("https://example.com/").unwrap();
+
+        store.store_cookies_from_response(
+            &url,
+            &[
+                "token=a; Path=/a".to_string(),
+                "token=b; Path=/b".to_string(),
+            ],
+        );
+
+        assert_eq!(store.get_all_cookies().len(), 2);
+        let a_url = Url::parse("https://example.com/a").unwrap();
+        let b_url = Url::parse("https://example.com/b").unwrap();
+        assert_eq!(store.get_cookie_header(&a_url), Some("token=a".to_string()));
+        assert_eq!(store.get_cookie_header(&b_url), Some("token=b".to_string()));
+
+        // Same name, domain and path still replaces the existing cookie
+        store.store_cookies_from_response(&url, &["token=c; Path=/a".to_string()]);
+        assert_eq!(store.get_all_cookies().len(), 2);
+        assert_eq!(store.get_cookie_header(&a_url), Some("token=c".to_string()));
     }
 
     #[test]
