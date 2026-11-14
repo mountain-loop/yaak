@@ -107,6 +107,11 @@ impl CookieStore {
             return false;
         }
 
+        // Secure cookies are only sent over https (loopback hosts count as secure contexts)
+        if cookie.secure && url.scheme() != "https" && !is_localhost(&url_host) {
+            return false;
+        }
+
         // Check path
         let url_path = url.path();
 
@@ -376,6 +381,25 @@ mod tests {
         // Should now have the cookie
         let header = store.get_cookie_header(&url);
         assert_eq!(header, Some("session=abc123".to_string()));
+    }
+
+    #[test]
+    fn test_secure_cookie_not_sent_over_http() {
+        let store = CookieStore::new();
+        let https_url = Url::parse("https://example.com/").unwrap();
+        store.store_cookies_from_response(&https_url, &["token=abc; Secure".to_string()]);
+
+        // Sent over https
+        assert_eq!(store.get_cookie_header(&https_url), Some("token=abc".to_string()));
+
+        // Never sent over plain http
+        let http_url = Url::parse("http://example.com/").unwrap();
+        assert!(store.get_cookie_header(&http_url).is_none());
+
+        // Loopback hosts are treated as a secure context
+        let local_url = Url::parse("http://localhost:3000/").unwrap();
+        store.store_cookies_from_response(&local_url, &["local=1; Secure".to_string()]);
+        assert_eq!(store.get_cookie_header(&local_url), Some("local=1".to_string()));
     }
 
     #[test]
