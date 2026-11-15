@@ -44,20 +44,24 @@ pub(crate) struct Dialled {
 /// the CONNECT named it, an IPv6 address in brackets.
 pub(crate) async fn dial(host: &str, port: u16) -> Result<Dialled, Unreachable> {
     let start = Instant::now();
-    let io = match tokio::time::timeout(CONNECT_TIMEOUT, open(host, port)).await {
+    let deadline = tokio::time::Instant::now() + CONNECT_TIMEOUT;
+    let io = match tokio::time::timeout_at(deadline, open(host, port, deadline)).await {
         Ok(io) => io?,
-        Err(_) => {
-            let e = io::Error::new(
-                io::ErrorKind::TimedOut,
-                format!("no connection after {} seconds", CONNECT_TIMEOUT.as_secs()),
-            );
-            return Err(Unreachable::of(&e, false));
-        }
+        Err(_) => return Err(Unreachable::of(&timed_out(), false)),
     };
     Ok(Dialled { io, took: start.elapsed() })
 }
 
-async fn open(host: &str, port: u16) -> Result<UpstreamIo, Unreachable> {
+fn timed_out() -> io::Error {
+    let message = format!("no connection after {} seconds", CONNECT_TIMEOUT.as_secs());
+    io::Error::new(io::ErrorKind::TimedOut, message)
+}
+
+async fn open(
+    host: &str,
+    port: u16,
+    deadline: tokio::time::Instant,
+) -> Result<UpstreamIo, Unreachable> {
     #[cfg(target_os = "macos")]
     if port == 80 {
         let host = host.trim_start_matches('[').trim_end_matches(']');
@@ -75,10 +79,27 @@ async fn open(host: &str, port: u16) -> Result<UpstreamIo, Unreachable> {
         let e = io::Error::new(io::ErrorKind::NotFound, "no address for the host");
         return Err(Unreachable::of(&e, true));
     }
-    TcpStream::connect(&addrs[..])
-        .await
-        .map(UpstreamIo::Tcp)
-        .map_err(|e| Unreachable::of(&e, false))
+    connect_any(&addrs, deadline).await.map(UpstreamIo::Tcp).map_err(|e| Unreachable::of(&e, false))
+}
+
+/// Connects to the first of `addrs` that answers, in turn, each given an even share of the time
+/// left before `deadline`, so one that never answers (a broken IPv6 route, say) leaves time for
+/// the rest. Fails with the last address's error.
+async fn connect_any(
+    addrs: &[SocketAddr],
+    deadline: tokio::time::Instant,
+) -> io::Result<TcpStream> {
+    let mut last = None;
+    for (i, addr) in addrs.iter().enumerate() {
+        let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+        let share = left / (addrs.len() - i) as u32;
+        match tokio::time::timeout(share, TcpStream::connect(addr)).await {
+            Ok(Ok(tcp)) => return Ok(tcp),
+            Ok(Err(e)) => last = Some(e),
+            Err(_) => last = Some(timed_out()),
+        }
+    }
+    Err(last.unwrap_or_else(timed_out))
 }
 
 /// Whether a CONNECT to `host:port` may be one of the engine's own connections coming back
@@ -273,6 +294,18 @@ mod tests {
             panic!("an .invalid name resolved");
         };
         assert_eq!(unreachable.kind, UnreachableKind::Lookup, "{unreachable}");
+    }
+
+    /// An address that never answers gets its share of the time, and the next is tried.
+    #[tokio::test]
+    async fn an_address_that_never_answers_leaves_time_for_the_next() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let reachable = listener.local_addr().unwrap();
+        // Reserved for documentation (RFC 5737), so nothing answers there.
+        let silent: SocketAddr = "192.0.2.1:9".parse().unwrap();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+        let tcp = connect_any(&[silent, reachable], deadline).await.unwrap();
+        assert_eq!(tcp.peer_addr().unwrap(), reachable);
     }
 
     /// Without vectored writes, TLS sends each record on its own, and a small one waits on
