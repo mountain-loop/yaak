@@ -124,15 +124,30 @@ impl NwError {
     fn to_io(self) -> io::Error {
         match self.domain {
             ERROR_DOMAIN_POSIX => io::Error::from_raw_os_error(self.code),
-            ERROR_DOMAIN_DNS => {
-                io::Error::other(format!("failed to look up address (DNS error {})", self.code))
-            }
+            ERROR_DOMAIN_DNS => io::Error::other(LookupFailed(self.code)),
             _ => io::Error::other(format!(
                 "Network.framework error (domain {}, code {})",
                 self.domain, self.code
             )),
         }
     }
+}
+
+/// A failed DNS lookup, by its `DNSServiceErrorType`.
+#[derive(Debug)]
+struct LookupFailed(i32);
+
+impl std::fmt::Display for LookupFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "failed to look up address (DNS error {})", self.0)
+    }
+}
+
+impl std::error::Error for LookupFailed {}
+
+/// Whether `e`, from [`connect`], is the host's name failing to resolve.
+pub(crate) fn is_lookup_failure(e: &io::Error) -> bool {
+    e.get_ref().is_some_and(|inner| inner.is::<LookupFailed>())
 }
 
 /// An `nw_connection_t`, cancelled when dropped.
@@ -536,6 +551,15 @@ pub(crate) async fn is_own_fallback(host: &str, port: u16) -> bool {
         }
     }
     false
+}
+
+/// Whether an open of `host:port` is under way, or recently went through a proxy on this Mac:
+/// whether a `CONNECT` to it may be the engine's own, which only [`is_own_fallback`] can tell,
+/// once the `CONNECT` is answered. Does not wait.
+pub(crate) fn has_attempts(host: &str, port: u16) -> bool {
+    let mut attempts = ATTEMPTS.lock().unwrap();
+    prune_attempts(&mut attempts);
+    attempts.contains_key(&attempt_key(host, port))
 }
 
 /// Opens a TCP connection to `host:port` that skips the system proxy where it can.

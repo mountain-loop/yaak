@@ -7,12 +7,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use rustls::pki_types::ServerName;
-use rustls::{ClientConfig, RootCertStore};
 use tempfile::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, copy_bidirectional};
 use tokio::net::{TcpListener, TcpStream};
-use tokio_rustls::TlsConnector;
 use yaak_proxy::{CaStore, ProxyConfig, start_proxy};
 
 type NwObject = *mut c_void;
@@ -51,11 +48,14 @@ async fn read_head(stream: &mut (impl AsyncReadExt + Unpin)) -> String {
     String::from_utf8(head).unwrap()
 }
 
-/// A host the engine passes through is tunneled as soon as its `CONNECT` arrives. When that
-/// `CONNECT` is the engine's own upstream falling back to the proxy, tunneling it out again would
-/// fall back again, without end. One `CONNECT`, then the client gets a 502.
+/// A CONNECT is answered only once its server is reached, and on macOS the engine reaches port 80
+/// through Network.framework, which falls back to the system proxy, the engine, when there is no
+/// direct route. That fallback is a CONNECT of the engine's own, which dialling again would
+/// repeat without end, so it is answered before any dial and refused once it is known to be the
+/// engine's own. One `CONNECT` each, then the client gets a 502: for its CONNECT, and for a plain
+/// request.
 #[tokio::test(flavor = "multi_thread")]
-async fn own_fallback_through_a_passthrough_host_stops() {
+async fn own_fallback_stops() {
     const TARGET: &str = "yaak-proxy-own-fallback.invalid";
     let dir = TempDir::new().unwrap();
     let ca = Arc::new(CaStore::load_or_create(dir.path()).unwrap());
@@ -84,25 +84,16 @@ async fn own_fallback_through_a_passthrough_host_stops() {
     });
     set_process_proxy(gateway_port);
 
-    // A client that rejects the engine's certificate gets the target passed through.
     let mut tcp = TcpStream::connect(("127.0.0.1", engine_port)).await.unwrap();
     let connect = format!("CONNECT {TARGET}:80 HTTP/1.1\r\nHost: {TARGET}:80\r\n\r\n");
     tcp.write_all(connect.as_bytes()).await.unwrap();
-    assert!(read_head(&mut tcp).await.starts_with("HTTP/1.1 200"));
-    let distrusting =
-        ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
-            .with_safe_default_protocol_versions()
-            .unwrap()
-            .with_root_certificates(RootCertStore::empty())
-            .with_no_client_auth();
-    let name = ServerName::try_from(TARGET).unwrap();
-    assert!(TlsConnector::from(Arc::new(distrusting)).connect(name, tcp).await.is_err());
-    let addr = format!("{TARGET}:80");
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
-    while proxy.handshake_state(&addr) != (0, true) {
-        assert!(tokio::time::Instant::now() < deadline, "{addr} was never passed through");
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
+    let head = tokio::time::timeout(Duration::from_secs(10), read_head(&mut tcp))
+        .await
+        .expect("no answer to the CONNECT");
+    assert!(head.starts_with("HTTP/1.1 502"), "{head}");
+    // Give a runaway chain time to show.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(connects.load(Ordering::SeqCst), 1);
 
     let mut client = TcpStream::connect(("127.0.0.1", engine_port)).await.unwrap();
     let request = format!("GET http://{TARGET}/ HTTP/1.1\r\nHost: {TARGET}\r\n\r\n");
@@ -111,8 +102,6 @@ async fn own_fallback_through_a_passthrough_host_stops() {
         .await
         .expect("no response");
     assert!(head.starts_with("HTTP/1.1 502"), "{head}");
-
-    // Give a runaway chain time to show.
     tokio::time::sleep(Duration::from_secs(1)).await;
-    assert_eq!(connects.load(Ordering::SeqCst), 1);
+    assert_eq!(connects.load(Ordering::SeqCst), 2);
 }

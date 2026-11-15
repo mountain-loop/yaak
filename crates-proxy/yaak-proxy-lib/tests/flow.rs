@@ -281,8 +281,15 @@ async fn http_version_setting_applies_to_new_connections() {
     ctx.start().unwrap();
     let port = ctx.port().unwrap();
     let ca = std::fs::read(dir.path().join("ca/ca.pem")).unwrap();
-    // Nothing listens there, so each flow is a 502, but its client side is spoken all the same.
-    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
+    // The server hangs up on its TLS, so each flow is a 502, but its client side is spoken all
+    // the same.
+    let hangs_up = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let server = hangs_up.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        loop {
+            drop(hangs_up.accept().await.unwrap());
+        }
+    });
 
     let mut sent = 0;
     let mut client_version = async || {
@@ -293,7 +300,7 @@ async fn http_version_setting_applies_to_new_connections() {
             .add_root_certificate(reqwest::Certificate::from_pem(&ca).unwrap())
             .build()
             .unwrap();
-        let url = format!("https://localhost:{closed}/{sent}");
+        let url = format!("https://localhost:{server}/{sent}");
         assert_eq!(client.get(&url).send().await.unwrap().status(), 502);
         wait_for_flow(&ctx, &url).await.client_http_version
     };
