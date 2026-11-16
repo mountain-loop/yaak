@@ -25,8 +25,6 @@ use std::time::SystemTime;
 use bytes::Bytes;
 use http::HeaderValue;
 use hyper_util::client::legacy::Client;
-#[cfg(not(target_os = "macos"))]
-use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use rustls::ClientConfig;
 use rustls::pki_types::CertificateDer;
@@ -201,9 +199,11 @@ pub enum ProxyEvent {
         /// connection. Not an error of the engine's or the server's.
         cancelled: bool,
     },
-    /// No response: connecting to or requesting from upstream failed, and the client got a 502,
-    /// or the engine refused the request (no host to send it to, or it looped back to the engine)
-    /// with a 4xx or 5xx of its own.
+    /// No response. The server could not be reached, so the client's connection was dropped
+    /// unanswered, as it would have failed without the proxy: `error` is then the reason in plain
+    /// words and the system's error, as a `ConnectFailed`'s. Or the request failed once it was
+    /// on its way, and the client got a 502. Or the engine refused the request (no host to send
+    /// it to) with a 4xx of its own.
     Error {
         id: u64,
         error: String,
@@ -519,19 +519,13 @@ fn upstream_tls_config(
     Ok(Arc::new(config))
 }
 
-/// Sends plain HTTP upstream. On macOS it connects through Network.framework, so Private Relay
-/// can't route the engine's own port-80 connections back into the engine (see [`nw`]).
-#[cfg(target_os = "macos")]
-type HttpClient = Client<nw::Connector, BoxBody>;
-#[cfg(not(target_os = "macos"))]
-type HttpClient = Client<HttpConnector, BoxBody>;
+/// Sends plain HTTP upstream, connecting as a CONNECT's dial does (see [`dial::Connector`]). On
+/// macOS it connects through Network.framework, so Private Relay can't route the engine's own
+/// port-80 connections back into the engine (see [`nw`]).
+type HttpClient = Client<dial::Connector, BoxBody>;
 
 fn http_client() -> HttpClient {
-    let builder = Client::builder(TokioExecutor::new());
-    #[cfg(target_os = "macos")]
-    return builder.build(nw::Connector);
-    #[cfg(not(target_os = "macos"))]
-    builder.build_http()
+    Client::builder(TokioExecutor::new()).build(dial::Connector)
 }
 
 fn via_marker() -> HeaderValue {

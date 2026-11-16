@@ -10,7 +10,7 @@ use std::time::Duration;
 use tempfile::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, copy_bidirectional};
 use tokio::net::{TcpListener, TcpStream};
-use yaak_proxy::{CaStore, ProxyConfig, start_proxy};
+use yaak_proxy::{CaStore, ProxyConfig, ProxyEvent, start_proxy};
 
 type NwObject = *mut c_void;
 
@@ -52,14 +52,16 @@ async fn read_head(stream: &mut (impl AsyncReadExt + Unpin)) -> String {
 /// through Network.framework, which falls back to the system proxy, the engine, when there is no
 /// direct route. That fallback is a CONNECT of the engine's own, which dialling again would
 /// repeat without end, so it is answered before any dial and refused once it is known to be the
-/// engine's own. One `CONNECT` each, then the client gets a 502: for its CONNECT, and for a plain
-/// request.
+/// engine's own. One `CONNECT` each, then the client's CONNECT gets a 502 and its plain request a
+/// reset connection, each recorded with the real reason, the name not resolving, and never the
+/// fallback.
 #[tokio::test(flavor = "multi_thread")]
 async fn own_fallback_stops() {
     const TARGET: &str = "yaak-proxy-own-fallback.invalid";
     let dir = TempDir::new().unwrap();
     let ca = Arc::new(CaStore::load_or_create(dir.path()).unwrap());
-    let proxy = start_proxy(ProxyConfig::new(0, ca)).unwrap();
+    let mut proxy = start_proxy(ProxyConfig::new(0, ca)).unwrap();
+    let events = proxy.take_event_rx().unwrap();
     let engine_port = proxy.port;
 
     // Counts the CONNECTs on their way from Network.framework to the engine.
@@ -98,10 +100,38 @@ async fn own_fallback_stops() {
     let mut client = TcpStream::connect(("127.0.0.1", engine_port)).await.unwrap();
     let request = format!("GET http://{TARGET}/ HTTP/1.1\r\nHost: {TARGET}\r\n\r\n");
     client.write_all(request.as_bytes()).await.unwrap();
-    let head = tokio::time::timeout(Duration::from_secs(10), read_head(&mut client))
+    let mut received = Vec::new();
+    let read = tokio::time::timeout(Duration::from_secs(10), client.read_to_end(&mut received))
         .await
-        .expect("no response");
-    assert!(head.starts_with("HTTP/1.1 502"), "{head}");
+        .expect("the connection stayed open");
+    assert!(received.is_empty(), "{}", String::from_utf8_lossy(&received));
+    let err = read.expect_err("the connection closed cleanly");
+    assert_eq!(err.kind(), std::io::ErrorKind::ConnectionReset, "{err}");
     tokio::time::sleep(Duration::from_secs(1)).await;
     assert_eq!(connects.load(Ordering::SeqCst), 2);
+
+    let events: Vec<ProxyEvent> = events.try_iter().collect();
+    let connect_failed = events.iter().find_map(|e| match e {
+        ProxyEvent::ConnectFailed { authority, error, .. }
+            if authority == &format!("{TARGET}:80") =>
+        {
+            Some(error.clone())
+        }
+        _ => None,
+    });
+    let request_id = events.iter().find_map(|e| match e {
+        ProxyEvent::RequestStart { id, url, .. } if url == &format!("http://{TARGET}/") => {
+            Some(*id)
+        }
+        _ => None,
+    });
+    let request_failed = events.iter().find_map(|e| match e {
+        ProxyEvent::Error { id, error, .. } if Some(*id) == request_id => Some(error.clone()),
+        _ => None,
+    });
+    for error in [connect_failed, request_failed] {
+        let error = error.unwrap_or_else(|| panic!("no failure recorded in {events:#?}"));
+        assert!(error.starts_with("DNS lookup failed: "), "{error}");
+        assert!(!error.contains("system proxy"), "{error}");
+    }
 }

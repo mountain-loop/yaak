@@ -17,8 +17,6 @@ use hyper::http::request::Parts;
 use hyper::http::uri::{Authority, PathAndQuery, Scheme};
 use hyper::upgrade::OnUpgrade;
 use hyper::{Method, Request, Response, StatusCode, Uri};
-#[cfg(not(target_os = "macos"))]
-use hyper_util::client::legacy::connect::HttpInfo;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use log::{debug, info, warn};
 use rustls::pki_types::ServerName;
@@ -27,7 +25,7 @@ use tokio::net::TcpStream;
 use tokio_rustls::{LazyConfigAcceptor, TlsConnector};
 
 use crate::body::{BodyParser, CaptureBody, Direction};
-use crate::connection::serve_tls;
+use crate::connection::{Reset, ResetHandle, serve_tls};
 use crate::decrypt::Verdict;
 use crate::dial::{self, Dialled, UpstreamIo};
 use crate::grpc::{self, GrpcParser};
@@ -279,6 +277,21 @@ impl Flow {
             .unwrap()
     }
 
+    /// Ends the flow as an error, its server unreachable, and resets the client's connection
+    /// unanswered, so the client reports a connection error of its own, as it would without the
+    /// proxy. A response of the engine's would look the server's.
+    fn unreachable(mut self, unreachable: &dial::Unreachable, conn: &ResetHandle) -> Reset {
+        self.answered = true;
+        let error = unreachable.to_string();
+        debug!("Flow {} could not reach the server: {error}", self.id);
+        self.engine.emit(ProxyEvent::Error {
+            id: self.id,
+            error,
+            elapsed_ms: self.start.elapsed().as_millis() as u64,
+        });
+        conn.reset()
+    }
+
     fn fail(mut self, error: String) -> Response<BoxBody> {
         // The request failed because the client stopped sending its body: it cancelled. The
         // answer goes nowhere, and dropping the flow unanswered says so.
@@ -316,11 +329,14 @@ fn bad_gateway(body: String) -> Response<BoxBody> {
     Response::builder().status(StatusCode::BAD_GATEWAY).body(text_body(body)).unwrap()
 }
 
+/// Serves a request to the listener. A plain HTTP request whose server can't be reached resets
+/// the client's connection through `conn`, failing with the [`Reset`].
 pub(crate) async fn handle_request(
     mut req: Request<Incoming>,
     client: ClientConn,
     engine: Arc<Engine>,
-) -> Result<Response<BoxBody>, Infallible> {
+    conn: ResetHandle,
+) -> Result<Response<BoxBody>, Reset> {
     if req.method() == Method::CONNECT {
         return Ok(handle_connect(req, client, engine).await);
     }
@@ -348,21 +364,16 @@ pub(crate) async fn handle_request(
 
     let (parts, body) = req.into_parts();
     let outgoing = Request::from_parts(parts, flow.capture_request(body));
-    Ok(match engine.http_client.request(outgoing).await {
+    match engine.http_client.request(outgoing).await {
         Ok(resp) => {
-            let remote_addr = plain_remote_addr(&resp);
-            flow.respond(resp, remote_addr)
+            let remote_addr = resp.extensions().get::<dial::RemoteAddr>().map(|a| a.0);
+            Ok(flow.respond(resp, remote_addr))
         }
-        Err(e) => flow.fail(error_chain(&e)),
-    })
-}
-
-/// The address `Engine::http_client` connected to for `resp`.
-fn plain_remote_addr(resp: &Response<Incoming>) -> Option<SocketAddr> {
-    #[cfg(target_os = "macos")]
-    return resp.extensions().get::<crate::nw::RemoteAddr>().map(|a| a.0);
-    #[cfg(not(target_os = "macos"))]
-    resp.extensions().get::<HttpInfo>().map(|i| i.remote_addr())
+        Err(e) => match dial::unreachable_of(&e) {
+            Some(unreachable) => Err(flow.unreachable(unreachable, &conn)),
+            None => Ok(flow.fail(error_chain(&e))),
+        },
+    }
 }
 
 /// Whether `req` carries this engine's `Via` mark, which it adds to every plain-HTTP request it

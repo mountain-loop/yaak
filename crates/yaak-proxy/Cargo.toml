@@ -27,12 +27,12 @@ rustls-native-certs = "0.8"
 tokio-rustls = "0.26"
 pem = "3"
 time = "0.3"
+tower-service = "0.3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6"
 dispatch2 = "0.3"
 libc = "0.2"
-tower-service = "0.3"
 
 [dev-dependencies]
 futures-util = "0.3"

@@ -1867,19 +1867,150 @@ async fn plain_http_get() {
     assert_eq!((status, remote_addr), (200, Some(upstream)));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn unreachable_upstream_is_an_error() {
-    let h = Harness::start(1024);
-    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap();
-    let url = format!("http://{closed}/");
+/// Sends `request` on `tcp`, a client's connection to the proxy, and reads what comes back until
+/// the connection ends: the bytes, and how it ended.
+async fn send_raw(tcp: &mut TcpStream, request: &str) -> (Vec<u8>, std::io::Result<usize>) {
+    tcp.write_all(request.as_bytes()).await.unwrap();
+    let mut received = Vec::new();
+    let read = tokio::time::timeout(Duration::from_secs(15), tcp.read_to_end(&mut received)).await;
+    (received, read.expect("the connection stayed open"))
+}
 
-    let resp = h.client().get(&url).send().await.unwrap();
-    assert_eq!(resp.status(), 502);
+fn get(url: &str, host: &str) -> String {
+    format!("GET {url} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: yaak-test\r\n\r\n")
+}
 
+/// Asserts the client's connection was reset with no response, as a client would see it fail
+/// without the proxy, not answered with a response of the engine's that would look the server's.
+fn assert_reset((received, read): (Vec<u8>, std::io::Result<usize>)) {
+    assert!(received.is_empty(), "{}", String::from_utf8_lossy(&received));
+    let err = read.expect_err("the connection closed cleanly");
+    assert_eq!(err.kind(), std::io::ErrorKind::ConnectionReset, "{err}");
+}
+
+/// The one flow of a plain request whose server could not be reached: its request, ended as an
+/// error with no response. Returns the error.
+fn unreachable_flow(h: &Harness, url: &str) -> String {
     let events = h.flow_events();
+    let starts: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            ProxyEvent::RequestStart { method, url, .. } => Some((method.clone(), url.clone())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(starts, [("GET".to_string(), url.to_string())], "{events:#?}");
+    assert!(headers(&events, true).contains(&("user-agent".into(), "yaak-test".into())));
+    assert!(!events.iter().any(|e| matches!(e, ProxyEvent::ResponseStart { .. })), "{events:#?}");
     let error = find!(events, ProxyEvent::Error { error, .. } => error.clone());
-    assert!(error.to_lowercase().contains("connect"), "{error}");
-    assert!(!events.iter().any(|e| matches!(e, ProxyEvent::ResponseStart { .. })));
+    assert!(!error.contains("system proxy"), "{error}");
+    error
+}
+
+/// A server that can't be reached resets the client's connection, as connecting to it without
+/// the proxy would have failed, and the flow ends as an error with the reason in plain words.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_name_that_does_not_resolve_resets_the_plain_request() {
+    within(async {
+        let h = Harness::start(1024);
+        let url = "http://yaak-proxy-test.invalid/";
+        let mut tcp = TcpStream::connect(("127.0.0.1", h.proxy.port)).await.unwrap();
+        assert_reset(send_raw(&mut tcp, &get(url, "yaak-proxy-test.invalid")).await);
+        let error = unreachable_flow(&h, url);
+        assert!(error.starts_with("DNS lookup failed: "), "{error}");
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_closed_port_resets_the_plain_request() {
+    within(async {
+        let h = Harness::start(1024);
+        let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap();
+        let url = format!("http://{closed}/");
+        let mut tcp = TcpStream::connect(("127.0.0.1", h.proxy.port)).await.unwrap();
+        assert_reset(send_raw(&mut tcp, &get(&url, &closed.to_string())).await);
+        let error = unreachable_flow(&h, &url);
+        assert!(error.starts_with("Connection refused: "), "{error}");
+    })
+    .await
+}
+
+/// A client sees the failure as its own connection error.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unreachable_server_is_a_connection_error_to_the_client() {
+    within(async {
+        let h = Harness::start(1024);
+        let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap();
+        let err = h.client().get(format!("http://{closed}/")).send().await.unwrap_err();
+        assert!(err.status().is_none(), "{err:?}");
+        let error = find!(h.flow_events(), ProxyEvent::Error { error, .. } => error.clone());
+        assert!(error.starts_with("Connection refused: "), "{error}");
+    })
+    .await
+}
+
+/// Only the connection the failed request came on is reset: the request before it on that
+/// connection was answered, and a new connection works.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_request_resets_its_keep_alive_connection_alone() {
+    within(async {
+        let h = Harness::start(1024);
+        let upstream = spawn_upstream(None).await;
+        let hello = format!("http://{upstream}/hello");
+        let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap();
+        let unreachable = format!("http://{closed}/");
+
+        let mut tcp = TcpStream::connect(("127.0.0.1", h.proxy.port)).await.unwrap();
+        tcp.write_all(get(&hello, &upstream.to_string()).as_bytes()).await.unwrap();
+        let mut head = Vec::new();
+        while !head.ends_with(b"\r\n\r\n") {
+            head.push(tcp.read_u8().await.unwrap());
+        }
+        let head = String::from_utf8(head).unwrap();
+        assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+        assert!(head.to_ascii_lowercase().contains("content-length: 5\r\n"), "{head}");
+        let mut body = [0u8; 5];
+        tcp.read_exact(&mut body).await.unwrap();
+        assert_eq!(&body, b"hello");
+        assert_reset(send_raw(&mut tcp, &get(&unreachable, &closed.to_string())).await);
+
+        assert_eq!(h.client().get(&hello).send().await.unwrap().text().await.unwrap(), "hello");
+
+        let flows = h.flows_events(3);
+        let mut ends: Vec<_> = flows
+            .values()
+            .map(|events| {
+                let url = find!(events, ProxyEvent::RequestStart { url, .. } => url.clone());
+                let status = events.iter().find_map(|e| match e {
+                    ProxyEvent::ResponseStart { status, .. } => Some(*status),
+                    _ => None,
+                });
+                let error = events.iter().find_map(|e| match e {
+                    ProxyEvent::Error { error, .. } => Some(error.clone()),
+                    _ => None,
+                });
+                (
+                    flow_id(&events[0]),
+                    url,
+                    status,
+                    error.is_some_and(|e| e.starts_with("Connection refused: ")),
+                )
+            })
+            .collect();
+        ends.sort();
+        let ends: Vec<_> =
+            ends.into_iter().map(|(_, url, status, refused)| (url, status, refused)).collect();
+        assert_eq!(
+            ends,
+            [
+                (hello.clone(), Some(200), false),
+                (unreachable, None, true),
+                (hello, Some(200), false)
+            ]
+        );
+    })
+    .await
 }
 
 /// Telegram's HTTP transport request, `POST /api` with only `Host` to say where it goes, from the
