@@ -51,21 +51,33 @@ pub(crate) struct Dialled {
 /// the CONNECT named it, an IPv6 address in brackets. On macOS, port 80 goes through
 /// Network.framework.
 pub(crate) async fn dial(host: &str, port: u16) -> Result<Dialled, Unreachable> {
-    let through_nw = cfg!(target_os = "macos") && port == 80;
-    dial_within(host, port, through_nw, CONNECT_TIMEOUT).await
+    let route = if cfg!(target_os = "macos") && port == 80 { Route::Nw } else { Route::InTurn };
+    within(CONNECT_TIMEOUT, |deadline| open(host, port, route, deadline)).await
 }
 
-/// [`dial`], through Network.framework when `through_nw` is set (on macOS only), within
-/// `timeout`.
-async fn dial_within(
-    host: &str,
-    port: u16,
-    through_nw: bool,
+/// How a connection is opened.
+#[derive(Clone, Copy)]
+enum Route {
+    /// A socket, to each address in turn ([`connect_any`]).
+    InTurn,
+    /// A socket, to each family's addresses in turn, the second family's from
+    /// [`FALLBACK_DELAY`] on ([`connect_racing`]), as hyper's own HTTP connector does.
+    Racing,
+    /// Network.framework, on macOS only.
+    Nw,
+}
+
+/// Runs `open`, given the deadline, timing it and failing it as timed out once `timeout` passes.
+async fn within<F>(
     timeout: Duration,
-) -> Result<Dialled, Unreachable> {
+    open: impl FnOnce(tokio::time::Instant) -> F,
+) -> Result<Dialled, Unreachable>
+where
+    F: Future<Output = Result<UpstreamIo, Unreachable>>,
+{
     let start = Instant::now();
     let deadline = tokio::time::Instant::now() + timeout;
-    let io = match tokio::time::timeout_at(deadline, open(host, port, through_nw, deadline)).await {
+    let io = match tokio::time::timeout_at(deadline, open(deadline)).await {
         Ok(io) => io?,
         Err(_) => return Err(Unreachable::of(&timed_out(timeout), false)),
     };
@@ -80,11 +92,11 @@ fn timed_out(timeout: Duration) -> io::Error {
 async fn open(
     host: &str,
     port: u16,
-    through_nw: bool,
+    route: Route,
     deadline: tokio::time::Instant,
 ) -> Result<UpstreamIo, Unreachable> {
     #[cfg(target_os = "macos")]
-    if through_nw {
+    if let Route::Nw = route {
         let bare = host.trim_start_matches('[').trim_end_matches(']');
         return match crate::nw::connect(bare, port).await {
             Ok(nw) => Ok(UpstreamIo::Nw(nw)),
@@ -95,9 +107,12 @@ async fn open(
             Err(e) => Err(Unreachable::of(&e, crate::nw::is_lookup_failure(&e))),
         };
     }
-    let _ = through_nw;
     let addrs = lookup(host, port).await?;
-    connect_any(&addrs, deadline).await.map(UpstreamIo::Tcp).map_err(|e| Unreachable::of(&e, false))
+    let tcp = match route {
+        Route::Racing => connect_racing(&addrs, deadline).await,
+        _ => connect_any(&addrs, deadline).await,
+    };
+    tcp.map(UpstreamIo::Tcp).map_err(|e| Unreachable::of(&e, false))
 }
 
 /// The addresses of `host`, looked up apart from connecting, so a failure is known to be the
@@ -152,9 +167,52 @@ async fn connect_any(
     Err(last.unwrap_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no address for the host")))
 }
 
+/// How long [`connect_racing`] waits on the first family's addresses before trying the other's
+/// alongside: hyper's own HTTP connector's delay.
+const FALLBACK_DELAY: Duration = Duration::from_millis(300);
+
+/// Connects as hyper's own HTTP connector does, Happy Eyeballs in short: to the addresses of the
+/// first address's family in turn, and to the other family's in turn alongside, from
+/// [`FALLBACK_DELAY`] on or as soon as the first family's have all failed. The first to connect
+/// wins, so a family whose route is broken costs no more than the delay. Fails with the first
+/// family's error.
+async fn connect_racing(
+    addrs: &[SocketAddr],
+    deadline: tokio::time::Instant,
+) -> io::Result<TcpStream> {
+    let (preferred, fallback): (Vec<SocketAddr>, Vec<SocketAddr>) =
+        addrs.iter().partition(|a| a.is_ipv6() == addrs[0].is_ipv6());
+    if fallback.is_empty() {
+        return connect_any(&preferred, deadline).await;
+    }
+    let first = connect_any(&preferred, deadline);
+    tokio::pin!(first);
+    tokio::select! {
+        result = &mut first => {
+            return match result {
+                Ok(tcp) => Ok(tcp),
+                Err(e) => connect_any(&fallback, deadline).await.or(Err(e)),
+            };
+        }
+        () = tokio::time::sleep(FALLBACK_DELAY) => {}
+    }
+    let second = connect_any(&fallback, deadline);
+    tokio::pin!(second);
+    tokio::select! {
+        result = &mut first => match result {
+            Ok(tcp) => Ok(tcp),
+            Err(e) => second.await.or(Err(e)),
+        },
+        result = &mut second => match result {
+            Ok(tcp) => Ok(tcp),
+            Err(_) => first.await,
+        },
+    }
+}
+
 /// Connects `Engine::http_client` to plain HTTP servers as [`dial`] does, within
-/// [`CONNECT_TIMEOUT`], and on macOS through Network.framework whatever the port, as the plain
-/// HTTP client always has. A server that can't be reached fails with an [`Unreachable`], which
+/// [`CONNECT_TIMEOUT`]: on macOS through Network.framework whatever the port, and elsewhere
+/// racing the address families as hyper's own HTTP connector did. A server that can't be reached fails with an [`Unreachable`], which
 /// [`unreachable_of`] finds in the client's error.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct Connector;
@@ -176,8 +234,9 @@ impl tower_service::Service<Uri> for Connector {
             }
             let host = uri.host().ok_or_else(|| invalid("invalid URL, host is missing"))?;
             let port = uri.port_u16().unwrap_or(80);
-            let through_nw = cfg!(target_os = "macos");
-            let dialled = dial_within(host, port, through_nw, CONNECT_TIMEOUT).await?;
+            let route = if cfg!(target_os = "macos") { Route::Nw } else { Route::Racing };
+            let dialled = within(CONNECT_TIMEOUT, |deadline| open(host, port, route, deadline));
+            let dialled = dialled.await?;
             Ok(PlainIo(TokioIo::new(dialled.io)))
         })
     }
@@ -471,21 +530,39 @@ mod tests {
         assert!(dialled.io.is_write_vectored());
     }
 
-    /// A server that never answers fails within the limit as a timeout. The plain HTTP client's
-    /// connections are opened the same way, within [`CONNECT_TIMEOUT`].
+    /// A connection that never opens fails at the limit as a timeout. The plain HTTP client's
+    /// connections are opened within the same [`CONNECT_TIMEOUT`].
     #[tokio::test]
-    async fn a_server_that_never_answers_times_out() {
-        let limit = Duration::from_millis(200);
+    async fn a_connection_that_never_opens_times_out() {
+        let limit = Duration::from_millis(100);
         let started = Instant::now();
-        // Reserved for documentation (RFC 5737), so nothing answers there.
-        let Err(unreachable) = dial_within("192.0.2.1", 9, false, limit).await else {
-            panic!("connected to an address that never answers");
+        let never = |_| std::future::pending::<Result<UpstreamIo, Unreachable>>();
+        let Err(unreachable) = within(limit, never).await else {
+            panic!("a pending open connected");
         };
         assert_eq!(
             (unreachable.kind, unreachable.reason()),
             (UnreachableKind::TimedOut, "Timed out")
         );
-        assert!(started.elapsed() < limit * 5, "{:?}", started.elapsed());
+        let elapsed = started.elapsed();
+        assert!(elapsed >= limit && elapsed < limit * 10, "{elapsed:?}");
+    }
+
+    /// The second family is tried alongside the first once the delay passes, however the first's
+    /// address fares: here one reserved for documentation (RFC 5737), which never answers or
+    /// fails at once, depending on the network.
+    #[tokio::test]
+    async fn racing_tries_the_other_family_without_waiting_out_the_first() {
+        let Ok(listener) = tokio::net::TcpListener::bind("[::1]:0").await else {
+            return eprintln!("no IPv6 loopback here");
+        };
+        let reachable = listener.local_addr().unwrap();
+        let silent: SocketAddr = "192.0.2.1:9".parse().unwrap();
+        let started = Instant::now();
+        let deadline = tokio::time::Instant::now() + CONNECT_TIMEOUT;
+        let tcp = connect_racing(&[silent, reachable], deadline).await.unwrap();
+        assert_eq!(tcp.peer_addr().unwrap(), reachable);
+        assert!(started.elapsed() < FALLBACK_DELAY * 4, "{:?}", started.elapsed());
     }
 
     /// With no direct route, Network.framework falls back to the system proxy, which the engine
