@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { platform } from "@yaakapp-internal/platform";
 import type { AgentSetupStatus, AppMetaData } from "@yaakapp-internal/rpc-schema";
-import { Banner, Heading, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { Banner, Icon, InlineCode, SegmentedControl, SettingsPage } from "@yaakapp-internal/ui";
 import { useEffect } from "react";
 import { useKeyValue } from "../../hooks/useKeyValue";
 import { usePluginInfos } from "../../hooks/usePluginInfo";
@@ -14,13 +14,7 @@ import {
 import { appInfo } from "../../lib/appInfo";
 import { rpc } from "../../lib/rpc";
 import { Link } from "../core/Link";
-import { SegmentedControl } from "../core/SegmentedControl";
-import {
-  SettingCommand,
-  SettingSnippet,
-  SettingsList,
-  SettingsSection,
-} from "../core/SettingRow";
+import { SettingCommand, SettingSnippet, SettingsList, SettingsSection } from "../core/SettingRow";
 import { DeprecatedPluginBanner } from "./SettingsPlugins";
 
 const CLI_INSTALL_COMMAND = "npm install -g @yaakapp/cli";
@@ -57,13 +51,10 @@ export function SettingsAgents() {
   const cli = cliSetup(client);
 
   return (
-    <VStack space={1.5} className="mb-4">
-      <div className="mb-3">
-        <Heading>Agents</Heading>
-        <p className="text-text-subtle">
-          Connect AI coding agents like Claude Code and Cursor to Yaak.
-        </p>
-      </div>
+    <SettingsPage
+      title="Agents"
+      description="Connect AI coding agents like Claude Code and Cursor to Yaak."
+    >
       <SettingsList>
         <SettingsSection title={null}>
           <div className="pb-4 border-b border-border-subtle">
@@ -135,6 +126,6 @@ export function SettingsAgents() {
           />
         </SettingsSection>
       </SettingsList>
-    </VStack>
+    </SettingsPage>
   );
 }

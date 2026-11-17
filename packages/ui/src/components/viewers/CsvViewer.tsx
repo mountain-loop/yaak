@@ -31,7 +31,7 @@ export function CsvViewerInner({ text, className }: { text: string | null; class
 
   return (
     <div className="overflow-auto h-full">
-      <Table className={classNames(className, "text-sm")}>
+      <Table density="compact" className={classNames(className, "text-sm")}>
         <TableHead>
           <TableRow>
             {columnIndexes.map((columnIndex) => (

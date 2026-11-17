@@ -21,11 +21,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { useInMemoryStoredValue, type UseStoredValue } from "../../hooks/useStoredValue";
+import type { UseStoredValue } from "../../hooks/useStoredValue";
+import { type UseHostStoredValue, useEditorHost } from "../EditorHost";
 import { computeSideForDragMove } from "../../lib/dnd";
 import type { ButtonProps } from "../Button";
 import { Button } from "../Button";
 import { DropMarker } from "../DropMarker";
+import { Icon } from "../Icon";
+import type { RadioDropdownProps } from "../RadioDropdown";
+import { RadioDropdown } from "../RadioDropdown";
 
 export interface TabButtonRenderProps {
   buttonProps: Partial<ButtonProps>;
@@ -46,7 +50,16 @@ export type TabItem =
       renderButton: (props: TabButtonRenderProps) => ReactNode;
       leftSlot?: ReactNode;
       rightSlot?: ReactNode;
-    };
+    }
+  | TabOptionsItem;
+
+/** A tab whose button is also a menu of choices, labelled with the chosen one */
+export interface TabOptionsItem {
+  value: string;
+  options: Omit<RadioDropdownProps, "children">;
+  leftSlot?: ReactNode;
+  rightSlot?: ReactNode;
+}
 
 export interface TabsStorage {
   order: string[];
@@ -62,6 +75,11 @@ export interface TabsProps {
   label: string;
   /** Default tab value. If not provided, defaults to first tab. */
   defaultValue?: string;
+  /**
+   * The tab shown, over the one stored or last chosen, while it is offered. Choosing another
+   * still calls `onChangeValue`, for the owner to pass it back.
+   */
+  value?: string;
   /** Called when active tab changes */
   onChangeValue?: (value: string) => void;
   tabs: TabItem[];
@@ -76,11 +94,17 @@ export interface TabsProps {
   activeTabKey?: string;
   /** Where the order and active tab under `storageKey` are kept */
   useStoredValue?: UseStoredValue;
+  /**
+   * A key with no stored tab opens on `defaultValue`, not on the tab last chosen under another
+   * key, and a stored tab no longer offered falls back the same way
+   */
+  keyedDefault?: boolean;
 }
 
 export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
   {
     defaultValue,
+    value: controlledValue,
     onChangeValue: onChangeValueProp,
     label,
     children,
@@ -91,19 +115,24 @@ export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
     layout = "vertical",
     storageKey,
     activeTabKey,
-    useStoredValue = useInMemoryStoredValue,
+    useStoredValue: useStoredValueProp,
+    keyedDefault = false,
   }: TabsProps,
   forwardedRef: Ref<TabsRef>,
 ) {
   const ref = useRef<HTMLDivElement | null>(null);
   const reorderable = !!storageKey;
+  const host = useEditorHost();
 
-  // Use key-value storage for persistence if storageKey is provided
+  // Use key-value storage for persistence if storageKey is provided. Without one passed in, the
+  // host's local storage keeps it.
   // Handle migration from old format (string[]) to new format (TabsStorage)
-  const [rawStorage, setStorage] = useStoredValue<TabsStorage | string[]>(storageKey ?? null, {
-    order: [],
-    activeTabs: {},
-  });
+  const useStoredValue: UseHostStoredValue = useStoredValueProp ?? host.useStoredValue;
+  const [rawStorage, setStorage] = useStoredValue<TabsStorage | string[]>(
+    storageKey ?? null,
+    { order: [], activeTabs: {} },
+    "no_sync",
+  );
 
   // Migrate old format (string[]) to new format (TabsStorage)
   const storage: TabsStorage = Array.isArray(rawStorage)
@@ -114,8 +143,17 @@ export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
 
   // Get the active tab value - prefer storage (if activeTabKey), then defaultValue, then first tab
   const storedActiveTab = activeTabKey ? storage?.activeTabs?.[activeTabKey] : undefined;
-  const [internalValue, setInternalValue] = useState<string | undefined>(undefined);
-  const value = storedActiveTab ?? internalValue ?? defaultValue ?? originalTabs[0]?.value;
+  const [internal, setInternal] = useState<{ key?: string; value: string } | undefined>(undefined);
+  const internalValue =
+    keyedDefault && internal?.key !== activeTabKey ? undefined : internal?.value;
+  const offered = (v: string | undefined) =>
+    v != null && (!keyedDefault || originalTabs.some((t) => t.value === v));
+  const controlled = originalTabs.some((t) => t.value === controlledValue)
+    ? controlledValue
+    : undefined;
+  const value =
+    [controlled, storedActiveTab, internalValue, defaultValue].find(offered) ??
+    originalTabs[0]?.value;
 
   // Helper to normalize storage (handle migration from old format)
   const normalizeStorage = useCallback(
@@ -127,7 +165,7 @@ export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
   // Handle tab change - update internal state, storage if we have a key, and call prop callback
   const onChangeValue = useCallback(
     async (newValue: string) => {
-      setInternalValue(newValue);
+      setInternal({ key: activeTabKey, value: newValue });
       if (storageKey && activeTabKey) {
         await setStorage((s) => {
           const normalized = normalizeStorage(s);
@@ -481,6 +519,8 @@ function TabButton({
   const buttonContent =
     "renderButton" in tab ? (
       tab.renderButton({ buttonProps: btnProps, isActive })
+    ) : "options" in tab ? (
+      <TabOptionsButton tab={tab} buttonProps={btnProps} isActive={isActive} />
     ) : (
       <Button leftSlot={tab.leftSlot} rightSlot={tab.rightSlot} {...btnProps}>
         {"label" in tab && tab.label ? tab.label : tab.value}
@@ -526,3 +566,40 @@ export const TabContent = memo(function TabContent({
   );
   return ErrorBoundary ? <ErrorBoundary name={`Tab ${value}`}>{content}</ErrorBoundary> : content;
 });
+
+function TabOptionsButton({
+  tab,
+  buttonProps,
+  isActive,
+}: TabButtonRenderProps & { tab: TabOptionsItem }) {
+  const { options } = tab;
+  const option = options.items.find((i) => "value" in i && i.value === options.value);
+  return (
+    <RadioDropdown
+      items={options.items}
+      itemsAfter={options.itemsAfter}
+      itemsBefore={options.itemsBefore}
+      value={options.value}
+      onChange={options.onChange}
+    >
+      <Button
+        leftSlot={tab.leftSlot}
+        rightSlot={
+          <div className="flex items-center">
+            {tab.rightSlot}
+            <Icon
+              size="sm"
+              icon="chevron_down"
+              className={classNames("ml-1", isActive ? "text-text-subtle" : "text-text-subtlest")}
+            />
+          </div>
+        }
+        {...buttonProps}
+      >
+        {option && "shortLabel" in option && option.shortLabel
+          ? option.shortLabel
+          : (option?.label ?? "Unknown")}
+      </Button>
+    </RadioDropdown>
+  );
+}

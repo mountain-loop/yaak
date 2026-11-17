@@ -2,7 +2,8 @@ import type { Color } from "@yaakapp-internal/plugins";
 import classNames from "classnames";
 
 interface Props {
-  count: number | true;
+  /** A number, a dot for `true`, or a short word such as a body's type */
+  count: number | true | string;
   count2?: number | true;
   className?: string;
   color?: Color;
@@ -24,6 +25,7 @@ export function CountBadge({ count, count2, className, color, showZero }: Props)
         color === "secondary" && "text-secondary",
         color === "success" && "text-success",
         color === "notice" && "text-notice",
+        color === "info" && "text-info",
         color === "warning" && "text-warning",
         color === "danger" && "text-danger",
       )}

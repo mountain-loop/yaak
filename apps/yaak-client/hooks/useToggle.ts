@@ -1,7 +1,2 @@
-import { useCallback, useState } from "react";
-
-export function useToggle(initialValue = false) {
-  const [value, setValue] = useState<boolean>(initialValue);
-  const toggle = useCallback(() => setValue((v) => !v), []);
-  return [value, toggle, setValue] as const;
-}
+// From its own entry rather than the package index, so tests that mock the index keep it
+export { useToggle } from "@yaakapp-internal/ui/useToggle";

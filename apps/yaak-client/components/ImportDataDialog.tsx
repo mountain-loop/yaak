@@ -5,7 +5,15 @@ import {
   type ImportSource,
   type Workspace,
 } from "@yaakapp-internal/models";
-import { Banner, FormattedError, HStack, Icon, VStack, IconTooltip } from "@yaakapp-internal/ui";
+import {
+  Banner,
+  FormattedError,
+  HStack,
+  Icon,
+  VStack,
+  IconTooltip,
+  SegmentedControl,
+} from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "../lib/errorMessage";
@@ -22,7 +30,6 @@ import { CheckboxTree } from "./core/CheckboxTree";
 import { Chip } from "./core/Chip";
 import { DialogFooter } from "./core/Dialog";
 import { Select } from "./core/Select";
-import { SegmentedControl } from "./core/SegmentedControl";
 import { pluralize } from "@yaakapp-internal/lib/pluralize";
 
 interface Props {

@@ -17,5 +17,6 @@ yaak-rpc-schema = { workspace = true }
 yaak-templates = { workspace = true }
 
 [dev-dependencies]
+rusqlite = "0.38"
 tempfile = "3"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

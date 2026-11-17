@@ -20,7 +20,7 @@ use yaak_proxy_lib::flows::{BodyEncoding, FlowFilter};
 use yaak_proxy_lib::models::{Flow, FlowBody};
 use yaak_proxy_lib::save::SaveFlowRequest;
 use yaak_proxy_lib::settings::ProxySettings;
-use yaak_proxy_lib::{ProxyCtx, ProxyState};
+use yaak_proxy_lib::{MasterKeySource, ProxyCtx, ProxyState};
 use yaak_rpc::RpcEventEmitter;
 
 async fn route(_req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
@@ -44,12 +44,18 @@ async fn spawn_upstream() -> SocketAddr {
     addr
 }
 
+/// The keychain every context and reader here shares, as the app and the CLI share one.
+fn keys() -> MasterKeySource {
+    static KEYS: std::sync::OnceLock<MasterKeySource> = std::sync::OnceLock::new();
+    KEYS.get_or_init(MasterKeySource::memory).clone()
+}
+
 /// A context over `dir` whose engine picks a free port, saving into Yaak's data in `client`.
 fn ctx(dir: &Path, client: &Path) -> ProxyCtx {
     let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
     settings.save(&dir.join("settings.json")).unwrap();
     let (events, _rx) = RpcEventEmitter::new();
-    ProxyCtx::new(dir, events).unwrap().with_client_data_dir(client)
+    ProxyCtx::new(dir, events, keys()).unwrap().with_client_data_dir(client)
 }
 
 /// Sends one POST through the engine and waits for its flow.
@@ -72,7 +78,7 @@ async fn capture_flow(ctx: &ProxyCtx) -> Flow {
 
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+        let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
         if let Some(flow) = flows.into_iter().find(|f| f.url == url) {
             return flow;
         }
@@ -117,7 +123,8 @@ async fn round_trip() {
     let wrong = http.get(&url).bearer_auth("not-the-token").send().await.unwrap();
     assert_eq!(wrong.status(), 401);
 
-    let ProxyConnection::Live(client) = ProxyConnection::connect(dir.path()).unwrap() else {
+    let ProxyConnection::Live(client) = ProxyConnection::connect(dir.path(), &keys()).unwrap()
+    else {
         panic!("expected the live owner");
     };
     let status = client.status().await.unwrap();
@@ -137,14 +144,18 @@ async fn round_trip() {
     assert_eq!(flows.iter().map(|f| &f.id).collect::<Vec<_>>(), vec![&flow.id]);
     let following = FlowFilter { after: Some(flow.id.clone()), ..Default::default() };
     assert!(client.flows(&following).await.unwrap().is_empty());
-    let filter = FlowFilter { status: Some("4xx".into()), ..Default::default() };
+    let filter = FlowFilter::search("@status:4xx");
     assert!(client.flows(&filter).await.unwrap().is_empty());
-    let search = FlowFilter { q: Some("CHARGES post 2xx".into()), ..Default::default() };
+    let search = FlowFilter::search("CHARGES post @status:2xx");
     assert_eq!(client.flows(&search).await.unwrap().len(), 1);
-    let search = FlowFilter { q: Some("charges get".into()), ..Default::default() };
+    let search = FlowFilter::search("charges @method:get");
     assert!(client.flows(&search).await.unwrap().is_empty());
+    // Listing is not reading; an agent reading the flow marks it.
+    let read = FlowFilter::search("@is:read");
+    assert!(client.flows(&read).await.unwrap().is_empty());
 
     let detail = client.flow(&flow.id, 8).await.unwrap();
+    assert_eq!(client.flows(&read).await.unwrap().len(), 1);
     assert_eq!(detail.flow.method, "POST");
     let request_body = detail.request_body.unwrap();
     assert_eq!((request_body.data.as_str(), request_body.truncated), (r#"{"amount"#, true));
@@ -268,7 +279,7 @@ async fn offline_reads_proxy_db() {
         flow
     };
 
-    let connection = ProxyConnection::connect(dir.path()).unwrap();
+    let connection = ProxyConnection::connect(dir.path(), &keys()).unwrap();
     assert!(matches!(connection, ProxyConnection::Offline(_)));
     let flows = connection.flows(&FlowFilter::default()).await.unwrap();
     assert_eq!(flows.iter().map(|f| &f.id).collect::<Vec<_>>(), vec![&flow.id]);
@@ -276,11 +287,11 @@ async fn offline_reads_proxy_db() {
     assert_eq!(detail.response_body.unwrap().data, r#"{"id":"ch_1","amount":42}"#);
     let body = connection.body(&flow.id, FlowBody::Request).await.unwrap();
     assert_eq!(body.data, br#"{"amount":42}"#);
-    let posts = FlowFilter { method: Some("post".into()), ..Default::default() };
+    let posts = FlowFilter::search("@method:post");
     assert_eq!(connection.har(&posts).await.unwrap().log.entries.len(), 1);
 
     let empty = tempfile::tempdir().unwrap();
-    let err = ProxyConnection::connect(empty.path()).err().unwrap();
+    let err = ProxyConnection::connect(empty.path(), &keys()).err().unwrap();
     assert!(err.starts_with("No captured traffic yet"), "{err}");
 }
 
@@ -335,10 +346,7 @@ async fn save_writes_the_request_into_yaak() {
     let saved = client.save(&flow.id, &target).await.unwrap();
     let dropped: Vec<&str> = saved.dropped_headers.iter().map(|h| h.name.as_str()).collect();
     assert!(dropped.contains(&"host") && dropped.contains(&"content-length"), "{dropped:?}");
-    assert_eq!(
-        saved.warnings,
-        vec!["The Authorization header is saved as captured, in plain text."]
-    );
+    assert_eq!(saved.warnings, vec!["The Authorization header is saved in plain text."]);
 
     // The row is in Yaak's database, written as a sync so a running Yaak picks it up.
     let request = query_manager.connect().get_http_request(&saved.request.id).unwrap();
@@ -365,7 +373,7 @@ async fn save_writes_the_request_into_yaak() {
     assert!(source.contains("sync"), "{source}");
 
     // The flow remembers what it was saved as.
-    let flow = yaak_proxy_lib::flows::get(&ctx.db, &flow.id).unwrap();
+    let flow = yaak_proxy_lib::flows::get(&ctx.db().unwrap(), &flow.id).unwrap();
     assert_eq!(flow.saved_request_id, Some(saved.request.id));
 
     // Without a name, through the control API as the CLI saves, it stays unnamed, as Yaak
@@ -432,7 +440,7 @@ async fn start_is_refused_while_another_process_owns_the_engine() {
     std::fs::write(dir.path().join("control.json"), serde_json::to_vec(&owner).unwrap()).unwrap();
 
     let err = ctx.start().unwrap_err();
-    assert!(err.contains("already running in the yaak CLI"), "{err}");
+    assert!(err.contains("already running in the CLI"), "{err}");
     assert_eq!(ctx.port(), None);
 
     daemon.kill().unwrap();
@@ -460,7 +468,7 @@ async fn the_app_takes_over_from_the_cli() {
 
     // The app opens onto the CLI's engine and cannot start its own.
     let app = ctx(dir.path(), client_dir.path());
-    assert!(app.serve_control_api().unwrap_err().contains("already running in the yaak CLI"));
+    assert!(app.serve_control_api().unwrap_err().contains("already running in the CLI"));
     let state = rpc(&app, "get_proxy_state", json!({})).await.unwrap();
     assert_eq!(state["state"], "stopped");
     assert_eq!(state["otherOwner"]["owner"], "cli");
@@ -481,6 +489,103 @@ async fn the_app_takes_over_from_the_cli() {
     app.stop().unwrap();
     app.stop_control_api();
     assert!(control::live_owner(dir.path()).is_none());
+}
+
+/// Tunnels listed while the CLI owned the engine can't be closed once the app has taken over,
+/// by id or by flow, though the app's engine numbers its tunnels from 1 again: a request closes
+/// only tunnels of the engine run it names. An entry names what is open now.
+#[tokio::test(flavor = "multi_thread")]
+async fn tunnels_listed_before_the_app_took_over_close_nothing_after() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let cli = ctx(dir.path(), client_dir.path()).with_owner(Owner::Cli);
+    let mut server = ControlServer::start(cli.clone()).unwrap();
+    let stop_rx = server.take_stop_rx().unwrap();
+    let daemon = std::thread::spawn(move || {
+        stop_rx.recv().unwrap();
+        drop(server);
+    });
+    cli.start().unwrap();
+    let app = ctx(dir.path(), client_dir.path());
+
+    let echo = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let echo_port = echo.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        loop {
+            let (mut tcp, _) = echo.accept().await.unwrap();
+            tokio::spawn(async move {
+                let (mut read, mut write) = tcp.split();
+                let _ = tokio::io::copy(&mut read, &mut write).await;
+            });
+        }
+    });
+    // The address the echo listens on, not `localhost`, which Windows tries as `::1` first and
+    // takes seconds to give up on.
+    let target = format!("127.0.0.1:{echo_port}");
+    let open = |port: u16| {
+        let target = target.clone();
+        async move {
+            let mut tcp = tokio::net::TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+            let connect = format!("CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n\r\n");
+            tcp.write_all(connect.as_bytes()).await.unwrap();
+            let mut head = Vec::new();
+            while !head.ends_with(b"\r\n\r\n") {
+                head.push(tcp.read_u8().await.unwrap());
+            }
+            tcp
+        }
+    };
+    let alive = |mut tcp: tokio::net::TcpStream| async move {
+        let mut echoed = [0u8; 4];
+        let ok = tcp.write_all(b"ping").await.is_ok() && tcp.read_exact(&mut echoed).await.is_ok();
+        (ok, tcp)
+    };
+    let listed = |app: &ProxyCtx| {
+        let app = app.clone();
+        async move {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                let tunnels = rpc(&app, "list_reconnectable_tunnels", json!({})).await.unwrap();
+                if tunnels.as_array().unwrap().len() == 1 && !tunnels[0]["flowId"].is_null() {
+                    return tunnels[0].clone();
+                }
+                assert!(Instant::now() < deadline, "the tunnel never showed: {tunnels}");
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        }
+    };
+
+    // The CLI's tunnel, listed through it.
+    let (ok, _old) = alive(open(cli.port().unwrap()).await).await;
+    assert!(ok);
+    rpc(&app, "edit_decrypt_list", json!({"add": ["host:127.0.0.1"]})).await.unwrap();
+    let old = listed(&app).await;
+
+    // The app takes over, and its first tunnel is number 1 again.
+    assert_eq!(rpc(&app, "take_over", json!({})).await.unwrap(), json!(true));
+    daemon.join().unwrap();
+    rpc(&app, "edit_decrypt_list", json!({"remove": ["host:127.0.0.1"]})).await.unwrap();
+    let (ok, new) = alive(open(app.port().unwrap()).await).await;
+    assert!(ok);
+    rpc(&app, "edit_decrypt_list", json!({"add": ["host:127.0.0.1"]})).await.unwrap();
+    let current = listed(&app).await;
+    assert_ne!(current["id"], old["id"]);
+    assert_ne!(current["flowId"], old["flowId"]);
+
+    let by_id = rpc(&app, "reconnect_tunnels", json!({"ids": [old["id"]]})).await.unwrap();
+    assert_eq!(by_id["closed"], 0);
+    let by_flow = rpc(&app, "reconnect_tunnels", json!({"flowId": old["flowId"]})).await.unwrap();
+    assert_eq!(by_flow["closed"], 0);
+    let (ok, mut new) = alive(new).await;
+    assert!(ok, "the app's tunnel was closed by the CLI's ids");
+
+    // An entry is resolved against what is open now.
+    let by_entry = rpc(&app, "reconnect_tunnels", json!({"entry": "host:127.0.0.1"})).await;
+    assert_eq!(by_entry.unwrap()["closed"], 1);
+    let mut rest = Vec::new();
+    let _ = new.read_to_end(&mut rest).await;
+    app.stop().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -564,7 +669,8 @@ async fn the_save_dialog_reads_workspaces_previews_and_saves() {
         (workspace.id.as_str(), Some(folder.id.as_str()))
     );
     let stored = ctx
-        .db
+        .db()
+        .unwrap()
         .with_conn(|db| db.find_one::<Flow>(yaak_proxy_lib::models::FlowIden::Id, &flow.id))
         .unwrap();
     assert_eq!(stored.saved_request_id.as_deref(), Some(request_id));
@@ -594,7 +700,7 @@ async fn export_har_writes_the_flows_asked_for() {
     assert_eq!(read(&selected)["log"]["entries"].as_array().unwrap().len(), 1);
 
     let searched = dir.path().join("searched.har");
-    let filter = json!({ "q": "charges", "limit": 1 });
+    let filter = json!({ "query": "charges", "limit": 1 });
     let written =
         rpc(&ctx, "export_har", json!({ "path": searched, "filter": filter })).await.unwrap();
     // The whole search, not the page the list had loaded.
@@ -605,7 +711,7 @@ async fn export_har_writes_the_flows_asked_for() {
 
     let none = dir.path().join("none.har");
     let written =
-        rpc(&ctx, "export_har", json!({ "path": none, "filter": { "q": "nothing-matches" } }))
+        rpc(&ctx, "export_har", json!({ "path": none, "filter": { "query": "nothing-matches" } }))
             .await
             .unwrap();
     assert_eq!(written, 0);
@@ -636,7 +742,7 @@ async fn flows_name_the_app_that_sent_them() {
 
     let deadline = Instant::now() + Duration::from_secs(5);
     let flow = loop {
-        let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+        let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
         if let Some(flow) = flows.into_iter().find(|f| f.url == url) {
             break flow;
         }
@@ -649,8 +755,8 @@ async fn flows_name_the_app_that_sent_them() {
     assert_eq!(flow.client_path.as_deref(), Some("/usr/bin/curl"));
 
     // The search and the sidebar's Apps group find it by its path.
-    let filter = FlowFilter { app: Some(vec!["/usr/bin/curl".into()]), ..Default::default() };
-    assert_eq!(yaak_proxy_lib::flows::list(&ctx.db, &filter).unwrap().len(), 1);
+    let filter = FlowFilter::search("@app:/usr/bin/curl");
+    assert_eq!(yaak_proxy_lib::flows::list(&ctx.db().unwrap(), &filter).unwrap().len(), 1);
 }
 
 /// Sends one GET through the engine, without waiting for a flow.
@@ -682,9 +788,12 @@ async fn pausing_stores_no_flows_and_resuming_stores_them_again() {
     assert_eq!((state["state"].as_str(), &state["recording"]), (Some("running"), &json!(false)));
     let paused = send_through(&ctx, "/while-paused").await;
     tokio::time::sleep(Duration::from_millis(300)).await;
-    let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+    let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
     assert!(flows.iter().all(|f| f.url != paused), "a flow was stored while paused");
-    assert!(ctx.blobs.connect().list_body_ids().unwrap().is_empty(), "a body was stored");
+    assert!(
+        ctx.blobs().unwrap().connect().list_body_ids().unwrap().is_empty(),
+        "a body was stored"
+    );
 
     // Resumed through the control API, as the CLI would.
     let status = client.set_recording(true).await.unwrap();
@@ -760,4 +869,197 @@ async fn another_app_owning_the_engine_is_not_taken_over() {
     assert!(other.port().is_some());
     assert_eq!(app.port(), None);
     other.stop().unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_decrypt_list_is_read_and_replaced_over_the_control_api() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let ctx = ctx(dir.path(), client_dir.path());
+    let _server = ControlServer::start(ctx.clone()).unwrap();
+    let info = control::read(dir.path()).unwrap();
+    let http = reqwest::Client::builder().no_proxy().build().unwrap();
+    let url = format!("{}/decrypt", info.base_url());
+
+    assert_eq!(http.get(&url).send().await.unwrap().status(), 401);
+    let list: Value =
+        http.get(&url).bearer_auth(&info.token).send().await.unwrap().json().await.unwrap();
+    assert!(list["entries"].as_array().unwrap().iter().all(|e| e["builtIn"] == true));
+
+    let put = http
+        .put(&url)
+        .bearer_auth(&info.token)
+        .json(&json!({"entries": ["*", "!host:*.bank.example"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(put.status(), 200);
+    let list: Value = put.json().await.unwrap();
+    assert_eq!(
+        list["entries"],
+        json!([
+            {"entry": "*", "builtIn": false},
+            {"entry": "!host:*.bank.example", "builtIn": false},
+        ]),
+        "every built-in exclusion left out is removed"
+    );
+    // Saved, it says how many open connections stay encrypted: none, as none are open.
+    assert_eq!(list["stillEncrypted"], 0);
+    let read: Value =
+        http.get(&url).bearer_auth(&info.token).send().await.unwrap().json().await.unwrap();
+    assert_eq!(read["entries"], list["entries"]);
+
+    let bad = http
+        .put(&url)
+        .bearer_auth(&info.token)
+        .json(&json!({"entries": ["app:"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad.status(), 400);
+}
+
+/// While the CLI owns the engine, the app's change to the decrypt list goes to the CLI, whose
+/// engine decrypts the next connection by it.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_decrypt_list_reaches_the_cli_that_owns_the_engine() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let cli = ctx(dir.path(), client_dir.path()).with_owner(Owner::Cli);
+    let _server = ControlServer::start(cli.clone()).unwrap();
+    cli.start().unwrap();
+    let app = ctx(dir.path(), client_dir.path());
+
+    let list = rpc(&app, "set_decrypt_list", json!({"entries": ["*"]})).await.unwrap();
+    assert_eq!(list["entries"][0], json!({"entry": "*", "builtIn": false}));
+
+    // Decrypted, the request is a flow of its own: a 502, as the server hangs up on its TLS.
+    let ca = std::fs::read(dir.path().join("ca/ca.pem")).unwrap();
+    let hangs_up = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = hangs_up.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        loop {
+            drop(hangs_up.accept().await.unwrap());
+        }
+    });
+    let client = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all(format!("http://127.0.0.1:{}", cli.port().unwrap())).unwrap())
+        .add_root_certificate(reqwest::Certificate::from_pem(&ca).unwrap())
+        .build()
+        .unwrap();
+    let url = format!("https://localhost:{port}/forwarded");
+    assert_eq!(client.get(&url).send().await.unwrap().status(), 502);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let flows = cli.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
+        if let Some(flow) = flows.iter().find(|f| f.url == url) {
+            assert!(!flow.tunnelled);
+            break;
+        }
+        assert!(Instant::now() < deadline, "no decrypted flow for {url}");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+/// While the CLI owns the engine, the app reads its open tunnels and pass-through set and
+/// reconnects tunnels there, through the control API.
+#[tokio::test(flavor = "multi_thread")]
+async fn open_tunnels_are_reconnected_in_the_cli_that_owns_the_engine() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let cli = ctx(dir.path(), client_dir.path()).with_owner(Owner::Cli);
+    let _server = ControlServer::start(cli.clone()).unwrap();
+    cli.start().unwrap();
+    let app = ctx(dir.path(), client_dir.path());
+
+    // An open tunnel, which the empty list leaves encrypted.
+    let echo = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let echo_port = echo.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        loop {
+            let (mut tcp, _) = echo.accept().await.unwrap();
+            tokio::spawn(async move {
+                let (mut read, mut write) = tcp.split();
+                let _ = tokio::io::copy(&mut read, &mut write).await;
+            });
+        }
+    });
+    let mut tcp = tokio::net::TcpStream::connect(("127.0.0.1", cli.port().unwrap())).await.unwrap();
+    let target = format!("localhost:{echo_port}");
+    tcp.write_all(format!("CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n\r\n").as_bytes())
+        .await
+        .unwrap();
+    let mut head = Vec::new();
+    while !head.ends_with(b"\r\n\r\n") {
+        head.push(tcp.read_u8().await.unwrap());
+    }
+    tcp.write_all(b"ping").await.unwrap();
+    let mut echoed = [0u8; 4];
+    tcp.read_exact(&mut echoed).await.unwrap();
+
+    rpc(&app, "edit_decrypt_list", json!({"add": ["host:localhost"]})).await.unwrap();
+    // Known once the CLI's event loop has seen it open.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let tunnels = loop {
+        let tunnels = rpc(&app, "list_reconnectable_tunnels", json!({})).await.unwrap();
+        if !tunnels.as_array().unwrap().is_empty() {
+            break tunnels;
+        }
+        assert!(Instant::now() < deadline, "the tunnel never showed");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    let saved = rpc(&app, "edit_decrypt_list", json!({"add": ["host:localhost"]})).await.unwrap();
+    assert_eq!(saved["stillEncrypted"], 1, "counted where the engine runs");
+    assert_eq!(tunnels.as_array().unwrap().len(), 1);
+    assert_eq!(tunnels[0]["host"], "localhost");
+    let scope = json!({"entry": "host:localhost"});
+    let closed = rpc(&app, "reconnect_tunnels", scope).await.unwrap();
+    assert_eq!(closed["closed"], 1);
+    let mut rest = Vec::new();
+    tcp.read_to_end(&mut rest).await.unwrap();
+
+    let set = rpc(&app, "list_passthrough", json!({})).await.unwrap();
+    assert_eq!(set["addresses"], json!([]));
+    let forgot = rpc(&app, "forget_passthrough", json!({"address": target})).await.unwrap();
+    assert_eq!(forgot, json!({"forgotten": false, "addresses": []}));
+
+    // The routes themselves.
+    let info = control::read(dir.path()).unwrap();
+    let http = reqwest::Client::builder().no_proxy().build().unwrap();
+    let get =
+        |path: &str| http.get(format!("{}{path}", info.base_url())).bearer_auth(&info.token).send();
+    let none: Value =
+        get("/tunnels/reconnectable?entry=host%3Alocalhost").await.unwrap().json().await.unwrap();
+    assert_eq!(none, json!([]));
+    assert_eq!(get("/tunnels/reconnectable?entry=host%3Aa+b").await.unwrap().status(), 400);
+    let set: Value = get("/passthrough").await.unwrap().json().await.unwrap();
+    assert_eq!(set, json!({"addresses": []}));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_decrypt_list_is_edited_over_the_control_api() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let ctx = ctx(dir.path(), client_dir.path());
+    let _server = ControlServer::start(ctx.clone()).unwrap();
+    let info = control::read(dir.path()).unwrap();
+    let http = reqwest::Client::builder().no_proxy().build().unwrap();
+    let url = format!("{}/decrypt", info.base_url());
+
+    for add in ["a.com", "b.com"] {
+        let resp =
+            http.patch(&url).bearer_auth(&info.token).json(&json!({"add": [add]})).send().await;
+        assert_eq!(resp.unwrap().status(), 200);
+    }
+    let resp = http
+        .patch(&url)
+        .bearer_auth(&info.token)
+        .json(&json!({"remove": ["host:a.com"]}))
+        .send()
+        .await
+        .unwrap();
+    let list: Value = resp.json().await.unwrap();
+    assert_eq!(list["entries"][0], json!({"entry": "host:b.com", "builtIn": false}));
+    assert_eq!(list["entries"][1]["builtIn"], true);
 }

@@ -19,6 +19,7 @@ members = [
   "crates/yaak-mcp",
   "crates/yaak-models",
   "crates/yaak-plugins",
+  "crates/yaak-query",
   "crates/yaak-sse",
   "crates/yaak-sync",
   "crates/yaak-templates",
@@ -43,6 +44,7 @@ members = [
   "crates-tauri/yaak-proxy-helper",
   "crates-tauri/yaak-system-appearance",
   "crates-tauri/yaak-tauri-utils",
+  "crates-tauri/yaak-updater",
   "crates-tauri/yaak-window",
 ]
 
@@ -96,6 +98,7 @@ yaak-lifecycle = { path = "crates/yaak-lifecycle" }
 yaak-mcp = { path = "crates/yaak-mcp" }
 yaak-models = { path = "crates/yaak-models" }
 yaak-plugins = { path = "crates/yaak-plugins" }
+yaak-query = { path = "crates/yaak-query" }
 yaak-sse = { path = "crates/yaak-sse" }
 yaak-sync = { path = "crates/yaak-sync" }
 yaak-templates = { path = "crates/yaak-templates" }
@@ -114,6 +117,7 @@ yaak-mac-window = { path = "crates-tauri/yaak-mac-window" }
 yaak-proxy-helper = { path = "crates-tauri/yaak-proxy-helper" }
 yaak-system-appearance = { path = "crates-tauri/yaak-system-appearance" }
 yaak-tauri-utils = { path = "crates-tauri/yaak-tauri-utils" }
+yaak-updater = { path = "crates-tauri/yaak-updater" }
 yaak-window = { path = "crates-tauri/yaak-window" }
 
 [profile.release]

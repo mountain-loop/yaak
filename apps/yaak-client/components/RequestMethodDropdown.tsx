@@ -1,38 +1,20 @@
 import type { HttpRequest } from "@yaakapp-internal/models";
-import { patchModel } from "@yaakapp-internal/models";
-import classNames from "classnames";
-import { memo, useCallback, useMemo } from "react";
-import { showPrompt } from "../lib/prompt";
-import { Button } from "./core/Button";
-import type { DropdownItem } from "./core/Dropdown";
-import { HttpMethodTag, HttpMethodTagRaw } from "./core/HttpMethodTag";
-import { Icon } from "@yaakapp-internal/ui";
-import type { RadioDropdownItem } from "./core/RadioDropdown";
-import { RadioDropdown } from "./core/RadioDropdown";
+import { patchModel, settingsAtom } from "@yaakapp-internal/models";
+import { RequestMethodDropdown as BaseRequestMethodDropdown } from "@yaakapp-internal/ui";
+import { useAtomValue } from "jotai";
+import { memo, useCallback } from "react";
 
 type Props = {
   request: HttpRequest;
   className?: string;
 };
 
-const radioItems: RadioDropdownItem<string>[] = [
-  "GET",
-  "PUT",
-  "POST",
-  "PATCH",
-  "DELETE",
-  "OPTIONS",
-  "QUERY",
-  "HEAD",
-].map((m) => ({
-  value: m,
-  label: <HttpMethodTagRaw method={m} />,
-}));
-
+/** The shared method menu, writing to the request and coloured by the user's setting */
 export const RequestMethodDropdown = memo(function RequestMethodDropdown({
   request,
   className,
 }: Props) {
+  const settings = useAtomValue(settingsAtom);
   const handleChange = useCallback(
     async (method: string) => {
       await patchModel(request, { method });
@@ -40,39 +22,12 @@ export const RequestMethodDropdown = memo(function RequestMethodDropdown({
     [request],
   );
 
-  const itemsAfter = useMemo<DropdownItem[]>(
-    () => [
-      {
-        key: "custom",
-        label: "CUSTOM",
-        leftSlot: <Icon icon="sparkles" />,
-        onSelect: async () => {
-          const newMethod = await showPrompt({
-            id: "custom-method",
-            label: "Http Method",
-            title: "Custom Method",
-            confirmText: "Save",
-            description: "Enter a custom method name",
-            placeholder: "CUSTOM",
-          });
-          if (newMethod == null) return;
-          await handleChange(newMethod);
-        },
-      },
-    ],
-    [handleChange],
-  );
-
   return (
-    <RadioDropdown
-      value={request.method}
-      items={radioItems}
-      itemsAfter={itemsAfter}
+    <BaseRequestMethodDropdown
+      method={request.method}
+      colored={settings.coloredMethods}
       onChange={handleChange}
-    >
-      <Button size="xs" className={classNames(className, "text-text-subtle hover:text")}>
-        <HttpMethodTag request={request} noAlias />
-      </Button>
-    </RadioDropdown>
+      className={className}
+    />
   );
 });

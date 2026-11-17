@@ -27,7 +27,14 @@ ws.on("message", async (e: Buffer) => {
 });
 ws.on("open", () => console.log("Plugin runtime connected to websocket"));
 ws.on("error", (err: unknown) => console.error("Plugin runtime websocket error", err));
-ws.on("close", (code: number) => console.log("Plugin runtime websocket closed", code));
+ws.on("close", (code: number) => {
+  console.log("Plugin runtime websocket closed", code);
+  // The app is the only thing that talks to this process. If the connection is
+  // gone (e.g. the app crashed or was force-quit before it could kill us), exit
+  // instead of lingering as an orphan that keeps plugin servers (like the MCP
+  // server's port) bound.
+  process.exit(0);
+});
 
 // Listen for incoming events from plugins
 pluginToAppEvents.listen((e) => {
