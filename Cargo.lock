@@ -11345,6 +11345,7 @@ dependencies = [
  "async-trait",
  "base64 0.23.1",
  "chrono",
+ "hex",
  "log 0.4.34",
  "md5",
  "rusqlite",

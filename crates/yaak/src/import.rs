@@ -1335,7 +1335,7 @@ fn content_hash(value: Value) -> String {
 
 fn hash_comparable(value: &Value) -> String {
     let canonical = serde_json::to_string(&sorted_keys(value.clone())).unwrap_or_default();
-    format!("{}{:x}", content_hash_version(value), Sha256::digest(canonical.as_bytes()))
+    format!("{}{}", content_hash_version(value), hex::encode(Sha256::digest(canonical.as_bytes())))
 }
 
 /// The fields two comparable forms disagree on, so a preview row can explain itself.
@@ -3463,7 +3463,7 @@ mod tests {
                 let mut value = comparable(serde_json::to_value(environment).unwrap());
                 value["name"] = json!(environment.name);
                 let canonical = serde_json::to_string(&sorted_keys(value)).unwrap();
-                let hash = format!("v1:{:x}", Sha256::digest(canonical.as_bytes()));
+                let hash = format!("v1:{}", hex::encode(Sha256::digest(canonical.as_bytes())));
                 let row = source_rows(&query_manager, workspace_id)
                     .into_iter()
                     .find(|r| r.model_id.as_deref() == Some(environment.id.as_str()))
