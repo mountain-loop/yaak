@@ -141,7 +141,7 @@ export function useFlowActions(): (flow: Flow) => DropdownItem[] {
         }
       };
       const noResponse = (flow.error != null || flow.cancelled) && flow.status == null;
-      // A failed TLS handshake, recorded without a request, has nothing to replay.
+      // A failed TLS handshake or connection, recorded without a request, has nothing to replay.
       const noRequest = flow.method === "";
       return [
         {

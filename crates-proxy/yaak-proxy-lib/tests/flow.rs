@@ -281,8 +281,15 @@ async fn http_version_setting_applies_to_new_connections() {
     ctx.start().unwrap();
     let port = ctx.port().unwrap();
     let ca = std::fs::read(dir.path().join("ca/ca.pem")).unwrap();
-    // Nothing listens there, so each flow is a 502, but its client side is spoken all the same.
-    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
+    // The server hangs up on its TLS, so each flow is a 502, but its client side is spoken all
+    // the same.
+    let hangs_up = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let server = hangs_up.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        loop {
+            drop(hangs_up.accept().await.unwrap());
+        }
+    });
 
     let mut sent = 0;
     let mut client_version = async || {
@@ -293,7 +300,7 @@ async fn http_version_setting_applies_to_new_connections() {
             .add_root_certificate(reqwest::Certificate::from_pem(&ca).unwrap())
             .build()
             .unwrap();
-        let url = format!("https://localhost:{closed}/{sent}");
+        let url = format!("https://localhost:{server}/{sent}");
         assert_eq!(client.get(&url).send().await.unwrap().status(), 502);
         wait_for_flow(&ctx, &url).await.client_http_version
     };
@@ -700,4 +707,47 @@ async fn times_capture_through_the_engine() {
         "{FLOWS} flows through the engine in {capture:?}: {:.0} flows/s; opening one: {open:?}",
         FLOWS as f64 / capture.as_secs_f64()
     );
+}
+
+/// A plain request whose server can't be reached resets the client's connection, and is one
+/// row: its request as sent, ended as an error with the reason in plain words and no status.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unreachable_plain_request_is_one_error_row() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let dir = tempfile::tempdir().unwrap();
+    let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
+    settings.save(&dir.path().join("settings.json")).unwrap();
+    let (events, _event_rx) = RpcEventEmitter::new();
+    let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+    ctx.start().unwrap();
+
+    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap();
+    let url = format!("http://{closed}/missing?q=1");
+    let mut tcp = tokio::net::TcpStream::connect(("127.0.0.1", ctx.port().unwrap())).await.unwrap();
+    let request = format!("GET {url} HTTP/1.1\r\nHost: {closed}\r\nUser-Agent: yaak-test\r\n\r\n");
+    tcp.write_all(request.as_bytes()).await.unwrap();
+    let mut received = Vec::new();
+    let read = tcp.read_to_end(&mut received).await;
+    assert!(received.is_empty(), "{}", String::from_utf8_lossy(&received));
+    assert_eq!(read.unwrap_err().kind(), std::io::ErrorKind::ConnectionReset);
+
+    let flow = wait_for_flow(&ctx, &url).await;
+    assert_eq!(flow.method, "GET");
+    assert!(flow.error.as_deref().unwrap().starts_with("Connection refused: "), "{flow:?}");
+    assert_eq!(flow.status, None);
+    assert!(!flow.cancelled);
+    assert!(flow.elapsed_ms.is_some(), "ended, not pending");
+    assert!(
+        flow.request_headers
+            .iter()
+            .any(|h| h.name.eq_ignore_ascii_case("user-agent") && h.value == "yaak-test")
+    );
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
+    assert_eq!(flows.len(), 1, "one row: {flows:?}");
+
+    let errors = rpc(&ctx, "list_flows", json!({"query": "@is:error"})).await.unwrap();
+    let ids: Vec<Value> =
+        errors["flows"].as_array().unwrap().iter().map(|f| f["id"].clone()).collect();
+    assert_eq!(ids, vec![json!(flow.id)]);
 }

@@ -300,16 +300,37 @@ impl Harness {
 
     /// A raw connection tunneled through the proxy with CONNECT to `localhost:port`.
     async fn connect_tunnel(&self, port: u16) -> TcpStream {
+        self.connect_to(&format!("localhost:{port}")).await
+    }
+
+    /// A raw connection tunneled through the proxy with CONNECT to `target` (`host:port`).
+    async fn connect_to(&self, target: &str) -> TcpStream {
+        let (tcp, head, _) = self.send_connect(target).await;
+        assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+        tcp
+    }
+
+    /// Sends a CONNECT to `target` and reads the proxy's answer: its head, and its body.
+    async fn send_connect(&self, target: &str) -> (TcpStream, String, String) {
         let mut tcp = TcpStream::connect(("127.0.0.1", self.proxy.port)).await.unwrap();
-        let connect =
-            format!("CONNECT localhost:{port} HTTP/1.1\r\nHost: localhost:{port}\r\n\r\n");
+        let connect = format!("CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n\r\n");
         tcp.write_all(connect.as_bytes()).await.unwrap();
         let mut head = Vec::new();
         while !head.ends_with(b"\r\n\r\n") {
             head.push(tcp.read_u8().await.unwrap());
         }
-        assert!(head.starts_with(b"HTTP/1.1 200"), "{}", String::from_utf8_lossy(&head));
-        tcp
+        let head = String::from_utf8(head).unwrap();
+        let length = head
+            .lines()
+            .find_map(|line| {
+                line.to_ascii_lowercase()
+                    .strip_prefix("content-length:")
+                    .map(|n| n.trim().parse::<usize>().unwrap())
+            })
+            .unwrap_or(0);
+        let mut body = vec![0u8; length];
+        tcp.read_exact(&mut body).await.unwrap();
+        (tcp, head, String::from_utf8(body).unwrap())
     }
 
     fn tls_client_config(&self) -> Arc<ClientConfig> {
@@ -407,6 +428,7 @@ fn is_terminal(event: &ProxyEvent) -> bool {
             | ProxyEvent::StreamEnd { .. }
             | ProxyEvent::TunnelEnd { .. }
             | ProxyEvent::HandshakeFailed { .. }
+            | ProxyEvent::ConnectFailed { .. }
     )
 }
 
@@ -428,7 +450,8 @@ fn flow_id(event: &ProxyEvent) -> u64 {
         | ProxyEvent::StreamEnd { id, .. }
         | ProxyEvent::TunnelStart { id, .. }
         | ProxyEvent::TunnelEnd { id, .. }
-        | ProxyEvent::HandshakeFailed { id, .. } => *id,
+        | ProxyEvent::HandshakeFailed { id, .. }
+        | ProxyEvent::ConnectFailed { id, .. } => *id,
     }
 }
 
@@ -1453,21 +1476,204 @@ async fn an_app_entry_decrypts_that_app_alone() {
     .await
 }
 
+/// The events of a CONNECT refused for its server: one `ConnectFailed`, and nothing else.
+fn connect_failure(h: &Harness) -> (String, String) {
+    let events = h.flow_events();
+    assert_eq!(events.len(), 1, "{events:#?}");
+    let ProxyEvent::ConnectFailed { authority, error, .. } = &events[0] else {
+        panic!("expected the failed connect, got {events:#?}");
+    };
+    (authority.clone(), error.clone())
+}
+
+/// A server that can't be reached fails the CONNECT itself, so the client reports a connection
+/// error of its own, as it would without the proxy, rather than a response that looks the
+/// server's.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_tunnel_to_nowhere_is_a_failed_flow() {
+async fn a_name_that_does_not_resolve_fails_the_connect() {
+    within(async {
+        let h = Harness::start(1024);
+        let (_tcp, head, body) = h.send_connect("yaak-proxy-test.invalid:443").await;
+        assert!(head.starts_with("HTTP/1.1 502"), "{head}");
+        assert!(
+            body.starts_with(
+                "Yaak Proxy could not connect to yaak-proxy-test.invalid:443: DNS lookup failed: "
+            ),
+            "{body}"
+        );
+        let (authority, error) = connect_failure(&h);
+        assert_eq!(authority, "yaak-proxy-test.invalid");
+        assert!(error.starts_with("DNS lookup failed: "), "{error}");
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_closed_port_fails_the_connect() {
+    within(async {
+        // Tunnelled or decrypted, the server is dialled before the CONNECT is answered.
+        for policy in [&[][..], &["*"][..]] {
+            let h = Harness::start_with(1024, with_policy(policy));
+            let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap();
+            let (_tcp, head, body) = h.send_connect(&closed.to_string()).await;
+            assert!(head.starts_with("HTTP/1.1 502"), "{head}");
+            assert!(body.contains(&format!("{closed}: Connection refused: ")), "{body}");
+            let (authority, error) = connect_failure(&h);
+            assert_eq!(authority, closed.to_string());
+            assert!(error.starts_with("Connection refused: "), "{error}");
+        }
+    })
+    .await
+}
+
+/// A listener on 127.0.0.1 that counts the connections it accepts and echoes what each sends.
+async fn spawn_counted_echo() -> (SocketAddr, Arc<AtomicUsize>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let accepts = Arc::new(AtomicUsize::new(0));
+    let counted = accepts.clone();
+    tokio::spawn(async move {
+        loop {
+            let (mut tcp, _) = listener.accept().await.unwrap();
+            counted.fetch_add(1, Ordering::SeqCst);
+            tokio::spawn(async move {
+                let (mut read, mut write) = tcp.split();
+                let _ = tokio::io::copy(&mut read, &mut write).await;
+            });
+        }
+    });
+    (addr, accepts)
+}
+
+/// Waits until `count` reaches `n`.
+async fn wait_for_count(count: &AtomicUsize, n: usize) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while count.load(Ordering::SeqCst) < n {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "stayed at {}",
+            count.load(Ordering::SeqCst)
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_tunnel_relays_over_the_connection_dialled_for_its_connect() {
     within(async {
         let h = Harness::start_with(1024, with_policy(&[]));
-        // A port nothing listens on.
-        let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
-        let mut tcp = h.connect_tunnel(closed).await;
-        let _ = tcp.write_all(b"\x16\x03\x01").await;
-        let mut rest = Vec::new();
-        let _ = tcp.read_to_end(&mut rest).await;
+        let (addr, accepts) = spawn_counted_echo().await;
+        let mut tcp = h.connect_to(&addr.to_string()).await;
+        // Connected before the client has sent anything.
+        wait_for_count(&accepts, 1).await;
+        tcp.write_all(b"ping").await.unwrap();
+        let mut echoed = [0u8; 4];
+        tcp.read_exact(&mut echoed).await.unwrap();
+        assert_eq!(&echoed, b"ping");
+        drop(tcp);
         let events = h.flow_events();
-        let (received, error) =
-            find!(events, ProxyEvent::TunnelEnd { received, error, .. } => (*received, error.clone()));
-        assert_eq!(received, 0);
-        assert!(error.is_some(), "{events:#?}");
+        find!(events, ProxyEvent::TunnelStart { .. } => ());
+        let error = find!(events, ProxyEvent::TunnelEnd { error, .. } => error.clone());
+        assert_eq!(error, None);
+        assert_eq!(accepts.load(Ordering::SeqCst), 1);
+    })
+    .await
+}
+
+/// `GET /hello` over HTTP/1.1, decrypted, through a CONNECT to `addr`.
+async fn decrypted_hello(h: &Harness, addr: SocketAddr) -> String {
+    let tcp = h.connect_to(&addr.to_string()).await;
+    let name = ServerName::try_from("localhost").unwrap();
+    let tls = TlsConnector::from(h.tls_client_config()).connect(name, tcp).await.unwrap();
+    get_hello_and_close(tls).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_decrypted_request_goes_on_the_connection_dialled_for_its_connect() {
+    within(async {
+        let h = Harness::start(1024);
+        let accepts = Arc::new(AtomicUsize::new(0));
+        let upstream =
+            spawn_upstream_with(Some(h.pki.server.clone()), accepts.clone(), route).await;
+        let response = decrypted_hello(&h, upstream).await;
+        assert!(response.ends_with("hello"), "{response}");
+        assert_eq!(accepts.load(Ordering::SeqCst), 1);
+
+        // Its dial is the request's connect time, and the times after it stay in order.
+        let events = h.flow_events();
+        let (connect, tls) = find!(events,
+            ProxyEvent::UpstreamConnection { elapsed_connect_ms, elapsed_tls_ms, .. } =>
+                (elapsed_connect_ms.unwrap(), elapsed_tls_ms.unwrap()));
+        let headers_at = find!(events, ProxyEvent::ResponseStart { elapsed_ms, .. } => *elapsed_ms);
+        let end_at =
+            find!(events, ProxyEvent::ResponseBodyComplete { elapsed_ms, .. } => *elapsed_ms);
+        assert!(connect <= tls && tls <= headers_at && headers_at <= end_at, "{events:#?}");
+    })
+    .await
+}
+
+/// A browser's preconnect that is never used: the server's connection closes with it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_client_that_hangs_up_after_the_connect_closes_the_server_connection() {
+    within(async {
+        let h = Harness::start(1024);
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let tcp = h.connect_to(&addr.to_string()).await;
+        let (mut server, _) = listener.accept().await.unwrap();
+        drop(tcp);
+        let mut rest = Vec::new();
+        let read = tokio::time::timeout(Duration::from_secs(5), server.read_to_end(&mut rest));
+        read.await.expect("the server's connection stayed open").unwrap();
+        assert!(rest.is_empty());
+    })
+    .await
+}
+
+/// The server closed the connection dialled for the CONNECT before the first request came, so
+/// the request goes on a new one.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dialled_connection_the_server_closed_is_dialled_again() {
+    within(async {
+        let h = Harness::start(1024);
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let accepts = Arc::new(AtomicUsize::new(0));
+        let counted = accepts.clone();
+        let tls = TlsAcceptor::from(h.pki.server.clone());
+        tokio::spawn(async move {
+            loop {
+                let (tcp, _) = listener.accept().await.unwrap();
+                // The first is closed unused, as an idle server would.
+                if counted.fetch_add(1, Ordering::SeqCst) == 0 {
+                    drop(tcp);
+                    continue;
+                }
+                let tls = tls.clone();
+                tokio::spawn(async move {
+                    let Ok(stream) = tls.accept(tcp).await else {
+                        return;
+                    };
+                    let builder = auto::Builder::new(TokioExecutor::new());
+                    let _ = builder.serve_connection(TokioIo::new(stream), service_fn(route)).await;
+                });
+            }
+        });
+
+        let tcp = h.connect_to(&addr.to_string()).await;
+        wait_for_count(&accepts, 1).await;
+        let name = ServerName::try_from("localhost").unwrap();
+        let mut tls = TlsConnector::from(h.tls_client_config()).connect(name, tcp).await.unwrap();
+        // Long enough for the close to arrive before the request.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        tls.write_all(b"GET /hello HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .await
+            .unwrap();
+        let mut response = Vec::new();
+        let _ = tls.read_to_end(&mut response).await;
+        let response = String::from_utf8_lossy(&response);
+        assert!(response.starts_with("HTTP/1.1 200") && response.ends_with("hello"), "{response}");
+        assert_eq!(accepts.load(Ordering::SeqCst), 2);
     })
     .await
 }
@@ -1661,19 +1867,150 @@ async fn plain_http_get() {
     assert_eq!((status, remote_addr), (200, Some(upstream)));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn unreachable_upstream_is_an_error() {
-    let h = Harness::start(1024);
-    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap();
-    let url = format!("http://{closed}/");
+/// Sends `request` on `tcp`, a client's connection to the proxy, and reads what comes back until
+/// the connection ends: the bytes, and how it ended.
+async fn send_raw(tcp: &mut TcpStream, request: &str) -> (Vec<u8>, std::io::Result<usize>) {
+    tcp.write_all(request.as_bytes()).await.unwrap();
+    let mut received = Vec::new();
+    let read = tokio::time::timeout(Duration::from_secs(15), tcp.read_to_end(&mut received)).await;
+    (received, read.expect("the connection stayed open"))
+}
 
-    let resp = h.client().get(&url).send().await.unwrap();
-    assert_eq!(resp.status(), 502);
+fn get(url: &str, host: &str) -> String {
+    format!("GET {url} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: yaak-test\r\n\r\n")
+}
 
+/// Asserts the client's connection was reset with no response, as a client would see it fail
+/// without the proxy, not answered with a response of the engine's that would look the server's.
+fn assert_reset((received, read): (Vec<u8>, std::io::Result<usize>)) {
+    assert!(received.is_empty(), "{}", String::from_utf8_lossy(&received));
+    let err = read.expect_err("the connection closed cleanly");
+    assert_eq!(err.kind(), std::io::ErrorKind::ConnectionReset, "{err}");
+}
+
+/// The one flow of a plain request whose server could not be reached: its request, ended as an
+/// error with no response. Returns the error.
+fn unreachable_flow(h: &Harness, url: &str) -> String {
     let events = h.flow_events();
+    let starts: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            ProxyEvent::RequestStart { method, url, .. } => Some((method.clone(), url.clone())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(starts, [("GET".to_string(), url.to_string())], "{events:#?}");
+    assert!(headers(&events, true).contains(&("user-agent".into(), "yaak-test".into())));
+    assert!(!events.iter().any(|e| matches!(e, ProxyEvent::ResponseStart { .. })), "{events:#?}");
     let error = find!(events, ProxyEvent::Error { error, .. } => error.clone());
-    assert!(error.to_lowercase().contains("connect"), "{error}");
-    assert!(!events.iter().any(|e| matches!(e, ProxyEvent::ResponseStart { .. })));
+    assert!(!error.contains("system proxy"), "{error}");
+    error
+}
+
+/// A server that can't be reached resets the client's connection, as connecting to it without
+/// the proxy would have failed, and the flow ends as an error with the reason in plain words.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_name_that_does_not_resolve_resets_the_plain_request() {
+    within(async {
+        let h = Harness::start(1024);
+        let url = "http://yaak-proxy-test.invalid/";
+        let mut tcp = TcpStream::connect(("127.0.0.1", h.proxy.port)).await.unwrap();
+        assert_reset(send_raw(&mut tcp, &get(url, "yaak-proxy-test.invalid")).await);
+        let error = unreachable_flow(&h, url);
+        assert!(error.starts_with("DNS lookup failed: "), "{error}");
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_closed_port_resets_the_plain_request() {
+    within(async {
+        let h = Harness::start(1024);
+        let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap();
+        let url = format!("http://{closed}/");
+        let mut tcp = TcpStream::connect(("127.0.0.1", h.proxy.port)).await.unwrap();
+        assert_reset(send_raw(&mut tcp, &get(&url, &closed.to_string())).await);
+        let error = unreachable_flow(&h, &url);
+        assert!(error.starts_with("Connection refused: "), "{error}");
+    })
+    .await
+}
+
+/// A client sees the failure as its own connection error.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unreachable_server_is_a_connection_error_to_the_client() {
+    within(async {
+        let h = Harness::start(1024);
+        let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap();
+        let err = h.client().get(format!("http://{closed}/")).send().await.unwrap_err();
+        assert!(err.status().is_none(), "{err:?}");
+        let error = find!(h.flow_events(), ProxyEvent::Error { error, .. } => error.clone());
+        assert!(error.starts_with("Connection refused: "), "{error}");
+    })
+    .await
+}
+
+/// Only the connection the failed request came on is reset: the request before it on that
+/// connection was answered, and a new connection works.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_request_resets_its_keep_alive_connection_alone() {
+    within(async {
+        let h = Harness::start(1024);
+        let upstream = spawn_upstream(None).await;
+        let hello = format!("http://{upstream}/hello");
+        let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap();
+        let unreachable = format!("http://{closed}/");
+
+        let mut tcp = TcpStream::connect(("127.0.0.1", h.proxy.port)).await.unwrap();
+        tcp.write_all(get(&hello, &upstream.to_string()).as_bytes()).await.unwrap();
+        let mut head = Vec::new();
+        while !head.ends_with(b"\r\n\r\n") {
+            head.push(tcp.read_u8().await.unwrap());
+        }
+        let head = String::from_utf8(head).unwrap();
+        assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+        assert!(head.to_ascii_lowercase().contains("content-length: 5\r\n"), "{head}");
+        let mut body = [0u8; 5];
+        tcp.read_exact(&mut body).await.unwrap();
+        assert_eq!(&body, b"hello");
+        assert_reset(send_raw(&mut tcp, &get(&unreachable, &closed.to_string())).await);
+
+        assert_eq!(h.client().get(&hello).send().await.unwrap().text().await.unwrap(), "hello");
+
+        let flows = h.flows_events(3);
+        let mut ends: Vec<_> = flows
+            .values()
+            .map(|events| {
+                let url = find!(events, ProxyEvent::RequestStart { url, .. } => url.clone());
+                let status = events.iter().find_map(|e| match e {
+                    ProxyEvent::ResponseStart { status, .. } => Some(*status),
+                    _ => None,
+                });
+                let error = events.iter().find_map(|e| match e {
+                    ProxyEvent::Error { error, .. } => Some(error.clone()),
+                    _ => None,
+                });
+                (
+                    flow_id(&events[0]),
+                    url,
+                    status,
+                    error.is_some_and(|e| e.starts_with("Connection refused: ")),
+                )
+            })
+            .collect();
+        ends.sort();
+        let ends: Vec<_> =
+            ends.into_iter().map(|(_, url, status, refused)| (url, status, refused)).collect();
+        assert_eq!(
+            ends,
+            [
+                (hello.clone(), Some(200), false),
+                (unreachable, None, true),
+                (hello, Some(200), false)
+            ]
+        );
+    })
+    .await
 }
 
 /// Telegram's HTTP transport request, `POST /api` with only `Host` to say where it goes, from the
