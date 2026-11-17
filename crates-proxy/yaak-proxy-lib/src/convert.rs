@@ -65,14 +65,11 @@ pub fn flow_to_request(flow: &Flow, body: &DecodedBody) -> Conversion {
     let (headers, dropped_headers) = split_headers(flow, body);
     let has_authorization = headers.iter().any(|h| h.name.eq_ignore_ascii_case("authorization"));
     if has_authorization {
-        warnings.push("The Authorization header is saved as captured, in plain text.".into());
+        warnings.push("The Authorization header is saved in plain text.".into());
     }
     let (body_type, body_fields) = request_body(flow, body, &mut warnings);
     if body.truncated {
-        warnings.push(format!(
-            "The body was cut at the capture limit, so only its first {} bytes are saved.",
-            body.data.len()
-        ));
+        warnings.push(format!("Only the first {} bytes of the body are saved.", body.data.len()));
     }
 
     // No name, as in Yaak, which then shows the URL.
@@ -169,15 +166,12 @@ fn request_body(
     let content_type = find_header(&flow.request_headers, "content-type").unwrap_or_default();
     let mime = content_type.split(';').next().unwrap_or_default().trim().to_ascii_lowercase();
     let Ok(text) = std::str::from_utf8(&body.data) else {
-        warnings.push(
-            "The body is binary and is saved as text, so bytes that are not UTF-8 are replaced."
-                .into(),
-        );
+        warnings.push("The body is binary and may be altered when saved.".into());
         return text_body(BODY_TYPE_OTHER, &String::from_utf8_lossy(&body.data));
     };
 
     if mime == "application/json" || mime.ends_with("+json") {
-        if let Some(graphql) = graphql_body(flow, text) {
+        if let Some(graphql) = graphql_body(flow, content_type, text) {
             return (Some(BODY_TYPE_GRAPHQL.into()), graphql);
         }
         return text_body(BODY_TYPE_JSON, text);
@@ -195,9 +189,7 @@ fn request_body(
         );
     }
     if mime == "multipart/form-data" {
-        warnings.push(
-            "The multipart body is saved as text with its Content-Type, not as form fields.".into(),
-        );
+        warnings.push("The multipart body is saved as text, not form fields.".into());
     }
     text_body(BODY_TYPE_OTHER, text)
 }
@@ -206,26 +198,23 @@ fn text_body(body_type: &str, text: &str) -> (Option<String>, BTreeMap<String, V
     (Some(body_type.into()), BTreeMap::from([("text".into(), json!(text))]))
 }
 
-/// A JSON body posted to a GraphQL endpoint, as the client's GraphQL body.
-fn graphql_body(flow: &Flow, text: &str) -> Option<BTreeMap<String, Value>> {
-    let path = flow.url.split('?').next().unwrap_or_default();
-    if !path.to_ascii_lowercase().ends_with("/graphql") {
-        return None;
+/// A JSON body that is a GraphQL request, as the client's GraphQL body. Detected as the proxy
+/// detects it at capture (`yaak_http::graphql`), which leaves out bodies with fields a GraphQL
+/// body cannot hold, such as persisted-query `extensions`.
+fn graphql_body(flow: &Flow, content_type: &str, text: &str) -> Option<BTreeMap<String, Value>> {
+    let body = yaak_http::graphql::parse_json_body(Some(content_type), text, &flow.url)?;
+    let mut fields = BTreeMap::from([("query".to_string(), json!(body.query))]);
+    match body.variables {
+        Some(Value::String(variables)) => {
+            fields.insert("variables".into(), json!(variables));
+        }
+        Some(variables) => {
+            let pretty = serde_json::to_string_pretty(&variables).ok()?;
+            fields.insert("variables".into(), json!(pretty));
+        }
+        None => {}
     }
-    let Value::Object(body) = serde_json::from_str::<Value>(text).ok()? else {
-        return None;
-    };
-    // Anything else, such as persisted-query `extensions`, would be lost in a GraphQL body.
-    if body.keys().any(|k| !matches!(k.as_str(), "query" | "variables" | "operationName")) {
-        return None;
-    }
-    let query = body.get("query")?.as_str()?;
-    let mut fields = BTreeMap::from([("query".to_string(), json!(query))]);
-    if let Some(variables) = body.get("variables").filter(|v| !v.is_null()) {
-        let pretty = serde_json::to_string_pretty(variables).ok()?;
-        fields.insert("variables".into(), json!(pretty));
-    }
-    if let Some(name) = body.get("operationName").and_then(Value::as_str) {
+    if let Some(name) = body.operation_name {
         fields.insert("operationName".into(), json!(name));
     }
     Some(fields)
@@ -254,6 +243,7 @@ mod tests {
             stored_size: data.len(),
             truncated: false,
             decode_error: None,
+            note: None,
         }
     }
 
@@ -302,10 +292,7 @@ mod tests {
                 ("Proxy-Authorization", DropReason::HopByHop),
             ]
         );
-        assert_eq!(
-            c.warnings,
-            vec!["The Authorization header is saved as captured, in plain text."]
-        );
+        assert_eq!(c.warnings, vec!["The Authorization header is saved in plain text."]);
     }
 
     #[test]
@@ -354,10 +341,14 @@ mod tests {
         let c = flow_to_request(&f, &body(persisted));
         assert_eq!(c.request.body_type.as_deref(), Some("application/json"));
 
-        // The same body anywhere else is plain JSON.
+        // A `query` that is no GraphQL document is plain JSON.
         let f = flow("POST", "https://x.test/api", &[("Content-Type", "application/json")]);
         let c = flow_to_request(&f, &body(r#"{"query":"q"}"#));
         assert_eq!(c.request.body_type.as_deref(), Some("application/json"));
+
+        // A GraphQL document is GraphQL on any path, as capture reads it.
+        let c = flow_to_request(&f, &body(r#"{"query":"mutation Save { save { id } }"}"#));
+        assert_eq!(c.request.body_type.as_deref(), Some("graphql"));
     }
 
     #[test]
@@ -416,6 +407,7 @@ mod tests {
             stored_size: 3,
             truncated: false,
             decode_error: None,
+            note: None,
         };
         let c = flow_to_request(&f, &data);
         assert_eq!(c.request.body_type.as_deref(), Some("other"));
@@ -427,8 +419,13 @@ mod tests {
     fn decoded_empty_body() {
         let f = flow("POST", "https://x.test/", &[("Content-Encoding", "gzip")]);
         // A gzip stream of nothing: stored bytes, but an empty body once decoded.
-        let data =
-            DecodedBody { data: Vec::new(), stored_size: 20, truncated: false, decode_error: None };
+        let data = DecodedBody {
+            data: Vec::new(),
+            stored_size: 20,
+            truncated: false,
+            decode_error: None,
+            note: None,
+        };
         let c = flow_to_request(&f, &data);
         assert!(c.request.headers.is_empty());
         assert_eq!(c.dropped_headers[0].reason, DropReason::BodyDecoded);
@@ -450,13 +447,11 @@ mod tests {
             stored_size: 4,
             truncated: true,
             decode_error: None,
+            note: None,
         };
         let c = flow_to_request(&f, &data);
         assert_eq!(names(&c.request), vec!["Content-Type"]);
         assert_eq!(c.dropped_headers[0].reason, DropReason::BodyDecoded);
-        assert_eq!(
-            c.warnings,
-            vec!["The body was cut at the capture limit, so only its first 4 bytes are saved."]
-        );
+        assert_eq!(c.warnings, vec!["Only the first 4 bytes of the body are saved."]);
     }
 }

@@ -1,59 +1,30 @@
-import { platform } from "@yaakapp-internal/platform";
-import { useFonts } from "@yaakapp-internal/fonts";
 import { useLicense } from "@yaakapp-internal/license";
-import type { EditorKeymap, Settings } from "@yaakapp-internal/models";
+import type { Settings } from "@yaakapp-internal/models";
 import { patchModel, settingsAtom } from "@yaakapp-internal/models";
-import { clamp, Heading, VStack } from "@yaakapp-internal/ui";
+import { SettingsInterface as SharedSettingsInterface, VStack } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
-import { useState } from "react";
 import { activeWorkspaceAtom } from "../../hooks/useActiveWorkspace";
+import { useSettingsView } from "../../hooks/useSettingsView";
 import { showConfirm } from "../../lib/confirm";
 import { pricingUrl } from "../../lib/pricingUrl";
-import { rpc } from "../../lib/rpc";
 import { CargoFeature } from "../CargoFeature";
-import { Button } from "../core/Button";
-import { Checkbox } from "../core/Checkbox";
 import { Link } from "../core/Link";
-import {
-  ModelSettingRowBoolean,
-  ModelSettingRowSelect,
-  SettingRow,
-  SettingRowBoolean,
-  SettingRowSelect,
-  SettingSelectControl,
-  SettingsList,
-  SettingsSection,
-} from "../core/SettingRow";
-
-const NULL_FONT_VALUE = "__NULL_FONT__";
-
-const fontSizeOptions = [
-  8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
-].map((n) => ({ label: `${n}`, value: `${n}` }));
-
-const keymaps: { value: EditorKeymap; label: string }[] = [
-  { value: "default", label: "Default" },
-  { value: "vim", label: "Vim" },
-  { value: "vscode", label: "VSCode" },
-  { value: "emacs", label: "Emacs" },
-];
+import { SettingRowBoolean, SettingRowSelect, SettingsSection } from "../core/SettingRow";
 
 export function SettingsInterface() {
   const workspace = useAtomValue(activeWorkspaceAtom);
   const settings = useAtomValue(settingsAtom);
-  const fonts = useFonts();
+  const bound = useSettingsView();
 
-  if (settings == null || workspace == null) {
+  if (settings == null || workspace == null || bound == null) {
     return null;
   }
 
   return (
-    <VStack space={1.5} className="mb-4">
-      <div className="mb-3">
-        <Heading>Interface</Heading>
-        <p className="text-text-subtle">Tweak settings related to the user interface.</p>
-      </div>
-      <SettingsList className="space-y-8">
+    <SharedSettingsInterface
+      view={bound.view}
+      callbacks={bound.callbacks}
+      leadingSections={
         <SettingsSection title="Workspaces">
           <SettingRowSelect
             title="Open workspace behavior"
@@ -78,151 +49,13 @@ export function SettingsInterface() {
             ]}
           />
         </SettingsSection>
-
-        <SettingsSection title="Fonts">
-          <SettingRow
-            title="Interface font"
-            description="Font used for Yaak interface controls."
-            controlClassName="gap-1"
-          >
-            {fonts.data && (
-              <SettingSelectControl
-                name="uiFont"
-                label="Interface font"
-                selectClassName="w-72!"
-                value={settings.interfaceFont ?? NULL_FONT_VALUE}
-                defaultValue={NULL_FONT_VALUE}
-                options={[
-                  { label: "System default", value: NULL_FONT_VALUE },
-                  ...fonts.data.uiFonts.map((f) => ({ label: f, value: f })),
-                  ...fonts.data.editorFonts.map((f) => ({ label: f, value: f })),
-                ]}
-                onChange={async (v) => {
-                  const interfaceFont = v === NULL_FONT_VALUE ? null : v;
-                  await patchModel(settings, { interfaceFont });
-                }}
-              />
-            )}
-            <SettingSelectControl
-              name="interfaceFontSize"
-              label="Interface Font Size"
-              selectClassName="w-20!"
-              value={`${settings.interfaceFontSize}`}
-              defaultValue="14"
-              options={fontSizeOptions}
-              onChange={(v) => patchModel(settings, { interfaceFontSize: Number.parseInt(v, 10) })}
-            />
-          </SettingRow>
-
-          <SettingRow
-            title="Editor font"
-            description="Font used in request and response editors."
-            controlClassName="gap-1"
-          >
-            {fonts.data && (
-              <SettingSelectControl
-                name="editorFont"
-                label="Editor font"
-                selectClassName="w-72!"
-                value={settings.editorFont ?? NULL_FONT_VALUE}
-                defaultValue={NULL_FONT_VALUE}
-                options={[
-                  { label: "System default", value: NULL_FONT_VALUE },
-                  ...fonts.data.editorFonts.map((f) => ({ label: f, value: f })),
-                ]}
-                onChange={async (v) => {
-                  const editorFont = v === NULL_FONT_VALUE ? null : v;
-                  await patchModel(settings, { editorFont });
-                }}
-              />
-            )}
-            <SettingSelectControl
-              name="editorFontSize"
-              label="Editor Font Size"
-              selectClassName="w-20!"
-              value={`${settings.editorFontSize}`}
-              defaultValue="12"
-              options={fontSizeOptions}
-              onChange={(v) =>
-                patchModel(settings, {
-                  editorFontSize: clamp(Number.parseInt(v, 10) || 14, 8, 30),
-                })
-              }
-            />
-          </SettingRow>
-        </SettingsSection>
-
-        <SettingsSection title="Editor">
-          <ModelSettingRowSelect
-            model={settings}
-            modelKey="editorKeymap"
-            title="Editor keymap"
-            description="Keyboard shortcut preset used by text editors."
-            options={keymaps}
-          />
-          <ModelSettingRowBoolean
-            model={settings}
-            modelKey="editorSoftWrap"
-            title="Wrap editor lines"
-            description="Wrap long lines in request and response editors."
-          />
-          <ModelSettingRowBoolean
-            model={settings}
-            modelKey="coloredMethods"
-            title="Colorize request methods"
-            description="Use method-specific colors for HTTP request methods."
-          />
-        </SettingsSection>
-
-        <SettingsSection title="Window">
-          <NativeTitlebarSetting settings={settings} />
-          {platform.osType() !== "macos" && (
-            <ModelSettingRowBoolean
-              model={settings}
-              modelKey="hideWindowControls"
-              title="Hide window controls"
-              description="Hide the close, maximize, and minimize controls on Windows or Linux."
-            />
-          )}
-        </SettingsSection>
-
+      }
+      trailingSections={
         <CargoFeature feature="license">
           <LicenseSettings settings={settings} />
         </CargoFeature>
-      </SettingsList>
-    </VStack>
-  );
-}
-
-function NativeTitlebarSetting({ settings }: { settings: Settings }) {
-  const [nativeTitlebar, setNativeTitlebar] = useState(settings.useNativeTitlebar);
-
-  return (
-    <SettingRow
-      title="Native title bar"
-      description="Use the operating system's standard title bar and window controls."
-      controlClassName="gap-2"
-    >
-      <Checkbox
-        hideLabel
-        size="md"
-        checked={nativeTitlebar}
-        title="Native title bar"
-        onChange={setNativeTitlebar}
-      />
-      {settings.useNativeTitlebar !== nativeTitlebar && (
-        <Button
-          color="primary"
-          size="xs"
-          onClick={async () => {
-            await patchModel(settings, { useNativeTitlebar: nativeTitlebar });
-            await rpc("cmd_restart");
-          }}
-        >
-          Apply and Restart
-        </Button>
-      )}
-    </SettingRow>
+      }
+    />
   );
 }
 

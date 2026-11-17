@@ -214,18 +214,12 @@ impl<S: HttpSender> HttpTransaction<S> {
 
             // Update the request URL
             let previous_url = current_url.clone();
-            current_url = if location.starts_with("http://") || location.starts_with("https://") {
-                // Absolute URL
-                location
-            } else if location.starts_with('/') {
-                // Absolute path - need to extract base URL from current request
-                let base_url = Self::extract_base_url(&current_url)?;
-                format!("{}{}", base_url, location)
-            } else {
-                // Relative path - need to resolve relative to current path
-                let base_path = Self::extract_base_path(&current_url)?;
-                format!("{}/{}", base_path, location)
-            };
+            current_url = Url::parse(&current_url)
+                .and_then(|url| url.join(&location))
+                .map_err(|e| {
+                    crate::error::Error::RequestError(format!("Invalid redirect URL: {}", e))
+                })?
+                .to_string();
 
             // Determine redirect behavior based on status code and method
             let behavior = if status == 303 {
@@ -332,38 +326,6 @@ impl<S: HttpSender> HttpTransaction<S> {
     /// Check if a status code indicates a redirect
     fn is_redirect(status: u16) -> bool {
         matches!(status, 301 | 302 | 303 | 307 | 308)
-    }
-
-    /// Extract the base URL (scheme + host) from a full URL
-    fn extract_base_url(url: &str) -> Result<String> {
-        // Find the position after "://"
-        let scheme_end = url.find("://").ok_or_else(|| {
-            crate::error::Error::RequestError(format!("Invalid URL format: {}", url))
-        })?;
-
-        // Find the first '/' after the scheme
-        let path_start = url[scheme_end + 3..].find('/');
-
-        if let Some(idx) = path_start {
-            Ok(url[..scheme_end + 3 + idx].to_string())
-        } else {
-            // No path, return entire URL
-            Ok(url.to_string())
-        }
-    }
-
-    /// Extract the base path (everything except the last segment) from a URL
-    fn extract_base_path(url: &str) -> Result<String> {
-        if let Some(last_slash) = url.rfind('/') {
-            // Don't include the trailing slash if it's part of the host
-            if url[..last_slash].ends_with("://") || url[..last_slash].ends_with(':') {
-                Ok(url.to_string())
-            } else {
-                Ok(url[..last_slash].to_string())
-            }
-        } else {
-            Ok(url.to_string())
-        }
     }
 }
 
@@ -503,6 +465,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_transaction_relative_redirect_urls() {
+        for (initial, location, expected) in [
+            ("https://api.example/a/resource", "//cdn.example/file", "https://cdn.example/file"),
+            ("https://api.example/a/resource", "?page=2", "https://api.example/a/resource?page=2"),
+            ("https://api.example", "next", "https://api.example/next"),
+            ("https://api.example/a/resource", "../next", "https://api.example/next"),
+            (
+                "https://api.example/a/resource?page=1",
+                "#section",
+                "https://api.example/a/resource?page=1#section",
+            ),
+            ("https://api.example/a/resource", "/next", "https://api.example/next"),
+            (
+                "https://api.example/a/resource",
+                "https://other.example/next",
+                "https://other.example/next",
+            ),
+        ] {
+            let sender = MockSender::new(vec![
+                MockResponse {
+                    status: 302,
+                    headers: vec![("Location".to_string(), location.to_string())],
+                    body: vec![],
+                },
+                MockResponse { status: 200, headers: vec![], body: vec![] },
+            ]);
+            let captured = sender.captured_requests.clone();
+            let transaction = HttpTransaction::new(sender);
+            let request = SendableHttpRequest {
+                url: initial.to_string(),
+                method: "GET".to_string(),
+                options: crate::types::SendableHttpRequestOptions {
+                    follow_redirects: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let (_tx, rx) = tokio::sync::watch::channel(false);
+            let (event_tx, _event_rx) = mpsc::channel(100);
+            let result =
+                transaction.execute_with_cancellation(request, rx, event_tx).await.unwrap();
+            assert_eq!(result.status, 200);
+            let requests = captured.lock().await;
+            assert_eq!(requests.len(), 2);
+            assert_eq!(requests[1].url, expected, "Location: {location}, base: {initial}");
+        }
+    }
+
+    #[tokio::test]
     async fn test_transaction_max_redirects_exceeded() {
         let redirect_headers =
             vec![("Location".to_string(), "https://example.com/loop".to_string())];
@@ -545,33 +556,6 @@ mod tests {
         assert!(!HttpTransaction::<MockSender>::is_redirect(200));
         assert!(!HttpTransaction::<MockSender>::is_redirect(404));
         assert!(!HttpTransaction::<MockSender>::is_redirect(500));
-    }
-
-    #[test]
-    fn test_extract_base_url() {
-        let result =
-            HttpTransaction::<MockSender>::extract_base_url("https://example.com/path/to/resource");
-        assert_eq!(result.unwrap(), "https://example.com");
-
-        let result = HttpTransaction::<MockSender>::extract_base_url("http://localhost:8080/api");
-        assert_eq!(result.unwrap(), "http://localhost:8080");
-
-        let result = HttpTransaction::<MockSender>::extract_base_url("invalid-url");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_extract_base_path() {
-        let result = HttpTransaction::<MockSender>::extract_base_path(
-            "https://example.com/path/to/resource",
-        );
-        assert_eq!(result.unwrap(), "https://example.com/path/to");
-
-        let result = HttpTransaction::<MockSender>::extract_base_path("https://example.com/single");
-        assert_eq!(result.unwrap(), "https://example.com");
-
-        let result = HttpTransaction::<MockSender>::extract_base_path("https://example.com/");
-        assert_eq!(result.unwrap(), "https://example.com");
     }
 
     #[tokio::test]

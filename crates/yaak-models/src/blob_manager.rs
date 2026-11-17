@@ -223,6 +223,16 @@ impl BodyChunkWriter {
         Ok(self.total_bytes)
     }
 
+    /// [`Self::finish`] without inserting the partial last chunk: it is returned for the caller
+    /// to insert, in a transaction it shares with other writes.
+    pub fn finish_deferred(mut self) -> Option<BodyChunk> {
+        if self.buf.is_empty() {
+            return None;
+        }
+        let data = std::mem::take(&mut self.buf);
+        Some(BodyChunk::new(&self.body_id, self.chunk_index, data))
+    }
+
     fn insert(&mut self, data: Vec<u8>) -> Result<()> {
         let chunk = BodyChunk::new(&self.body_id, self.chunk_index, data);
         self.blob_manager.with_tx(|b| b.insert_chunk(&chunk))?;
@@ -316,6 +326,21 @@ mod tests {
                 Ok::<_, Error>(())
             })
             .unwrap();
+    }
+
+    /// The last chunk is handed back unwritten, after the full chunks written as they filled.
+    #[test]
+    fn finish_deferred_returns_the_last_chunk_unwritten() {
+        let manager = create_test_manager();
+        let mut writer = BodyChunkWriter::new(manager.clone(), "fl_1.response");
+        writer.write(&vec![b'a'; BODY_CHUNK_SIZE + 3]).unwrap();
+        let last = writer.finish_deferred().unwrap();
+        assert_eq!((last.body_id.as_str(), last.chunk_index), ("fl_1.response", 1));
+        assert_eq!(last.data, b"aaa");
+        assert_eq!(manager.connect().get_chunks("fl_1.response").unwrap().len(), 1);
+
+        let empty = BodyChunkWriter::new(manager.clone(), "fl_2.response");
+        assert!(empty.finish_deferred().is_none());
     }
 
     #[test]

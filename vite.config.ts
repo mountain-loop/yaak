@@ -10,6 +10,7 @@ export default defineConfig({
     ignorePatterns: [
       "**/bindings/**",
       "**/routeTree.gen.ts",
+      "crates/yaak-query/pkg/**",
       "crates/yaak-templates/pkg/**",
       "crates/yaak-wasm/pkg/**",
       "plugins/importer-bruno/tests/fixtures/upstream/**",
@@ -18,6 +19,7 @@ export default defineConfig({
   lint: {
     ignorePatterns: [
       "npm/**",
+      "crates/yaak-query/pkg/**",
       "crates/yaak-templates/pkg/**",
       "crates/yaak-wasm/pkg/**",
       "**/bindings/gen_*.ts",

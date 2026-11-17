@@ -1,2 +1,6 @@
-// Hardcode font size for now. In the future, this could be configurable.
-document.documentElement.style.fontSize = "14px";
+import { applyFontSizes } from "./lib/interfaceSettings";
+import { readSettingsValues, SETTINGS_VALUES_KEY } from "./lib/settings";
+
+// Yaak's default sizes unless changed in Settings' Interface tab, so the two apps read as one
+// family.
+applyFontSizes(readSettingsValues(localStorage.getItem(SETTINGS_VALUES_KEY)));

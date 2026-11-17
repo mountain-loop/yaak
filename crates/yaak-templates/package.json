@@ -10,6 +10,6 @@
     "build:clean": "rimraf ./pkg/.gitignore"
   },
   "devDependencies": {
-    "rimraf": "^6.1.2"
+    "rimraf": "^6.1.4"
   }
 }

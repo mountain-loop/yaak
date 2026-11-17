@@ -1,13 +1,19 @@
 import { platform } from "@yaakapp-internal/platform";
 import { useLicense } from "@yaakapp-internal/license";
 import { pluginsAtom, settingsAtom } from "@yaakapp-internal/models";
-import { HeaderSize, HStack, Icon, CountBadge } from "@yaakapp-internal/ui";
-import classNames from "classnames";
+import {
+  CountBadge,
+  SETTINGS_TAB_GENERAL,
+  SETTINGS_TAB_INTERFACE,
+  SETTINGS_TAB_LICENSE,
+  SETTINGS_TAB_THEME,
+  SettingsDialog,
+  type SettingsTabDef,
+} from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { useKeyPressEvent } from "react-use";
 import { appInfo } from "../../lib/appInfo";
 import { capitalize } from "../../lib/capitalize";
-import { TabContent, type TabItem, Tabs } from "../core/Tabs/Tabs";
 import { SettingsAgents } from "./SettingsAgents";
 import { SettingsCertificates } from "./SettingsCertificates";
 import { SettingsGeneral } from "./SettingsGeneral";
@@ -24,15 +30,15 @@ interface Props {
   hide?: () => void;
 }
 
-const TAB_GENERAL = "general";
-const TAB_INTERFACE = "interface";
-const TAB_THEME = "theme";
+const TAB_GENERAL = SETTINGS_TAB_GENERAL;
+const TAB_INTERFACE = SETTINGS_TAB_INTERFACE;
+const TAB_THEME = SETTINGS_TAB_THEME;
 const TAB_SHORTCUTS = "shortcuts";
 const TAB_PROXY = "proxy";
 const TAB_CERTIFICATES = "certificates";
 const TAB_PLUGINS = "plugins";
 const TAB_AGENTS = "agents";
-const TAB_LICENSE = "license";
+const TAB_LICENSE = SETTINGS_TAB_LICENSE;
 const tabs = [
   TAB_GENERAL,
   TAB_THEME,
@@ -60,105 +66,57 @@ export default function Settings({ tab, hide }: Props) {
     if (hide == null) await platform.window.close();
   });
 
+  const tabDefs: Record<SettingsTab, Omit<SettingsTabDef, "value" | "label">> = {
+    [TAB_GENERAL]: { icon: "settings", content: <SettingsGeneral /> },
+    [TAB_THEME]: { icon: "palette", content: <SettingsTheme /> },
+    [TAB_INTERFACE]: { icon: "columns_2", content: <SettingsInterface /> },
+    [TAB_SHORTCUTS]: { icon: "keyboard", content: <SettingsHotkeys /> },
+    [TAB_PLUGINS]: {
+      icon: "puzzle",
+      rightSlot: <CountBadge count={plugins.filter((p) => p.source !== "bundled").length} />,
+      content: <SettingsPlugins defaultSubtab={mainTab === TAB_PLUGINS ? subtab : undefined} />,
+      contentClassName: "h-full grid grid-rows-1",
+    },
+    [TAB_AGENTS]: {
+      icon: "sparkles",
+      hidden: !platform.capabilities.agents,
+      content: <SettingsAgents />,
+    },
+    [TAB_CERTIFICATES]: {
+      icon: "shield_check",
+      rightSlot: <CountBadge count={settings.clientCertificates.length} />,
+      content: <SettingsCertificates />,
+    },
+    [TAB_PROXY]: {
+      icon: "wifi",
+      rightSlot: settings.proxy?.type === "enabled" ? <CountBadge count /> : null,
+      content: <SettingsProxy />,
+    },
+    [TAB_LICENSE]: {
+      icon: "key_round",
+      hidden: !appInfo.featureLicense,
+      rightSlot:
+        licenseCheck.check.data?.status === "personal_use" ? (
+          <CountBadge count color="notice" />
+        ) : null,
+      content: <SettingsLicense />,
+    },
+  };
+
   return (
-    <div className={classNames("grid grid-rows-[auto_minmax(0,1fr)] h-full")}>
-      {hide ? (
-        <span />
-      ) : (
-        <HeaderSize
-          data-tauri-drag-region
-          ignoreControlsSpacing
-          onlyXWindowControl
-          size="md"
-          className="x-theme-appHeader bg-surface text-text-subtle flex items-center justify-center border-b border-border-subtle text-sm font-semibold"
-          osType={platform.osType()}
-          hideWindowControls={settings.hideWindowControls}
-          useNativeTitlebar={settings.useNativeTitlebar}
-          interfaceScale={settings.interfaceScale}
-        >
-          <HStack
-            space={2}
-            justifyContent="center"
-            className="w-full h-full grid grid-cols-[1fr_auto] pointer-events-none"
-          >
-            <div className={classNames(platform.osType() === "macos" ? "text-center" : "pl-2")}>Settings</div>
-          </HStack>
-        </HeaderSize>
-      )}
-      <Tabs
-        layout="horizontal"
-        defaultValue={mainTab}
-        addBorders
-        tabListClassName="min-w-40 bg-surface x-theme-sidebar border-r border-border pl-3"
-        label="Settings"
-        tabs={tabs.map(
-          (value): TabItem => ({
-            value,
-            label: capitalize(value),
-            hidden:
-              (!appInfo.featureLicense && value === TAB_LICENSE) ||
-              (!platform.capabilities.agents && value === TAB_AGENTS),
-            leftSlot:
-              value === TAB_GENERAL ? (
-                <Icon icon="settings" className="text-secondary" />
-              ) : value === TAB_THEME ? (
-                <Icon icon="palette" className="text-secondary" />
-              ) : value === TAB_INTERFACE ? (
-                <Icon icon="columns_2" className="text-secondary" />
-              ) : value === TAB_SHORTCUTS ? (
-                <Icon icon="keyboard" className="text-secondary" />
-              ) : value === TAB_CERTIFICATES ? (
-                <Icon icon="shield_check" className="text-secondary" />
-              ) : value === TAB_PROXY ? (
-                <Icon icon="wifi" className="text-secondary" />
-              ) : value === TAB_PLUGINS ? (
-                <Icon icon="puzzle" className="text-secondary" />
-              ) : value === TAB_AGENTS ? (
-                <Icon icon="sparkles" className="text-secondary" />
-              ) : value === TAB_LICENSE ? (
-                <Icon icon="key_round" className="text-secondary" />
-              ) : null,
-            rightSlot:
-              value === TAB_CERTIFICATES ? (
-                <CountBadge count={settings.clientCertificates.length} />
-              ) : value === TAB_PLUGINS ? (
-                <CountBadge count={plugins.filter((p) => p.source !== "bundled").length} />
-              ) : value === TAB_PROXY && settings.proxy?.type === "enabled" ? (
-                <CountBadge count />
-              ) : value === TAB_LICENSE && licenseCheck.check.data?.status === "personal_use" ? (
-                <CountBadge count color="notice" />
-              ) : null,
-          }),
-        )}
-      >
-        <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsGeneral />
-        </TabContent>
-        <TabContent value={TAB_INTERFACE} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsInterface />
-        </TabContent>
-        <TabContent value={TAB_THEME} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsTheme />
-        </TabContent>
-        <TabContent value={TAB_SHORTCUTS} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsHotkeys />
-        </TabContent>
-        <TabContent value={TAB_PLUGINS} className="h-full grid grid-rows-1">
-          <SettingsPlugins defaultSubtab={mainTab === TAB_PLUGINS ? subtab : undefined} />
-        </TabContent>
-        <TabContent value={TAB_AGENTS} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsAgents />
-        </TabContent>
-        <TabContent value={TAB_PROXY} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsProxy />
-        </TabContent>
-        <TabContent value={TAB_CERTIFICATES} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsCertificates />
-        </TabContent>
-        <TabContent value={TAB_LICENSE} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsLicense />
-        </TabContent>
-      </Tabs>
-    </div>
+    <SettingsDialog
+      defaultTab={mainTab}
+      titlebar={
+        hide
+          ? null
+          : {
+              osType: platform.osType(),
+              hideWindowControls: settings.hideWindowControls,
+              useNativeTitlebar: settings.useNativeTitlebar,
+              interfaceScale: settings.interfaceScale,
+            }
+      }
+      tabs={tabs.map((value) => ({ value, label: capitalize(value), ...tabDefs[value] }))}
+    />
   );
 }

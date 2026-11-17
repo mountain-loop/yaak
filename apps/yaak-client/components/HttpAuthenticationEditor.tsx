@@ -6,7 +6,7 @@ import type {
   Workspace,
 } from "@yaakapp-internal/models";
 import { patchModel } from "@yaakapp-internal/models";
-import { HStack, Icon, InlineCode } from "@yaakapp-internal/ui";
+import { HStack, Icon, InlineCode, SegmentedControl } from "@yaakapp-internal/ui";
 import { useCallback } from "react";
 import { openFolderSettings } from "../commands/openFolderSettings";
 import { openWorkspaceSettings } from "../commands/openWorkspaceSettings";
@@ -21,7 +21,6 @@ import { IconButton } from "./core/IconButton";
 import { Input, type InputProps } from "./core/Input";
 import { Link } from "./core/Link";
 import { RadioDropdown } from "./core/RadioDropdown";
-import { SegmentedControl } from "./core/SegmentedControl";
 import { DynamicForm } from "./DynamicForm";
 import { EmptyStateText } from "./EmptyStateText";
 
