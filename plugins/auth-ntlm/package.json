@@ -15,6 +15,6 @@
     "test": "vp test --run tests"
   },
   "dependencies": {
-    "httpntlm": "^1.8.13"
+    "httpntlm": "^1.8.14"
   }
 }
