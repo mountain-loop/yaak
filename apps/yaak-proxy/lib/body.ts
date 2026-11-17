@@ -4,7 +4,12 @@ import {
   decodeBodyText,
   strictUtf8Text,
 } from "@yaakapp-internal/lib/decodeBodyText";
-import type { FilterLanguage, Flow, FlowBody } from "@yaakapp-internal/proxy-lib";
+import type {
+  FilterLanguage,
+  Flow,
+  FlowBody,
+  GetFlowBodyResponse,
+} from "@yaakapp-internal/proxy-lib";
 import type { CodeEditorProps } from "@yaakapp-internal/ui/editor";
 import vkBeautify from "vkbeautify";
 import { rpc } from "./rpc";
@@ -13,18 +18,31 @@ import { rpc } from "./rpc";
 export function flowBodyQueryOptions(flow: Flow, which: FlowBody) {
   return queryOptions({
     queryKey: ["get_flow_body", flow.id, which, flow.updatedAt],
-    queryFn: async () => {
-      const res = await rpc("get_flow_body", { flowId: flow.id, which });
-      return {
-        bytes: base64ToBytes(res.data),
-        truncated: res.truncated,
-        storedSize: res.storedSize,
-        decodeError: res.decodeError ?? null,
-      };
-    },
+    queryFn: async () => viewerBody(await rpc("get_flow_body", { flowId: flow.id, which })),
     // Reading a stored body fails the same way every time, so the error shows at once.
     retry: false,
+    // A stream's body changes with each message, each a new key: dropped once unwatched, so a
+    // long stream left selected doesn't hold a copy per message
+    ...(flow.streamKind == null ? {} : { gcTime: 0 }),
   });
+}
+
+/** The body RPC's answer as the viewer reads it, with what to know of it beyond its bytes */
+export function viewerBody(res: GetFlowBodyResponse) {
+  return {
+    bytes: base64ToBytes(res.data),
+    truncated: res.truncated,
+    storedSize: res.storedSize,
+    decodeError: res.decodeError ?? null,
+    /** Why there is no body, as a WebSocket has none after its 101 */
+    note: res.note ?? null,
+  };
+}
+
+/** What an empty body's pane says: a WebSocket's points at its messages */
+export function emptyBodyText(which: FlowBody, note: string | null): string {
+  if (note != null) return "No body. See Messages.";
+  return which === "request" ? "No request body" : "Empty";
 }
 
 export function base64ToBytes(data: string): Uint8Array<ArrayBuffer> {
@@ -188,6 +206,45 @@ export function shortContentType(contentType: string | null): string | null {
   const subtype = essence.split("/")[1] ?? essence;
   const suffix = subtype.split("+").pop() ?? subtype;
   return suffix.replace(/^x-/, "");
+}
+
+/**
+ * The short name a body tab's badge gives a body's type, as the Type column and the Pretty and
+ * Raw switch read it: JSON, XML, HTML, CSV, Form, Multipart, GraphQL, Image, Binary and so on.
+ * Null when there is no body.
+ */
+export function bodyTypeBadge(
+  contentType: string | null,
+  size: number,
+  graphql = false,
+): string | null {
+  if (size <= 0) return null;
+  if (graphql) return "GraphQL";
+  const essence = mimeEssence(contentType);
+  if (essence == null) return "Binary";
+  const [type = "", subtype = ""] = essence.split("/");
+  const suffix = subtype.split("+").pop() ?? subtype;
+  if (type === "multipart") return "Multipart";
+  if (essence === "application/x-www-form-urlencoded") return "Form";
+  if (essence === "application/graphql" || suffix === "graphql") return "GraphQL";
+  if (essence === "image/svg+xml") return "SVG";
+  if (type === "image") return "Image";
+  if (type === "audio") return "Audio";
+  if (type === "video") return "Video";
+  if (type === "font") return "Font";
+  if (suffix === "json" || suffix === "x-ndjson" || suffix === "ndjson") return "JSON";
+  if (suffix === "xml") return "XML";
+  if (suffix === "html" || suffix === "xhtml") return "HTML";
+  if (suffix === "csv") return "CSV";
+  if (suffix === "tab-separated-values") return "TSV";
+  if (suffix === "javascript" || suffix === "ecmascript") return "JS";
+  if (suffix === "css") return "CSS";
+  if (suffix === "markdown") return "Markdown";
+  if (suffix === "event-stream") return "SSE";
+  if (suffix === "pdf") return "PDF";
+  if (/grpc|protobuf|proto/.test(suffix)) return "Protobuf";
+  if (type === "text") return "Text";
+  return "Binary";
 }
 
 /** Extensions for media types whose subtype isn't one */

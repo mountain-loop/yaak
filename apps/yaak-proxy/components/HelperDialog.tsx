@@ -48,8 +48,8 @@ export function HelperDialog() {
       open={open}
       onClose={close}
       size="dynamic"
-      title="Turn on Yaak Proxy under Allow in the Background"
-      description="In System Settings > General > Login Items. Newer macOS calls the list Background App Activity."
+      title="Approve Helper"
+      description="Turn on Yaak Proxy in System Settings > General > Login Items."
       className="w-[34rem]"
     >
       <div className="grid gap-3 pb-4">

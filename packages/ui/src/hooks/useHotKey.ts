@@ -21,6 +21,8 @@ export interface HotkeyContextValue {
   os: string;
   /** The key combos bound to an action, like `["Meta+Shift+s"]`, or null when it has none */
   bindingFor: (action: HotkeyAction) => string[] | null;
+  /** What an action does, in words, for lists of shortcuts. Falls back to the action's name */
+  labelFor?: (action: HotkeyAction) => string;
   /** Bind a callback to an action's keys, returning the unbind */
   register: (
     action: HotkeyAction,
@@ -47,6 +49,11 @@ export function useHotKey(
     if (action == null) return;
     return register(action, callback, options);
   }, [action, callback, options, register]);
+}
+
+export function useHotkeyLabel(action: HotkeyAction): string {
+  const { labelFor } = useContext(HotkeyContext);
+  return labelFor?.(action) ?? action;
 }
 
 export function useFormattedHotkey(action: HotkeyAction | null): string[] | null {

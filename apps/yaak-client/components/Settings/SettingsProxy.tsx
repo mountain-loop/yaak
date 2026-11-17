@@ -1,6 +1,6 @@
 import { patchModel, settingsAtom } from "@yaakapp-internal/models";
 import type { ProxySetting } from "@yaakapp-internal/models";
-import { Heading, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { InlineCode, SettingsPage } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { CommercialUseBanner } from "../CommercialUseBanner";
 import {
@@ -26,15 +26,11 @@ export function SettingsProxy() {
   };
 
   return (
-    <VStack space={1.5} className="mb-4">
-      <div className="mb-3">
-        <Heading>Proxy</Heading>
-        <p className="text-text-subtle">
-          Configure a proxy server for HTTP requests. Useful for corporate firewalls, debugging
-          traffic, or routing through specific infrastructure.
-        </p>
-      </div>
-      <CommercialUseBanner source="proxy-settings" title="Using a proxy for work?" />
+    <SettingsPage
+      title="Proxy"
+      description="Configure a proxy server for HTTP requests. Useful for corporate firewalls, debugging traffic, or routing through specific infrastructure."
+      banner={<CommercialUseBanner source="proxy-settings" title="Using a proxy for work?" />}
+    >
       <SettingsList className="space-y-8">
         <SettingsSection title="Proxy">
           <SettingRowSelect
@@ -160,7 +156,7 @@ export function SettingsProxy() {
           </>
         )}
       </SettingsList>
-    </VStack>
+    </SettingsPage>
   );
 }
 

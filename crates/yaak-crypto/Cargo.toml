@@ -13,3 +13,14 @@ log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 yaak-models = { workspace = true }
+
+# The Secret Service backend keyring uses, to tell a missing service from a refusal.
+[target.'cfg(target_os = "linux")'.dependencies]
+dbus-secret-service = "4.1.0"
+
+[features]
+# `MasterKeySource::memory` and `MasterKeySource::refusing`, for other crates' tests.
+test-support = []
+
+[dev-dependencies]
+tempfile = "3"

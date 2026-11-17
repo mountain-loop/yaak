@@ -28,7 +28,7 @@ export interface SystemProxySwitch {
 /** What the system proxy switch shows */
 export function systemProxySwitch(state: SystemProxyState): SystemProxySwitch {
   if (state.pending != null) {
-    const description = state.helper ? "Changing the system proxy" : "Waiting for your password";
+    const description = state.helper ? "Changing the system proxy" : "Waiting for macOS";
     return { checked: state.pending, description, failed: false };
   }
   // A failed change leaves the switch where the system proxy actually is.
@@ -37,71 +37,75 @@ export function systemProxySwitch(state: SystemProxyState): SystemProxySwitch {
     const cancelled = /cancel/i.test(state.error);
     return {
       checked,
-      description: cancelled ? "Cancelled in the password prompt" : state.error,
+      description: cancelled ? "The password prompt was cancelled." : state.error,
       failed: true,
     };
   }
   return {
     checked,
     description: checked
-      ? "Routing this Mac's web traffic through Yaak Proxy"
-      : `Not routing. Only apps pointed at port ${state.port ?? 9090} are captured`,
+      ? "Traffic from every app will be recorded."
+      : `Only traffic sent to port ${state.port ?? 9090} will be recorded.`,
     failed: false,
   };
 }
 
 export interface HelperRow {
-  title: string;
-  /** Which way changes go, and why */
+  /** The helper's state, in one sentence */
   description: string;
+  /** What the helper is for, or what this state still needs, behind the row's info icon */
+  tooltip: string;
   /** What the row's button does, if it has one: the first two open the approval dialog */
   action: "install" | "approve" | "unregister" | null;
 }
 
-/** The privileged helper's row in the state pill menu, kept short */
+/** What the helper is for, the same in every state but one */
+const HELPER_TOOLTIP = "The helper changes the system proxy without a password prompt.";
+
+/** The privileged helper's row in Settings, kept short */
 export function helperRow(helper: HelperState, backend: SystemProxyBackend): HelperRow {
   switch (helper) {
     case "unavailable":
       return {
-        title: "Helper: not in dev builds",
-        description: "Changes use the password prompt.",
+        description: "The helper is not available in dev builds.",
+        tooltip: HELPER_TOOLTIP,
         action: null,
       };
     case "not_found":
       // What macOS reports until the helper is first installed.
       return {
-        title: "Helper: not found by macOS",
-        description: "Changes use the password prompt.",
+        description: "macOS could not find the helper.",
+        tooltip: HELPER_TOOLTIP,
         action: "install",
       };
     case "not_registered":
       return {
-        title: "Helper: not installed",
-        description: "Changes use the password prompt.",
+        description: "The helper is not installed.",
+        tooltip: HELPER_TOOLTIP,
         action: "install",
       };
     case "requires_approval":
       return {
-        title: "Helper: awaiting approval",
-        description: "Changes use the password prompt.",
+        description: "The helper is awaiting approval.",
+        tooltip: HELPER_TOOLTIP,
         action: "approve",
       };
     case "enabled":
       return {
-        title: "Helper: enabled",
-        description:
+        description: "The helper is installed.",
+        tooltip:
           backend === "helper"
-            ? "No password prompts."
-            : "One more password prompt puts back your settings.",
+            ? HELPER_TOOLTIP
+            : "One more password prompt is needed to restore the system proxy settings.",
         action: "unregister",
       };
     default: {
       // Every state is handled above; one this build doesn't know still gets a row, rather
-      // than taking the whole menu down.
+      // than taking the whole page down.
       const unknown: never = helper;
       return {
-        title: `Helper: ${String(unknown)}`,
-        description: "Changes use the password prompt.",
+        description: `The helper is ${String(unknown)}.`,
+        tooltip: HELPER_TOOLTIP,
         action: null,
       };
     }

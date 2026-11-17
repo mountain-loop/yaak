@@ -4,6 +4,10 @@
   },
   "bundle": {
     "externalBin": ["vendored/helper/yaak-proxy-helper"],
+    "resources": {
+      "../yaak-app-client/vendored/protoc/include": "vendored/protoc/include",
+      "../yaak-app-client/vendored/protoc/yaakprotoc*": "vendored/protoc/"
+    },
     "macOS": {
       "minimumSystemVersion": "13.0",
       "hardenedRuntime": true,

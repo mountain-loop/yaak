@@ -1,22 +1,24 @@
-import { Button, Icon, LoadingIcon } from "@yaakapp-internal/ui";
+import { Button, Icon, IconTooltip, InlineCode, LoadingIcon } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import type { ReactNode } from "react";
 import { useRpcMutation } from "../hooks/useRpcMutation";
+import { encryptingPercent } from "../lib/encrypting";
 import { proxyStateAtom } from "../lib/store";
 import { useCopyEnvironment, useProxySetup, useSystemProxySwitch } from "./ProxyStatus";
 
 type StepState = "todo" | "next" | "wait" | "done" | "fail";
 
 /**
- * The list's empty state until traffic arrives: trust the certificate, turn on the system proxy,
- * then see traffic. Not dismissable and nothing remembered; the first flow replaces it. Copy
- * environment beside it serves someone who wants one terminal proxied and nothing system-wide.
+ * The list's empty state until traffic arrives: turn on the system proxy, then see traffic. The
+ * certificate is trusted at the first Decrypt, not here, as nothing needs it before. Not
+ * dismissable and nothing remembered; the first flow replaces it. Copy environment beside it
+ * serves someone who wants one terminal proxied and nothing system-wide.
  */
 export function FirstRun() {
   const proxyState = useAtomValue(proxyStateAtom);
   const setup = useProxySetup();
-  const { caStatus, trust, systemProxy, setSystemProxy } = setup;
+  const { systemProxy, setSystemProxy } = setup;
   const systemSwitch = useSystemProxySwitch(setup);
   const execute = useRpcMutation("execute_action");
   const retry = useRpcMutation("take_over");
@@ -26,74 +28,41 @@ export function FirstRun() {
   // Changed only by the process that owns the engine, so not from here while the CLI does.
   const otherOwner = proxyState?.otherOwner != null;
   const recording = proxyState?.recording !== false;
-  const trusted = caStatus.data?.trusted === true;
   const systemSupported = systemProxy.data?.supported !== false;
   const systemOn = systemProxy.data?.enabled === true;
 
-  const trustState: StepState = trusted
-    ? "done"
-    : trust.isPending
-      ? "wait"
-      : trust.error != null
-        ? "fail"
-        : "next";
   const systemState: StepState = setSystemProxy.isPending
     ? "wait"
     : systemOn
       ? "done"
       : systemSwitch.failed
         ? "fail"
-        : trusted
-          ? "next"
-          : "todo";
-  const ready = trusted && (systemOn || !systemSupported);
-  const trafficState: StepState = !running && !otherOwner ? "fail" : ready ? "wait" : "todo";
+        : "next";
+  const ready = systemOn || !systemSupported;
+  const encrypting = !running && !otherOwner ? encryptingPercent(proxyState) : null;
+  const trafficState: StepState =
+    encrypting != null ? "wait" : !running && !otherOwner ? "fail" : ready ? "wait" : "todo";
 
   return (
     <div className="grid place-items-center h-full px-10 pb-16 pt-6">
       <div className="w-full max-w-[40rem]">
         <div className="text-xl font-semibold mb-1.5">Set up Yaak Proxy</div>
         <div className="text-text-subtle text-sm leading-relaxed mb-4">
-          Three steps, once. Afterwards every app on this Mac sends its traffic here, and HTTPS
-          reads as plain text.
+          {systemSupported
+            ? "Traffic from every app on this Mac will be recorded."
+            : "Traffic appears here as apps send it."}
         </div>
         <div className="rounded-lg border border-border-subtle bg-surface divide-y divide-border-subtle">
-          <Step
-            n={1}
-            state={trustState}
-            title={trusted ? "Certificate trusted" : "Trust the certificate"}
-            description={
-              trusted
-                ? "Yaak Proxy CA, in your login keychain."
-                : trustState === "wait"
-                  ? "Waiting for your password in the macOS prompt."
-                  : trustState === "fail"
-                    ? (trust.error?.message ?? "The certificate was not trusted.")
-                    : "So HTTPS reads as plain text. macOS asks for your login password once."
-            }
-            action={
-              trustState === "next" || trustState === "fail" ? (
-                <Button
-                  size="2xs"
-                  variant={trustState === "fail" ? "border" : "solid"}
-                  color={trustState === "fail" ? "default" : "primary"}
-                  onClick={() => trust.mutate({})}
-                >
-                  {trustState === "fail" ? "Try again" : "Trust certificate"}
-                </Button>
-              ) : null
-            }
-          />
           {systemSupported && (
             <Step
-              n={2}
+              n={1}
               state={systemState}
-              title={systemOn ? "System proxy on" : "Turn on the system proxy"}
+              title={systemOn ? "System proxy overridden" : "Override system proxy"}
               description={
                 otherOwner && !systemOn
                   ? proxyState?.otherOwner?.owner === "cli"
-                    ? "The CLI owns the proxy. Take over to turn this on from here."
-                    : "Another Yaak Proxy window owns the engine. Quit it to use this one."
+                    ? "Take over from the CLI to change this."
+                    : "Quit the other Yaak Proxy to use this one."
                   : systemSwitch.description
               }
               action={
@@ -104,24 +73,32 @@ export function FirstRun() {
                     color={systemState === "fail" ? "default" : "primary"}
                     onClick={() => setSystemProxy.mutate({ enabled: true })}
                   >
-                    {systemState === "fail" ? "Try again" : "Turn on"}
+                    {systemState === "fail" ? "Retry" : "Enable"}
                   </Button>
                 ) : null
               }
             />
           )}
           <Step
-            n={systemSupported ? 3 : 2}
+            n={systemSupported ? 2 : 1}
             state={trafficState}
-            title={trafficState === "wait" ? "Waiting for traffic" : "See traffic"}
+            title={
+              encrypting != null
+                ? `Encrypting recorded traffic, ${encrypting}`
+                : trafficState === "wait"
+                  ? "Waiting for traffic"
+                  : "See traffic"
+            }
             description={
-              trafficState === "fail"
-                ? (retry.error?.message ?? proxyState?.startError ?? "The proxy has not started.")
-                : !recording
-                  ? "Recording is paused, so traffic passes through without being stored."
-                  : trafficState === "wait"
-                    ? "Open a website or send a request, and its flow appears here."
-                    : "Flows appear here as apps send requests."
+              encrypting != null
+                ? "Recording will start once encryption finishes."
+                : trafficState === "fail"
+                  ? (retry.error?.message ?? proxyState?.startError ?? "The proxy failed to start.")
+                  : !recording
+                    ? "Recording is paused."
+                    : trafficState === "wait"
+                      ? "Open a website or send a request to begin."
+                      : "Flows appear here as apps send requests."
             }
             action={
               trafficState === "fail" ? (
@@ -139,14 +116,14 @@ export function FirstRun() {
                   color="primary"
                   onClick={() => execute.mutate({ scope: "global", action: "recording_toggle" })}
                 >
-                  Resume recording
+                  Resume Recording
                 </Button>
               ) : null
             }
           />
         </div>
         <div className="flex items-center gap-3 mt-4 text-sm text-text-subtle">
-          <span>Only need one terminal or one app? Copy the environment instead.</span>
+          <span>To proxy a single terminal instead, copy the environment.</span>
           <Button
             size="2xs"
             variant="border"
@@ -154,8 +131,18 @@ export function FirstRun() {
             leftSlot={<Icon icon="square_terminal" size="sm" />}
             onClick={() => void copyEnvironment()}
           >
-            Copy environment
+            Copy Environment
           </Button>
+        </div>
+        <div className="mt-2 text-sm text-text-subtle">
+          Agents can connect through <InlineCode>yaak mcp</InlineCode>.
+        </div>
+        <div className="flex items-center gap-1.5 mt-2 text-sm text-text-subtle">
+          Recorded traffic is encrypted on disk.
+          <IconTooltip
+            iconSize="sm"
+            content="The key is kept in the system keychain, so the system may ask to let Yaak Proxy use it."
+          />
         </div>
       </div>
     </div>

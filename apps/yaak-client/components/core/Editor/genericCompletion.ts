@@ -1,15 +1,8 @@
-import type { Completion, CompletionContext } from "@codemirror/autocomplete";
-import type { GenericCompletionOption } from "@yaakapp-internal/plugins";
+import type { CompletionContext } from "@codemirror/autocomplete";
+import type { GenericCompletionConfig } from "@yaakapp-internal/ui";
 import { defaultBoost } from "./twig/completion";
 
-export type GenericCompletion = GenericCompletionOption & {
-  apply?: Completion["apply"];
-};
-
-export interface GenericCompletionConfig {
-  minMatch?: number;
-  options: GenericCompletion[];
-}
+export type { GenericCompletion, GenericCompletionConfig } from "@yaakapp-internal/ui";
 
 /**
  * Complete options, always matching until the start of the line
