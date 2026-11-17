@@ -4,7 +4,7 @@ import { fixtures } from "./fixtures";
 /**
  * Dev only: traffic for HTTPS decryption's states, by `?scene=`: `encrypted`, the first minute
  * with nothing decrypted, and `mixed`, some decrypted, a refused handshake and the tunnel passed
- * through after it.
+ * through after it, and a server that could not be reached.
  */
 export type HttpsScene = "encrypted" | "mixed";
 
@@ -169,6 +169,19 @@ function mixedScene(): Flow[] {
     }),
     decrypted(9, 0, "https://api.typefully.com/v1/drafts", apps.dia),
     tunnel(10, "www.google.com", apps.dia, { elapsedMs: null }),
+    {
+      ...tunnel(11, "jig3d.com", apps.dia),
+      method: "",
+      url: "https://jig3d.com",
+      tunnelled: false,
+      tunnelReason: null,
+      error:
+        "DNS lookup failed: failed to lookup address information: nodename nor servname provided, or not known",
+      elapsedMs: 3,
+      remoteAddr: null,
+      requestSize: 0,
+      responseSize: 0,
+    },
   ];
 }
 

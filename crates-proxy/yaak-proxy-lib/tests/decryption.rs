@@ -169,7 +169,7 @@ async fn a_refused_handshake_is_one_flow_per_address() {
     assert!(rejected.elapsed_ms.is_some(), "ended, not pending");
     // No request was sent, so there is none to save.
     let preview = rpc(&ctx, "preview_save", json!({"flowId": rejected.id})).await;
-    assert!(preview.unwrap_err().starts_with("The TLS handshake failed"));
+    assert!(preview.unwrap_err().starts_with("The connection failed"));
 
     // Passed through from now on, naming the refusal.
     let _tunnel = open_tunnel(&ctx, &target).await;
@@ -239,6 +239,55 @@ async fn a_refused_handshake_is_one_flow_per_address() {
         assert!(Instant::now() < deadline, "no second refusal");
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
+}
+
+/// A server the engine can't reach fails the CONNECT, and is one failed flow: no tunnel, no
+/// refused handshake, nothing to reconnect or save.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unreachable_server_is_one_failed_flow() {
+    // Everything is tunnelled, so a tunnel would be recorded, and kept to reconnect.
+    let (_dir, ctx, _events) = started(&[]);
+    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap();
+    let mut tcp = TcpStream::connect(("127.0.0.1", ctx.port().unwrap())).await.unwrap();
+    let connect = format!("CONNECT {closed} HTTP/1.1\r\nHost: {closed}\r\n\r\n");
+    tcp.write_all(connect.as_bytes()).await.unwrap();
+    let mut head = Vec::new();
+    while !head.ends_with(b"\r\n\r\n") {
+        head.push(tcp.read_u8().await.unwrap());
+    }
+    assert!(head.starts_with(b"HTTP/1.1 502"), "{}", String::from_utf8_lossy(&head));
+
+    let url = format!("https://{closed}");
+    let failed = wait_for(&ctx, "failed", |f| f.url == url).await;
+    assert_eq!(failed.method, "");
+    assert!(failed.error.as_deref().unwrap().starts_with("Connection refused: "), "{failed:?}");
+    assert!(failed.elapsed_ms.is_some(), "ended, not pending");
+    assert_eq!(failed.status, None);
+    assert!(!failed.tunnelled);
+    assert_eq!((failed.tunnel_reason, failed.tls_rejected.as_deref()), (None, None));
+    assert_eq!(failed.client_addr, Some(tcp.local_addr().unwrap().to_string()));
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(flows(&ctx).len(), 1, "one flow");
+
+    let ids = |listed: Value| -> Vec<Value> {
+        listed["flows"].as_array().unwrap().iter().map(|f| f["id"].clone()).collect()
+    };
+    let errors = rpc(&ctx, "list_flows", json!({"query": "@is:error"})).await.unwrap();
+    assert_eq!(ids(errors), vec![json!(failed.id)]);
+    for query in ["@is:encrypted", "@is:rejected"] {
+        let listed = rpc(&ctx, "list_flows", json!({"query": query})).await.unwrap();
+        assert!(ids(listed).is_empty(), "{query}");
+    }
+
+    // Listed now, a tunnel to it would be decrypted on a reconnect; there is none.
+    let saved = rpc(&ctx, "edit_decrypt_list", json!({"add": ["127.0.0.1"]})).await.unwrap();
+    assert_eq!(saved["stillEncrypted"], 0);
+    assert!(reconnectable(&ctx, json!({})).await.is_empty());
+    assert!(reconnectable(&ctx, json!({"flowId": failed.id})).await.is_empty());
+    let passthrough = rpc(&ctx, "list_passthrough", json!({})).await.unwrap();
+    assert_eq!(passthrough["addresses"], json!([]));
+    let preview = rpc(&ctx, "preview_save", json!({"flowId": failed.id})).await;
+    assert!(preview.unwrap_err().starts_with("The connection failed"));
 }
 
 /// Open tunnels are kept whether or not flows are recorded; saving the list closes none of

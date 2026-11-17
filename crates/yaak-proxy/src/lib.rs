@@ -3,6 +3,7 @@ mod cert;
 mod connection;
 mod decode;
 mod decrypt;
+mod dial;
 mod grpc;
 mod messages;
 #[cfg(target_os = "macos")]
@@ -24,8 +25,6 @@ use std::time::SystemTime;
 use bytes::Bytes;
 use http::HeaderValue;
 use hyper_util::client::legacy::Client;
-#[cfg(not(target_os = "macos"))]
-use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use rustls::ClientConfig;
 use rustls::pki_types::CertificateDer;
@@ -106,7 +105,8 @@ impl ProxyConfig {
 /// passes. An HTTPS connection the engine tunnels without decrypting, because the decrypt policy
 /// leaves it out or its client rejected the engine's certificate, is a flow of its own, from
 /// `TunnelStart` to `TunnelEnd`. A client's failed handshake that starts its address being
-/// passed through is a flow too, of the one event `HandshakeFailed`. Other traffic tunnelled
+/// passed through is a flow too, of the one event `HandshakeFailed`, and so is a CONNECT whose
+/// server could not be reached, of the one event `ConnectFailed`. Other traffic tunnelled
 /// blind (non-TLS CONNECT payloads, upgrades to protocols other than WebSocket) produces no
 /// events.
 #[derive(Debug, Clone)]
@@ -151,7 +151,11 @@ pub enum ProxyEvent {
     UpstreamConnection {
         id: u64,
         /// Milliseconds from `started_at` to the TCP connection, and to the TLS handshake's
-        /// end. None when the connection was opened for an earlier request and reused.
+        /// end. None when the connection was opened for an earlier request and reused. A
+        /// connection opened as its CONNECT came in, before this request, is charged to the
+        /// first request on it, as if opened just before it: `elapsed_connect_ms` is how long
+        /// opening it took, and this flow's later times are counted from that much before its
+        /// `started_at`, so they stay in order.
         elapsed_connect_ms: Option<u64>,
         elapsed_tls_ms: Option<u64>,
         /// `TLSv1.3`, `TLSv1.2`.
@@ -195,9 +199,11 @@ pub enum ProxyEvent {
         /// connection. Not an error of the engine's or the server's.
         cancelled: bool,
     },
-    /// No response: connecting to or requesting from upstream failed, and the client got a 502,
-    /// or the engine refused the request (no host to send it to, or it looped back to the engine)
-    /// with a 4xx or 5xx of its own.
+    /// No response. The server could not be reached, so the client's connection was dropped
+    /// unanswered, as it would have failed without the proxy: `error` is then the reason in plain
+    /// words and the system's error, as a `ConnectFailed`'s. Or the request failed once it was
+    /// on its way, and the client got a 502. Or the engine refused the request (no host to send
+    /// it to) with a 4xx of its own.
     Error {
         id: u64,
         error: String,
@@ -261,6 +267,22 @@ pub enum ProxyEvent {
         /// handshake error, which is not a rejection.
         rejection: Option<String>,
         /// The error the handshake ended with.
+        error: String,
+        /// Milliseconds from `started_at` to the failure.
+        elapsed_ms: u64,
+    },
+    /// A CONNECT's server could not be reached, so the CONNECT was answered with a 502, or a 504
+    /// when it timed out, and nothing was tunnelled or decrypted. A flow of its own, which
+    /// nothing follows.
+    ConnectFailed {
+        id: u64,
+        started_at: SystemTime,
+        /// `host[:port]`, the port left out when it is 443.
+        authority: String,
+        connection: u64,
+        client_addr: SocketAddr,
+        /// The reason in plain words, then the system's error: `DNS lookup failed: ...`,
+        /// `Connection refused: ...`, `Host unreachable: ...`, `Timed out: ...`.
         error: String,
         /// Milliseconds from `started_at` to the failure.
         elapsed_ms: u64,
@@ -497,19 +519,13 @@ fn upstream_tls_config(
     Ok(Arc::new(config))
 }
 
-/// Sends plain HTTP upstream. On macOS it connects through Network.framework, so Private Relay
-/// can't route the engine's own port-80 connections back into the engine (see [`nw`]).
-#[cfg(target_os = "macos")]
-type HttpClient = Client<nw::Connector, BoxBody>;
-#[cfg(not(target_os = "macos"))]
-type HttpClient = Client<HttpConnector, BoxBody>;
+/// Sends plain HTTP upstream, connecting as a CONNECT's dial does (see [`dial::Connector`]). On
+/// macOS it connects through Network.framework, so Private Relay can't route the engine's own
+/// port-80 connections back into the engine (see [`nw`]).
+type HttpClient = Client<dial::Connector, BoxBody>;
 
 fn http_client() -> HttpClient {
-    let builder = Client::builder(TokioExecutor::new());
-    #[cfg(target_os = "macos")]
-    return builder.build(nw::Connector);
-    #[cfg(not(target_os = "macos"))]
-    builder.build_http()
+    Client::builder(TokioExecutor::new()).build(dial::Connector)
 }
 
 fn via_marker() -> HeaderValue {

@@ -9,7 +9,6 @@
 
 use std::collections::HashMap;
 use std::ffi::{CStr, CString, c_char, c_void};
-use std::future::Future;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV6};
 use std::pin::Pin;
@@ -22,9 +21,6 @@ use block2::{Block, RcBlock};
 use bytes::Bytes;
 use dispatch2::{DispatchData, DispatchQueue, DispatchRetained};
 use hyper::Uri;
-use hyper::http::uri::Scheme;
-use hyper_util::client::legacy::connect::{Connected, Connection as HyperConnection};
-use hyper_util::rt::TokioIo;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::sync::{oneshot, watch};
 
@@ -124,15 +120,56 @@ impl NwError {
     fn to_io(self) -> io::Error {
         match self.domain {
             ERROR_DOMAIN_POSIX => io::Error::from_raw_os_error(self.code),
-            ERROR_DOMAIN_DNS => {
-                io::Error::other(format!("failed to look up address (DNS error {})", self.code))
-            }
+            ERROR_DOMAIN_DNS => io::Error::other(LookupFailed(self.code)),
             _ => io::Error::other(format!(
                 "Network.framework error (domain {}, code {})",
                 self.domain, self.code
             )),
         }
     }
+}
+
+/// A failed DNS lookup, by its `DNSServiceErrorType`.
+#[derive(Debug)]
+struct LookupFailed(i32);
+
+impl std::fmt::Display for LookupFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "failed to look up address (DNS error {})", self.0)
+    }
+}
+
+impl std::error::Error for LookupFailed {}
+
+/// Whether `e`, from [`connect`], is the host's name failing to resolve.
+pub(crate) fn is_lookup_failure(e: &io::Error) -> bool {
+    e.get_ref().is_some_and(|inner| inner.is::<LookupFailed>())
+}
+
+/// A connection refused by [`connect`] for going through a proxy on this Mac, which may be the
+/// engine. It says nothing of why there was no direct route.
+#[derive(Debug)]
+struct LocalProxyFallback {
+    host: String,
+    port: u16,
+}
+
+impl std::fmt::Display for LocalProxyFallback {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { host, port } = self;
+        write!(
+            f,
+            "could not connect to {host}:{port} without the system proxy, which may be Yaak Proxy"
+        )
+    }
+}
+
+impl std::error::Error for LocalProxyFallback {}
+
+/// Whether `e`, from [`connect`], is the connection refused for going through a proxy on this
+/// Mac, as it does when there is no direct route.
+pub(crate) fn is_local_proxy_fallback(e: &io::Error) -> bool {
+    e.get_ref().is_some_and(|inner| inner.is::<LocalProxyFallback>())
 }
 
 /// An `nw_connection_t`, cancelled when dropped.
@@ -538,6 +575,15 @@ pub(crate) async fn is_own_fallback(host: &str, port: u16) -> bool {
     false
 }
 
+/// Whether an open of `host:port` is under way, or recently went through a proxy on this Mac:
+/// whether a `CONNECT` to it may be the engine's own, which only [`is_own_fallback`] can tell,
+/// once the `CONNECT` is answered. Does not wait.
+pub(crate) fn has_attempts(host: &str, port: u16) -> bool {
+    let mut attempts = ATTEMPTS.lock().unwrap();
+    prune_attempts(&mut attempts);
+    attempts.contains_key(&attempt_key(host, port))
+}
+
 /// Opens a TCP connection to `host:port` that skips the system proxy where it can.
 pub(crate) async fn connect(host: &str, port: u16) -> io::Result<NwStream> {
     open(host, port, |_| {}).await
@@ -611,9 +657,7 @@ async fn open(host: &str, port: u16, configure: impl FnOnce(NwObject)) -> io::Re
     let via_local_proxy = conn.used_local_proxy().await;
     attempt.finish(via_local_proxy);
     if via_local_proxy {
-        return Err(io::Error::other(format!(
-            "could not connect to {host}:{port} without the system proxy, which may be Yaak Proxy"
-        )));
+        return Err(io::Error::other(LocalProxyFallback { host: host.to_string(), port }));
     }
     Ok(NwStream {
         remote_addr: conn.remote_addr(),
@@ -654,78 +698,6 @@ unsafe fn is_local_endpoint(endpoint: NwObject) -> bool {
                 .unwrap_or(true),
             _ => true,
         }
-    }
-}
-
-/// The address a plain-HTTP response came from, in its extensions.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct RemoteAddr(pub(crate) SocketAddr);
-
-/// Connects hyper-util's client to plain-HTTP origins through [`connect`].
-#[derive(Clone, Copy, Default)]
-pub(crate) struct Connector;
-
-impl tower_service::Service<Uri> for Connector {
-    type Response = NwIo;
-    type Error = io::Error;
-    type Future = Pin<Box<dyn Future<Output = io::Result<NwIo>> + Send>>;
-
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, uri: Uri) -> Self::Future {
-        Box::pin(async move {
-            let invalid = |message| io::Error::new(io::ErrorKind::InvalidInput, message);
-            if uri.scheme() != Some(&Scheme::HTTP) {
-                return Err(invalid("invalid URL, scheme is not http"));
-            }
-            let host = uri.host().ok_or_else(|| invalid("invalid URL, host is missing"))?;
-            let host = host.trim_start_matches('[').trim_end_matches(']');
-            let stream = connect(host, uri.port_u16().unwrap_or(80)).await?;
-            Ok(NwIo(TokioIo::new(stream)))
-        })
-    }
-}
-
-/// [`NwStream`] as hyper's IO, reporting where it connected.
-pub(crate) struct NwIo(TokioIo<NwStream>);
-
-impl HyperConnection for NwIo {
-    fn connected(&self) -> Connected {
-        let connected = Connected::new();
-        match self.0.inner().remote_addr() {
-            Some(addr) => connected.extra(RemoteAddr(addr)),
-            None => connected,
-        }
-    }
-}
-
-impl hyper::rt::Read for NwIo {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: hyper::rt::ReadBufCursor<'_>,
-    ) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.0).poll_read(cx, buf)
-    }
-}
-
-impl hyper::rt::Write for NwIo {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.0).poll_write(cx, buf)
-    }
-
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.0).poll_flush(cx)
-    }
-
-    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.0).poll_shutdown(cx)
     }
 }
 
@@ -983,6 +955,7 @@ mod tests {
             .expect("the connection kept waiting")
             .err()
             .expect("connected through the local proxy");
+        assert!(is_local_proxy_fallback(&err), "{err}");
         assert!(err.to_string().contains("without the system proxy"), "{err}");
 
         let (head, own, after) = tokio::time::timeout(WAIT, seen_rx).await.unwrap().unwrap();

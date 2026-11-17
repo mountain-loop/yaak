@@ -2,7 +2,7 @@ import type { Virtualizer } from "@tanstack/react-virtual";
 import classNames from "classnames";
 import { format } from "date-fns";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEventViewerKeyboard } from "../../hooks/useEventViewerKeyboard";
 import { Banner } from "../Banner";
 import { Button } from "../Button";
@@ -14,6 +14,9 @@ import { Separator } from "../Separator";
 import { SplitLayout } from "../SplitLayout";
 import { HStack } from "../Stacks";
 import { AutoScroller } from "./AutoScroller";
+
+/** How long a load runs before the loading message shows */
+const LOADING_MESSAGE_DELAY_MS = 200;
 
 interface EventViewerProps<T> {
   /** Array of events to display */
@@ -86,6 +89,17 @@ export function EventViewer<T>({
   const [activeIndex, setActiveIndexInternal] = useState<number | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
+  // The loading message waits a moment, so a load that finishes at once never flashes it
+  const [showLoading, setShowLoading] = useState(false);
+  useEffect(() => {
+    if (!isLoading) {
+      setShowLoading(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowLoading(true), LOADING_MESSAGE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [isLoading]);
+
   // Wrap setActiveIndex to notify parent
   const setActiveIndex = useCallback(
     (indexOrUpdater: number | null | ((prev: number | null) => number | null)) => {
@@ -149,6 +163,7 @@ export function EventViewer<T>({
   }, []);
 
   if (isLoading) {
+    if (!showLoading) return null;
     return <div className="p-3 text-text-subtlest italic">{loadingMessage}</div>;
   }
 

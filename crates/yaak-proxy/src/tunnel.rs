@@ -108,7 +108,8 @@ where
     relay(client, crate::nw::connect(host, port).await?, prefix).await
 }
 
-async fn relay<S, U>(mut client: S, mut upstream: U, prefix: &[u8]) -> io::Result<()>
+/// Copies bytes both ways between `client` and `upstream`, after sending `prefix` upstream.
+pub(crate) async fn relay<S, U>(mut client: S, mut upstream: U, prefix: &[u8]) -> io::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin,
     U: AsyncRead + AsyncWrite + Unpin,

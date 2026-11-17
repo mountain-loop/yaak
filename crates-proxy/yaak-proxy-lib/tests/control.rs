@@ -933,15 +933,21 @@ async fn the_decrypt_list_reaches_the_cli_that_owns_the_engine() {
     let list = rpc(&app, "set_decrypt_list", json!({"entries": ["*"]})).await.unwrap();
     assert_eq!(list["entries"][0], json!({"entry": "*", "builtIn": false}));
 
-    // Decrypted, the request is a flow of its own: a 502, as nothing listens there.
+    // Decrypted, the request is a flow of its own: a 502, as the server hangs up on its TLS.
     let ca = std::fs::read(dir.path().join("ca/ca.pem")).unwrap();
-    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
+    let hangs_up = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = hangs_up.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        loop {
+            drop(hangs_up.accept().await.unwrap());
+        }
+    });
     let client = reqwest::Client::builder()
         .proxy(reqwest::Proxy::all(format!("http://127.0.0.1:{}", cli.port().unwrap())).unwrap())
         .add_root_certificate(reqwest::Certificate::from_pem(&ca).unwrap())
         .build()
         .unwrap();
-    let url = format!("https://localhost:{closed}/forwarded");
+    let url = format!("https://localhost:{port}/forwarded");
     assert_eq!(client.get(&url).send().await.unwrap().status(), 502);
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {

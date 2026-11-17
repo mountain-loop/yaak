@@ -229,7 +229,8 @@ impl Flow {
         }
     }
 
-    /// A client's failed TLS handshake, recorded without a request: nothing to save or replay.
+    /// A client's failed TLS handshake, or a server that could not be reached, recorded without
+    /// a request: nothing to save or replay.
     pub fn is_handshake_only(&self) -> bool {
         self.method.is_empty()
     }
