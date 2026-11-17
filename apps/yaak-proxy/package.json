@@ -28,15 +28,15 @@
     "vkbeautify": "^0.99.3"
   },
   "devDependencies": {
-    "@rolldown/plugin-babel": "^0.3.0",
+    "@rolldown/plugin-babel": "^0.3.1",
     "@types/babel__core": "^7.20.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "^6.1.2",
+    "@vitejs/plugin-react": "^6.3.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "typescript": "^5.8.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@^1.4.0",
     "vite-plugin-wasm": "^3.5.0",
-    "vite-plus": "^1.4.0"
+    "vite-plus": "^1.6.0"
   }
 }
