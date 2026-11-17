@@ -1,0 +1,22 @@
+[package]
+name = "yaak-updater"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The update prompt, download and install that Yaak and Yaak Proxy share, and the macOS-safe
+# restart that follows an install. Each app checks for updates its own way and hands what it
+# finds to this crate.
+
+[dependencies]
+log = { workspace = true }
+md5 = "0.8.0"
+nanoid = "0.5.0"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tauri = { workspace = true }
+tauri-plugin-dialog = { workspace = true }
+tauri-plugin-updater = "2.10.1"
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time", "macros"] }
+ts-rs = { workspace = true }

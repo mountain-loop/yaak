@@ -69,6 +69,8 @@ export interface SettingsFontsView {
 export interface SettingsUpdatesView {
   /** A check for updates is running */
   checking: boolean;
+  /** Show the row that turns notification checks off; shown unless false */
+  notificationsSetting?: boolean;
 }
 
 /** Where a license stands, with what each state's copy needs */

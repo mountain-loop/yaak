@@ -1,5 +1,6 @@
 import {
   HeaderSize,
+  HeaderTint,
   IconButton,
   SidebarLayout,
   SplitLayout,
@@ -12,8 +13,12 @@ import { useState } from "react";
 import { useLocalStorage } from "react-use";
 import { flowLayoutAtom } from "../lib/atoms";
 import { setupIncomplete } from "../lib/firstRun";
-import { lockedAtom, noFlowsAtom, systemProxyEverOnAtom } from "../lib/store";
+import { useMenuExportHar } from "../lib/flowActions";
+import { useNavigationControls } from "../lib/navigation";
+import { proxyStatusOf, statusTintColor } from "../lib/proxyStatus";
+import { lockedAtom, noFlowsAtom, proxyStateAtom, systemProxyEverOnAtom } from "../lib/store";
 import { getOsType } from "../lib/tauri";
+import { AddColumnDialog } from "./AddColumnDialog";
 import { ClearFlowsButton } from "./ClearFlowsButton";
 import { FirstRun } from "./FirstRun";
 import { FlowDetail } from "./FlowDetail";
@@ -24,14 +29,17 @@ import { HelperDialog } from "./HelperDialog";
 import { SaveDialog } from "./SaveDialog";
 import { SavedSearchDialog } from "./SavedSearchDialog";
 import { SearchBar } from "./SearchBar";
-import { SettingsWindow, useOpenSettings } from "./Settings";
+import { SettingsDialogFallback, useOpenSettings } from "./Settings";
 import { Sidebar } from "./Sidebar";
+import { HttpsStrip } from "./HttpsStrip";
 import { TakeOverBanner } from "./TakeOverBanner";
 
 export function ProxyLayout() {
   const os = getOsType();
   const [flowLayout, setFlowLayout] = useAtom(flowLayoutAtom);
   const openSettings = useOpenSettings();
+  useMenuExportHar();
+  useNavigationControls();
   const [sidebarWidth, setSidebarWidth] = useLocalStorage("sidebar_width", 250);
   const [sidebarHidden, setSidebarHidden] = useLocalStorage("sidebar_hidden", false);
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useLocalStorage(
@@ -40,6 +48,7 @@ export function ProxyLayout() {
   );
   const [floating, setFloating] = useState(false);
   const isHidden = floating ? (floatingSidebarHidden ?? true) : (sidebarHidden ?? false);
+  const tint = statusTintColor(proxyStatusOf(useAtomValue(proxyStateAtom)));
 
   return (
     <div
@@ -57,19 +66,21 @@ export function ProxyLayout() {
         interfaceScale={1}
         className="x-theme-appHeader bg-surface"
       >
+        <HeaderTint color={tint} animate />
         {/* Yaak's silhouette: the sidebar toggle and the state pill where Yaak has the toggle and
             the environment, the search where it names the request, then its icons. Only the
             controls take the pointer: everything around them, the traffic lights' corner
             included, falls through to the header, which drags the window. */}
         <div
           data-tauri-drag-region
-          className="grid grid-cols-[minmax(auto,1fr)_minmax(0,26rem)_minmax(auto,1fr)] gap-2 items-center w-full h-full pointer-events-none"
+          className="grid grid-cols-[minmax(auto,1fr)_minmax(0,44rem)_minmax(auto,1fr)] gap-2 items-center w-full h-full pointer-events-none"
         >
           <div data-tauri-drag-region className="flex items-center gap-1 pl-1 whitespace-nowrap">
             <IconButton
               className="pointer-events-auto"
               size="sm"
               title="Toggle sidebar"
+              tooltip
               icon={isHidden ? "left_panel_hidden" : "left_panel_visible"}
               iconColor="secondary"
               onClick={() => {
@@ -93,6 +104,7 @@ export function ProxyLayout() {
               className="pointer-events-auto"
               icon={flowLayout === "horizontal" ? "columns_2" : "rows_2"}
               title={`Change to ${flowLayout === "horizontal" ? "vertical" : "horizontal"} layout`}
+              tooltip
               size="sm"
               iconColor="secondary"
               onClick={() =>
@@ -103,6 +115,7 @@ export function ProxyLayout() {
               className="pointer-events-auto"
               icon="settings"
               title="Settings"
+              tooltip
               size="sm"
               iconColor="secondary"
               onClick={() => openSettings()}
@@ -139,6 +152,7 @@ export function ProxyLayout() {
                 <IconButton
                   size="sm"
                   title="Toggle sidebar"
+                  tooltip
                   icon="left_panel_visible"
                   iconColor="secondary"
                   onClick={() => setFloatingSidebarHidden(true)}
@@ -153,6 +167,7 @@ export function ProxyLayout() {
       >
         <div className="h-full flex flex-col min-h-0">
           <TakeOverBanner />
+          <HttpsStrip />
           <div className="flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)]">
             <FlowsOrFirstRun flowLayout={flowLayout} />
           </div>
@@ -160,8 +175,9 @@ export function ProxyLayout() {
       </SidebarLayout>
       <SaveDialog />
       <SavedSearchDialog />
+      <AddColumnDialog />
       <HelperDialog />
-      <SettingsWindow />
+      <SettingsDialogFallback />
       <Toasts />
     </div>
   );
@@ -176,10 +192,9 @@ export function ProxyLayout() {
 function FlowsOrFirstRun({ flowLayout }: { flowLayout: SplitLayoutLayout }) {
   const locked = useAtomValue(lockedAtom);
   const noFlows = useAtomValue(noFlowsAtom) || locked != null;
-  const { caStatus, systemProxy } = useProxySetup();
+  const { systemProxy } = useProxySetup();
   const systemProxyEverOn = useAtomValue(systemProxyEverOnAtom);
   const incomplete = setupIncomplete({
-    trusted: caStatus.data?.trusted ?? null,
     systemProxySupported: systemProxy.data?.supported ?? null,
     systemProxyEverOn,
   });
@@ -188,7 +203,8 @@ function FlowsOrFirstRun({ flowLayout }: { flowLayout: SplitLayoutLayout }) {
   return (
     <SplitLayout
       storageKey="proxy_detail"
-      className="gap-1"
+      // The card sits a wider gutter from the list side by side; the handle fills the gutter.
+      gutter={flowLayout === "vertical" ? 8 : 20}
       layout={flowLayout}
       defaultRatio={0.55}
       firstSlot={({ style }) => <FlowList style={style} className="pt-1" />}

@@ -41,7 +41,7 @@ export async function loadSeenValues(paths: string[]): Promise<Record<string, st
 const PROBLEM_LABELS: Record<QueryDiagnostic["kind"], string> = {
   unknownField: "Unknown field",
   invalidValue: "Invalid value",
-  notYet: "Not yet",
+  notYet: "Not supported",
 };
 
 /** The terms of a search the backend cannot run, as the box underlines them */

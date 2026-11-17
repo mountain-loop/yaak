@@ -12,8 +12,7 @@ use yaak_models::blob_manager::BlobManager;
 const MESSAGE_PAGE: usize = 500;
 
 /// What a WebSocket's response body reads as: it has none.
-pub const WEBSOCKET_BODY_NOTE: &str =
-    "A WebSocket has no body after its 101 response. Its frames are its messages.";
+pub const WEBSOCKET_BODY_NOTE: &str = "A WebSocket has no body";
 
 /// Whether a flow's body is its stream's messages rather than bytes stored on their own: an
 /// event stream's response, a gRPC call's request, and its response when the server answered

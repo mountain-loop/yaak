@@ -387,7 +387,7 @@ async fn find_schema(
             }
             Err(_) => Ok((None, Some(format!("No schema for {service} on {authority}")))),
         },
-        Err(e) => Ok((None, Some(format!("No schema for {service}; reflection failed: {e}")))),
+        Err(e) => Ok((None, Some(format!("No schema for {service}. Reflection failed: {e}")))),
     }
 }
 
@@ -448,11 +448,15 @@ fn decode_with(
             json: yaak_grpc::message_to_json(&decoded)?,
             message_type: Some(message_type),
             schema: Some(schema),
-            note: message.truncated.then(|| "The message is cut at the capture limit".into()),
+            note: message
+                .truncated
+                .then(|| "The message was truncated at the capture limit".into()),
         }),
-        Err(e) => {
-            Ok(schemaless(payload, message, Some(format!("Did not decode as {message_type}: {e}"))))
-        }
+        Err(e) => Ok(schemaless(
+            payload,
+            message,
+            Some(format!("Failed to decode as {message_type}: {e}")),
+        )),
     }
 }
 
@@ -460,7 +464,7 @@ fn schemaless(payload: &[u8], message: &FlowMessage, reason: Option<String>) -> 
     let mut notes: Vec<String> = reason.into_iter().collect();
     notes.push("Decoded without a schema: field names and types are guesses".into());
     if message.truncated {
-        notes.push("The message is cut at the capture limit".into());
+        notes.push("The message was truncated at the capture limit".into());
     }
     let fields = decode_fields(payload, 0).unwrap_or_else(|| {
         notes.push("Not a valid protobuf message: shown as bytes".into());

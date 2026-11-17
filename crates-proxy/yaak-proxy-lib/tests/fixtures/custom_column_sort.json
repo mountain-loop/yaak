@@ -1,0 +1,101 @@
+{
+  "flows": [
+    {
+      "method": "GET",
+      "url": "https://x.com/a?page=2&Page=9",
+      "requestHeaders": [{ "name": "x-cache", "value": "req0" }],
+      "responseHeaders": [{ "name": "X-Cache", "value": "HIT" }]
+    },
+    {
+      "method": "POST",
+      "url": "https://x.com/b",
+      "responseHeaders": [{ "name": "x-cache", "value": "miss" }]
+    },
+    {
+      "method": "GET",
+      "url": "https://x.com/c?page=10"
+    },
+    {
+      "method": "POST",
+      "url": "https://x.com/d?q=a+b",
+      "requestHeaders": [{ "name": "X-CACHE", "value": "zeta" }]
+    },
+    {
+      "method": "GET",
+      "url": "https://x.com/e?page=",
+      "responseHeaders": [
+        { "name": "x-cache", "value": "hit" },
+        { "name": "x-cache", "value": "AAA" }
+      ]
+    },
+    {
+      "method": "GET",
+      "url": "https://x.com/f?PAGE=1",
+      "requestHeaders": [{ "name": "x-cache", "value": "zzz" }],
+      "responseHeaders": [{ "name": "x-cache", "value": "Hit" }]
+    },
+    {
+      "method": "GET",
+      "url": "https://x.com/g?page=%41b",
+      "requestHeaders": [{ "name": "x-cache", "value": "early" }],
+      "responseHeaders": [{ "name": "x-cache", "value": "" }]
+    },
+    {
+      "method": "GET",
+      "url": "https://x.com/h",
+      "requestHeaders": [{ "name": "x-cache", "value": "Beta" }]
+    }
+  ],
+  "sorts": [
+    {
+      "sort": [{ "column": "field:res.header.x-cache", "descending": false }],
+      "order": [2, 3, 6, 7, 0, 4, 5, 1]
+    },
+    {
+      "sort": [{ "column": "field:res.header.x-cache", "descending": true }],
+      "order": [1, 0, 4, 5, 2, 3, 6, 7]
+    },
+    {
+      "sort": [{ "column": "field:req.header.x-cache", "descending": false }],
+      "order": [1, 2, 4, 7, 6, 0, 3, 5]
+    },
+    {
+      "sort": [{ "column": "field:req.header.x-cache", "descending": true }],
+      "order": [5, 3, 0, 6, 7, 1, 2, 4]
+    },
+    {
+      "sort": [{ "column": "field:header.x-cache", "descending": false }],
+      "order": [2, 6, 7, 0, 4, 5, 1, 3]
+    },
+    {
+      "sort": [{ "column": "field:header.x-cache", "descending": true }],
+      "order": [3, 1, 0, 4, 5, 7, 2, 6]
+    },
+    {
+      "sort": [{ "column": "field:query.page", "descending": false }],
+      "order": [1, 3, 4, 7, 5, 2, 0, 6]
+    },
+    {
+      "sort": [{ "column": "field:query.page", "descending": true }],
+      "order": [6, 0, 2, 5, 1, 3, 4, 7]
+    },
+    {
+      "sort": [{ "column": "field:query.q", "descending": true }],
+      "order": [3, 0, 1, 2, 4, 5, 6, 7]
+    },
+    {
+      "sort": [
+        { "column": "method", "descending": false },
+        { "column": "field:header.x-cache", "descending": true }
+      ],
+      "order": [0, 4, 5, 7, 2, 6, 3, 1]
+    },
+    {
+      "sort": [
+        { "column": "field:header.x-cache", "descending": false },
+        { "column": "field:query.page", "descending": true }
+      ],
+      "order": [6, 2, 7, 0, 5, 4, 1, 3]
+    }
+  ]
+}

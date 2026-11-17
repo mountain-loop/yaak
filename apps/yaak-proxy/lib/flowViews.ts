@@ -119,7 +119,7 @@ function responseView(flow: Flow, body: FlowBodyData | null, ended: boolean): Ht
     elapsedMs: flow.elapsedMs ?? 0,
     elapsedHeadersMs: flow.elapsedHeadersMs ?? 0,
     elapsedDnsMs: 0,
-    error: flow.error ?? (flow.cancelled && flow.status == null ? "Cancelled by the client" : null),
+    error: flow.error ?? (flow.cancelled && flow.status == null ? "Cancelled by the app" : null),
     remoteAddr: flow.remoteAddr,
     version: flow.upstreamHttpVersion ?? flow.clientHttpVersion,
     cookieHeaders: {

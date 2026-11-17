@@ -3,8 +3,6 @@ import { useState } from "react";
 import { clamp } from "../../lib/clamp";
 import { Button } from "../Button";
 import { Checkbox } from "../Checkbox";
-import { Heading } from "../Heading";
-import { VStack } from "../Stacks";
 import {
   SettingRow,
   SettingRowBoolean,
@@ -13,6 +11,7 @@ import {
   SettingsList,
   SettingsSection,
 } from "./SettingRow";
+import { SettingsPage } from "./SettingsPage";
 import type {
   SettingsCallbacks,
   SettingsEditorKeymap,
@@ -52,11 +51,7 @@ export function SettingsInterface({
   const shown = (row: SettingsInterfaceRow) => !view.hiddenInterfaceRows?.includes(row);
 
   return (
-    <VStack space={1.5} className="mb-4">
-      <div className="mb-3">
-        <Heading>Interface</Heading>
-        <p className="text-text-subtle">Tweak settings related to the user interface.</p>
-      </div>
+    <SettingsPage title="Interface" description="Tweak settings related to the user interface.">
       <SettingsList className="space-y-8">
         {leadingSections}
 
@@ -183,7 +178,7 @@ export function SettingsInterface({
 
         {trailingSections}
       </SettingsList>
-    </VStack>
+    </SettingsPage>
   );
 }
 

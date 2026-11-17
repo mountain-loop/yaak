@@ -448,7 +448,7 @@ async fn grpc_web_calls_are_stored_and_decoded() {
         let decode = json!({ "flowId": flow.id, "seq": 1 });
         let schemaless = rpc(&ctx, "decode_grpc_message", decode.clone()).await.unwrap();
         assert_eq!(schemaless["messageType"], Value::Null);
-        assert!(schemaless["note"].as_str().unwrap().contains("reflection failed"), "{schemaless}");
+        assert!(schemaless["note"].as_str().unwrap().contains("Reflection failed"), "{schemaless}");
         let fields: Value = serde_json::from_str(schemaless["json"].as_str().unwrap()).unwrap();
         assert_eq!(fields[0]["string"], "Hello Ada");
         assert_eq!(fields[1], json!({ "field": 2, "wireType": "varint", "value": 3 }));

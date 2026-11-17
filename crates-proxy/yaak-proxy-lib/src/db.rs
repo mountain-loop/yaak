@@ -154,10 +154,7 @@ fn any_encrypted(data_dir: &Path) -> bool {
 }
 
 fn missing_data_key(data_dir: &Path) -> String {
-    format!(
-        "The proxy's captured traffic is encrypted, but its key is missing from {}",
-        data_dir.display()
-    )
+    format!("The encryption key is missing from {}.", data_dir.display())
 }
 
 /// Both databases, opened together.
@@ -270,6 +267,23 @@ pub fn remove_captured(data_dir: &Path) -> std::result::Result<(), String> {
     Ok(())
 }
 
+/// Deletes `blobs.sqlite`, every body and message payload, for one made empty as it opens.
+/// What an interrupted conversion to encryption left beside it goes too, or opening would
+/// recover it, bodies and all. The data key stays, as `proxy.db` is still encrypted with it.
+/// Nothing may have it open.
+pub fn remove_blobs(data_dir: &Path) -> std::result::Result<(), String> {
+    for suffix in ["", "-wal", "-shm", "-plain", "-encrypting"] {
+        let path = data_dir.join(format!("{BLOBS_DB}{suffix}"));
+        match std::fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                return Err(format!("Failed to delete {}: {e}", path.display()));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 /// Either database in `data_dir` is plain, left by a build from before encryption.
 pub fn needs_encrypting(data_dir: &Path) -> bool {
     [PROXY_DB, BLOBS_DB]
@@ -307,12 +321,11 @@ pub fn encrypt_existing(
     Ok(converted)
 }
 
-const KEY_UNAVAILABLE: &str =
-    "Yaak Proxy stores traffic encrypted and couldn't read its key from the keychain";
+const KEY_UNAVAILABLE: &str = "Failed to read the encryption key from the keychain";
 
 /// Why the databases cannot be opened, or the CA made, without the data key.
 pub fn key_unavailable(reason: &str) -> String {
-    format!("{KEY_UNAVAILABLE}: {reason}. Allow it access, then retry.")
+    format!("{KEY_UNAVAILABLE}: {reason}")
 }
 
 /// `reason` is [`key_unavailable`]'s: the keychain would not give up the key.
@@ -502,11 +515,13 @@ mod tests {
             tables,
             vec![
                 "_sqlx_migrations",
+                "filter_history",
                 "flow_clear_mark",
                 "flow_messages",
                 "flow_sweep_pending",
                 "flows",
                 "grpc_schemas",
+                "last_filter",
                 "saved_queries"
             ]
         );
@@ -526,6 +541,7 @@ mod tests {
             "grpc_method",
             "grpc_status",
             "grpc_message",
+            "graphql_operation",
             "agent_read",
         ] {
             assert!(flow_columns.contains(&column.to_string()), "{column} in {flow_columns:?}");
@@ -597,7 +613,8 @@ mod tests {
         assert_eq!(
             &applied[6..],
             [
-                "00000007", "00000008", "00000009", "00000010", "00000011", "00000012"
+                "00000007", "00000008", "00000009", "00000010", "00000011", "00000012", "00000013",
+                "00000014", "00000015"
             ]
         );
         let mark_columns = columns(&conn, "flow_clear_mark");
@@ -723,5 +740,22 @@ mod tests {
         assert_eq!(listed.iter().map(|f| f.id.as_str()).collect::<Vec<_>>(), ["fl_tunnel"]);
         let old = crate::flows::find(&db, "fl_old").unwrap();
         assert!(!old.tunnelled);
+    }
+
+    /// Removing the blob store takes what an interrupted conversion left too, which opening
+    /// would otherwise recover, and leaves `proxy.db` and the key.
+    #[test]
+    fn removing_the_blobs_takes_a_conversion_s_leftovers() {
+        let dir = tempfile::tempdir().unwrap();
+        let blobs = ["", "-wal", "-shm", "-plain", "-encrypting"].map(|s| format!("{BLOBS_DB}{s}"));
+        let kept = [PROXY_DB, DATA_KEY];
+        for name in blobs.iter().map(String::as_str).chain(kept) {
+            std::fs::write(dir.path().join(name), b"x").unwrap();
+        }
+        remove_blobs(dir.path()).unwrap();
+        assert!(blobs.iter().all(|name| !dir.path().join(name).exists()));
+        assert!(kept.iter().all(|name| dir.path().join(name).exists()));
+        // Nothing there is fine too.
+        remove_blobs(dir.path()).unwrap();
     }
 }

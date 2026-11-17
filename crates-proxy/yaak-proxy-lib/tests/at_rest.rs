@@ -16,7 +16,7 @@ use yaak_proxy_lib::client::ProxyConnection;
 use yaak_proxy_lib::db::{BLOBS_DB, DATA_KEY, PROXY_DB, database_key};
 use yaak_proxy_lib::flows::{self, FlowFilter};
 use yaak_proxy_lib::models::{Flow, FlowBody, ProxyHeader};
-use yaak_proxy_lib::settings::ProxySettings;
+use yaak_proxy_lib::settings::{ProxySettings, TrafficRetention};
 use yaak_proxy_lib::{MasterKeySource, ProxyCtx};
 use yaak_rpc::RpcEventEmitter;
 
@@ -25,8 +25,15 @@ const QUERY_SECRET: &str = "QUERYSECRET456";
 const BODY_SECRET: &str = "BODYSECRET789";
 const FLOWS: usize = 3_000;
 
+/// The proxy in `dir`, launched with traffic kept between launches, so what one launch stored
+/// the next reads back.
 fn open_ctx(dir: &Path, keys: MasterKeySource) -> ProxyCtx {
-    let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
+    let settings = ProxySettings {
+        port: 0,
+        system_proxy_at_launch: false,
+        traffic: Some(TrafficRetention::Keep),
+        ..Default::default()
+    };
     settings.save(&dir.join("settings.json")).unwrap();
     let (events, _rx) = RpcEventEmitter::new();
     ProxyCtx::new(dir, events, keys).unwrap()
@@ -182,7 +189,7 @@ fn stores_nothing_in_plaintext_and_reads_back_with_the_key() {
     )
     .err()
     .unwrap();
-    assert!(err.contains("couldn't read its key from the keychain"), "{err}");
+    assert!(err.contains("Failed to read the encryption key from the keychain"), "{err}");
     // Nor without any key at all.
     let raw = rusqlite::Connection::open(dir.path().join(PROXY_DB)).unwrap();
     let err = raw.query_row("SELECT count(*) FROM flows", [], |r| r.get::<_, i64>(0)).unwrap_err();
@@ -359,8 +366,8 @@ fn a_refused_key_refuses_capture() {
     let err = ctx.start().unwrap_err();
     assert_eq!(
         err,
-        "Yaak Proxy stores traffic encrypted and couldn't read its key from the keychain: \
-        Encryption error: User canceled the operation. Allow it access, then retry."
+        "Failed to read the encryption key from the keychain: Encryption error: User canceled \
+        the operation"
     );
     assert_eq!(ctx.start_error().as_deref(), Some(err.as_str()));
     assert_eq!(ctx.port(), None);
@@ -419,8 +426,8 @@ fn waits_for_an_older_owner_before_converting() {
     std::fs::write(&control, serde_json::to_string(&owner).unwrap()).unwrap();
 
     let ctx = open_ctx(dir.path(), MasterKeySource::memory());
-    assert!(ctx.load_ca().err().unwrap().contains("can't be encrypted yet"));
-    assert!(ctx.start().unwrap_err().starts_with("The proxy is already running in the yaak CLI"));
+    assert!(ctx.load_ca().err().unwrap().contains("Take over or quit it, then retry."));
+    assert!(ctx.start().unwrap_err().starts_with("The proxy is already running in the CLI"));
     for name in [PROXY_DB, BLOBS_DB] {
         assert_eq!(file_state(&dir.path().join(name)).unwrap(), FileState::Plain);
     }
@@ -434,6 +441,38 @@ fn waits_for_an_older_owner_before_converting() {
     for name in [PROXY_DB, BLOBS_DB] {
         assert_eq!(file_state(&dir.path().join(name)).unwrap(), FileState::Encrypted);
     }
+}
+
+/// Launched while the CLI daemon captures, set to clear traffic at launch, the app keeps the
+/// daemon's traffic: it is still being written, and is what taking over shows.
+#[cfg(unix)]
+#[test]
+fn a_launch_under_another_owner_keeps_its_traffic() {
+    use yaak_proxy_lib::control::{ControlInfo, Owner, control_path};
+    let dir = plain_capture();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let owner = ControlInfo {
+        pid: std::os::unix::process::parent_id(),
+        control_port: listener.local_addr().unwrap().port(),
+        proxy_port: None,
+        token: "tok".into(),
+        owner: Owner::Cli,
+        started_at: chrono::Utc::now(),
+    };
+    let control = control_path(dir.path());
+    std::fs::write(&control, serde_json::to_string(&owner).unwrap()).unwrap();
+    let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
+    assert_eq!(settings.traffic(), TrafficRetention::ClearOnLaunch);
+    settings.save(&dir.path().join("settings.json")).unwrap();
+    let (events, _rx) = RpcEventEmitter::new();
+    let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+
+    // Taken over once the daemon lets go: every flow it captured is there.
+    drop(listener);
+    std::fs::remove_file(&control).unwrap();
+    ctx.start().unwrap();
+    assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), FLOWS);
+    ctx.stop().unwrap();
 }
 
 /// The data key's file gone from beside encrypted databases is refused too, rather than a new
@@ -450,7 +489,7 @@ fn a_lost_data_key_is_not_replaced() {
     std::fs::remove_file(dir.path().join(DATA_KEY)).unwrap();
     let ctx = open_ctx(dir.path(), keys);
     let err = ctx.start().unwrap_err();
-    assert!(err.starts_with("The proxy's captured traffic is encrypted, but its key is missing"));
+    assert!(err.starts_with("The encryption key is missing from"));
     assert!(!dir.path().join(DATA_KEY).exists());
     assert_eq!(std::fs::read_to_string(dir.path().join("ca/ca.pem")).unwrap(), pem);
     assert!(ctx.db().is_err(), "locked");

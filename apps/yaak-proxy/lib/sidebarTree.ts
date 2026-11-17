@@ -1,12 +1,20 @@
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import type { TreeNode } from "@yaakapp-internal/ui";
 import type { DecryptSubject } from "./decrypt";
-import { fieldTerm, pathTerm, siteTerm, termKeys } from "./query";
+import {
+  asOneTerm,
+  fieldTerm,
+  orGroupShapes,
+  pathTerm,
+  queryShape,
+  siteTerm,
+  termKeys,
+} from "./query";
 import { appKeyOf, folderOf, isSystemFlow, runtimeFolderOf, sidebarPath, siteOf } from "./search";
 
 export type SidebarKind =
   | "all"
-  | "tunnelled"
+  | "encrypted"
   | "saved"
   | "group"
   | "app"
@@ -25,18 +33,33 @@ export interface SidebarItem {
   label: string;
   /** Dim beside the label: a generic runtime's folder */
   sublabel?: string;
-  /** Flows under the row, of those loaded */
+  /** Flows under the row, of those loaded; hosts, for Domains */
   count: number;
-  /** Shown instead of the count, as Domains says how many hosts */
-  countLabel?: string;
   /** An app's path, for its icon */
   appPath?: string;
   /** What selecting the row writes into the search box; empty for all traffic */
   query: string;
+  /**
+   * The row's own value excluded, without the rows above it, for Exclude This Value; set only on
+   * the rows whose menu filters by them
+   */
+  exclude?: string;
+  /** What Copy Value copies, when not the label: a path row's host and path */
+  value?: string;
   /** What Decrypt in the row's menu decrypts: its host, site or app */
   decrypt?: DecryptSubject;
+  /**
+   * Every flow under the row is encrypted, marked once something in the capture is decrypted,
+   * as in the first minute every row would be
+   */
+  encryptedOnly?: boolean;
   /** The saved search a Saved row is, for renaming and deleting it */
   savedId?: string;
+  /**
+   * On disk: a folder row's working directory, in full, and a program's executable, for Reveal
+   * in Finder and, on a folder, Copy path
+   */
+  path?: string;
 }
 
 /** A saved search as the sidebar lists it, with how many flows it covers */
@@ -53,7 +76,7 @@ export const SAVED_ID = "saved";
 export const APPS_ID = "apps";
 export const DOMAINS_ID = "domains";
 export const SYSTEM_ID = "system";
-export const TUNNELLED_ID = "tunnelled";
+export const ENCRYPTED_ID = "encrypted";
 
 /** A row a flow sits under, with what makes it, so a rebuild only looks it up */
 interface PlaceRow {
@@ -61,7 +84,11 @@ interface PlaceRow {
   kind: "folder" | "site" | "host" | "path";
   label: string;
   query: string;
+  exclude: string;
+  value?: string;
   decrypt?: DecryptSubject;
+  /** A folder row's working directory, in full */
+  path?: string;
 }
 
 /**
@@ -94,6 +121,7 @@ function placeOf(flow: Flow): Place {
       kind: "site",
       label: site,
       query: siteTerm(site),
+      exclude: `-${siteTerm(site)}`,
       decrypt: { kind: "site", site },
     },
     {
@@ -101,17 +129,21 @@ function placeOf(flow: Flow): Place {
       kind: "host",
       label: host,
       query: hostQuery,
+      exclude: fieldTerm("host", host, true),
       decrypt: { kind: "host", host },
     },
   ];
   let p = "";
   for (const segment of segments) {
     p += `/${segment}`;
+    const query = `${hostQuery} ${pathTerm(p)}`;
     rows.push({
       id: `path:${host}${p}`,
       kind: "path",
       label: `/${segment}`,
-      query: `${hostQuery} ${pathTerm(p)}`,
+      query,
+      exclude: `-(${query})`,
+      value: `${host}${p}`,
     });
   }
   const system = isSystemFlow(flow);
@@ -128,8 +160,16 @@ function placeOf(flow: Flow): Place {
     } else {
       const folderId = `app:${app}|cwd:${folder}`;
       const folderQuery = `${appQuery} ${fieldTerm("cwd", folder)}`;
+      const folderRow: PlaceRow = {
+        id: folderId,
+        kind: "folder",
+        label: folder,
+        query: folderQuery,
+        exclude: fieldTerm("cwd", folder, true),
+      };
+      if (flow.clientCwd != null) folderRow.path = flow.clientCwd;
       appRows = [
-        { id: folderId, kind: "folder", label: folder, query: folderQuery },
+        folderRow,
         ...rows.map((r) => ({
           ...r,
           id: `${folderId}|${r.id}`,
@@ -152,33 +192,64 @@ function appQueryFor(app: string, system: boolean): string {
   return system ? `${fieldTerm("is", "system")} ${query}` : query;
 }
 
+/** A program outside an app bundle: its executable, for Reveal in Finder */
+function programPath(flow: Flow): string | undefined {
+  return flow.clientBundleId == null ? (flow.clientPath ?? undefined) : undefined;
+}
+
 /** A node being built, its children by id */
 interface Trie {
   item: SidebarItem;
   children: Map<string, Trie>;
+  /** Encrypted flows under it */
+  encrypted?: number;
 }
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
 /** Counts a flow under `parent`'s child `row`, making the child the first time */
-function child(parent: Trie, row: PlaceRow): Trie {
+function child(parent: Trie, row: PlaceRow, encrypted: boolean): Trie {
   let node = parent.children.get(row.id);
   if (node == null) {
     node = {
-      item: { id: row.id, kind: row.kind, label: row.label, count: 0, query: row.query },
+      item: {
+        id: row.id,
+        kind: row.kind,
+        label: row.label,
+        count: 0,
+        query: row.query,
+        exclude: row.exclude,
+      },
       children: new Map(),
     };
+    if (row.value != null) node.item.value = row.value;
     if (row.decrypt != null) node.item.decrypt = row.decrypt;
+    if (row.path != null) node.item.path = row.path;
     parent.children.set(row.id, node);
+  } else if (node.item.path !== row.path) {
+    // Folders of the same name in different places share a row, which then names no one path.
+    delete node.item.path;
   }
   node.item.count++;
+  if (encrypted) node.encrypted = (node.encrypted ?? 0) + 1;
   return node;
 }
 
 /** Adds a flow under `parent` by where it went: its site, then its host, then its path */
-function addPlace(parent: Trie, rows: PlaceRow[]) {
+function addPlace(parent: Trie, rows: PlaceRow[], encrypted: boolean) {
   let node = parent;
-  for (const row of rows) node = child(node, row);
+  for (const row of rows) node = child(node, row, encrypted);
+}
+
+/** Marks the apps, sites and hosts whose every flow is encrypted */
+function markEncrypted(trie: Trie) {
+  for (const c of trie.children.values()) {
+    const kind = c.item.kind;
+    if ((kind === "app" || kind === "site" || kind === "host") && c.encrypted === c.item.count) {
+      c.item.encryptedOnly = true;
+    }
+    markEncrypted(c);
+  }
 }
 
 function toNodes(
@@ -212,9 +283,8 @@ function group(id: string, label: string): Trie {
 /**
  * The sidebar: All traffic, then Apps, each app opening to its own sites, hosts and paths, then
  * Domains by site, host and path, then System, macOS's daemons, apart from the apps. A group with
- * nothing in it is left out. Not decrypted, after All traffic, gathers the HTTPS passed through
- * undecrypted, when there is any, and Saved lists the saved searches, each with its count from
- * the database. `total` is All traffic's count: every flow it covers in the database.
+ * nothing in it is left out. Encrypted, last, gathers the HTTPS passed through undecrypted,
+ * when there is any, and Saved lists the saved searches, each with its count from the database. `total` is All traffic's count: every flow it covers in the database.
  */
 export function buildSidebarTree(
   flows: Flow[],
@@ -232,13 +302,12 @@ export function buildSidebarTree(
   const domains = group(DOMAINS_ID, "Domains");
   const system = { ...group(SYSTEM_ID, "System") };
   system.item.query = fieldTerm("is", "system");
-  let tunnelled = 0;
+  let encrypted = 0;
 
   for (const flow of flows) {
     const place = placeOf(flow);
-    if (flow.tunnelled) tunnelled++;
-    domains.item.count++;
-    addPlace(domains, place.rows);
+    if (flow.tunnelled) encrypted++;
+    addPlace(domains, place.rows, flow.tunnelled);
     if (place.app == null) continue;
     const parent = place.system ? system : apps;
     const id = `app:${place.app}`;
@@ -251,43 +320,38 @@ export function buildSidebarTree(
         label: flow.clientName ?? place.app,
         count: 0,
         query: appQueryFor(place.app, place.system),
+        exclude: fieldTerm("app", place.app, true),
       };
       if (flow.clientName != null) {
         item.decrypt = { kind: "app", name: flow.clientName, bundleId: flow.clientBundleId };
       }
       if (folder != null) item.sublabel = folder;
       if (flow.clientPath != null) item.appPath = flow.clientPath;
+      const program = programPath(flow);
+      if (program != null) item.path = program;
       app = { item, children: new Map() };
       parent.children.set(id, app);
+    } else if (app.item.path !== programPath(flow)) {
+      // Programs of the same name in different places share a row, which names no one path.
+      delete app.item.path;
     }
     app.item.count++;
+    if (flow.tunnelled) app.encrypted = (app.encrypted ?? 0) + 1;
     parent.item.count++;
-    addPlace(app, place.appRows);
+    addPlace(app, place.appRows, flow.tunnelled);
   }
-  let hosts = 0;
-  for (const site of domains.children.values()) hosts += site.children.size;
-  domains.item.countLabel = hosts === 1 ? "1 host" : `${hosts} hosts`;
+  // Once something is decrypted: a refused handshake isn't, so it doesn't count
+  if (encrypted > 0 && flows.some((f) => !f.tunnelled && f.tlsRejected == null)) {
+    for (const g of [apps, domains, system]) markEncrypted(g);
+  }
+  for (const site of domains.children.values()) domains.item.count += site.children.size;
 
   root.children?.push({
-    item: { id: ALL_ID, kind: "all", label: "All traffic", count: total, query: "" },
+    item: { id: ALL_ID, kind: "all", label: "All Traffic", count: total, query: "" },
     parent: root,
     depth: 1,
     draggable: false,
   });
-  if (tunnelled > 0) {
-    root.children?.push({
-      item: {
-        id: TUNNELLED_ID,
-        kind: "tunnelled",
-        label: "Not decrypted",
-        count: tunnelled,
-        query: fieldTerm("is", "tunnelled"),
-      },
-      parent: root,
-      depth: 1,
-      draggable: false,
-    });
-  }
   if (saved.length > 0) {
     const node: TreeNode<SidebarItem> = {
       item: { id: SAVED_ID, kind: "group", label: "Saved", count: 0, query: "" },
@@ -323,6 +387,20 @@ export function buildSidebarTree(
     node.children = toNodes(g.children.values(), node);
     root.children?.push(node);
   }
+  if (encrypted > 0) {
+    root.children?.push({
+      item: {
+        id: ENCRYPTED_ID,
+        kind: "encrypted",
+        label: "Encrypted",
+        count: encrypted,
+        query: fieldTerm("is", "encrypted"),
+      },
+      parent: root,
+      depth: 1,
+      draggable: false,
+    });
+  }
   return root;
 }
 
@@ -337,11 +415,49 @@ export function itemsById(root: TreeNode<SidebarItem>): Map<string, SidebarItem>
   return map;
 }
 
-/** The search text for the selected rows: their queries, OR'd; empty for All traffic */
+/**
+ * The search text for the selected rows: their queries, OR'd, one with `OR` of its own in
+ * parentheses so it stays one group; empty for All traffic
+ */
 export function selectionText(items: SidebarItem[]): string {
   const queries = [...new Set(items.map((i) => i.query))];
   if (queries.includes("")) return "";
-  return queries.join(" OR ");
+  return queries.length === 1 ? (queries[0] ?? "") : queries.map(asOneTerm).join(" OR ");
+}
+
+/**
+ * All traffic is selected alone: chosen beside other rows it takes their place, and another row
+ * chosen beside it takes its. `before` is the selection as it was.
+ */
+export function exclusiveAll(ids: string[], before: string[]): string[] {
+  if (!ids.includes(ALL_ID) || ids.length === 1) return ids;
+  return before.includes(ALL_ID) ? ids.filter((id) => id !== ALL_ID) : [ALL_ID];
+}
+
+/**
+ * The rows a filter applied leaves selected: those selected whose query is still in it, and,
+ * with `add`, every row whose query is one of its `OR` groups whole, as the filter the rows
+ * wrote is when Back returns to it. All traffic alone for no filter.
+ */
+export function rowsForFilter(
+  text: string,
+  selected: string[],
+  items: Map<string, SidebarItem>,
+  add: boolean,
+): string[] {
+  if (text.trim() === "") return [ALL_ID];
+  const rows = selected.filter((id) => {
+    const item = items.get(id);
+    return item != null && item.query !== "" && queryInText(item.query, text);
+  });
+  if (!add) return rows;
+  const groups = new Set(orGroupShapes(text));
+  for (const [id, item] of items) {
+    if (item.query === "" || rows.includes(id)) continue;
+    const shape = queryShape(item.query);
+    if (shape != null && groups.has(shape)) rows.push(id);
+  }
+  return rows;
 }
 
 /**
@@ -353,4 +469,36 @@ export function queryInText(query: string, text: string): boolean {
   const want = termKeys(query);
   if (want.length === 0) return have.size === 0;
   return want.every((t) => have.has(t));
+}
+
+/** The rows of a selection whose menu filters by them: apps, folders, sites, hosts and paths */
+export function valueRows(items: SidebarItem[]): SidebarItem[] {
+  return items.filter((i) => i.exclude != null);
+}
+
+/**
+ * The filter `text` with the rows added, for Filter by This Value: their queries as one `OR`
+ * group, or their values each excluded. A filter with `OR` at its top is grouped first, so the
+ * rows narrow all of it, as the list's cell menu does.
+ */
+export function filterWithRows(text: string, items: SidebarItem[], negated: boolean): string {
+  const rows = valueRows(items);
+  const terms = [
+    ...new Set(rows.map((i) => (negated ? (i.exclude ?? "") : i.query)).filter((t) => t !== "")),
+  ];
+  if (terms.length === 0) return text;
+  const term = negated ? terms.join(" ") : terms.join(" OR ");
+  const current = text.trim();
+  return current === "" ? term : `${asOneTerm(current)} ${asOneTerm(term)}`;
+}
+
+/**
+ * What Copy Value copies for the rows, one a line: an app's name, a folder's path, a site or
+ * host, or a path's host and path
+ */
+export function copyRowsText(items: SidebarItem[]): string {
+  const values = valueRows(items).map((i) =>
+    i.kind === "folder" ? (i.path ?? i.label) : (i.value ?? i.label),
+  );
+  return [...new Set(values)].join("\n");
 }

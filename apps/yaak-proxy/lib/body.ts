@@ -208,6 +208,45 @@ export function shortContentType(contentType: string | null): string | null {
   return suffix.replace(/^x-/, "");
 }
 
+/**
+ * The short name a body tab's badge gives a body's type, as the Type column and the Pretty and
+ * Raw switch read it: JSON, XML, HTML, CSV, Form, Multipart, GraphQL, Image, Binary and so on.
+ * Null when there is no body.
+ */
+export function bodyTypeBadge(
+  contentType: string | null,
+  size: number,
+  graphql = false,
+): string | null {
+  if (size <= 0) return null;
+  if (graphql) return "GraphQL";
+  const essence = mimeEssence(contentType);
+  if (essence == null) return "Binary";
+  const [type = "", subtype = ""] = essence.split("/");
+  const suffix = subtype.split("+").pop() ?? subtype;
+  if (type === "multipart") return "Multipart";
+  if (essence === "application/x-www-form-urlencoded") return "Form";
+  if (essence === "application/graphql" || suffix === "graphql") return "GraphQL";
+  if (essence === "image/svg+xml") return "SVG";
+  if (type === "image") return "Image";
+  if (type === "audio") return "Audio";
+  if (type === "video") return "Video";
+  if (type === "font") return "Font";
+  if (suffix === "json" || suffix === "x-ndjson" || suffix === "ndjson") return "JSON";
+  if (suffix === "xml") return "XML";
+  if (suffix === "html" || suffix === "xhtml") return "HTML";
+  if (suffix === "csv") return "CSV";
+  if (suffix === "tab-separated-values") return "TSV";
+  if (suffix === "javascript" || suffix === "ecmascript") return "JS";
+  if (suffix === "css") return "CSS";
+  if (suffix === "markdown") return "Markdown";
+  if (suffix === "event-stream") return "SSE";
+  if (suffix === "pdf") return "PDF";
+  if (/grpc|protobuf|proto/.test(suffix)) return "Protobuf";
+  if (type === "text") return "Text";
+  return "Binary";
+}
+
 /** Extensions for media types whose subtype isn't one */
 const EXTENSIONS: Record<string, string> = {
   "application/javascript": "js",

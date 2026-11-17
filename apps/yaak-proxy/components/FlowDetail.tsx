@@ -2,13 +2,14 @@ import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import type { CSSProperties } from "react";
 import { selectedFlowAtom } from "../lib/atoms";
+import { isRejection } from "../lib/encryptedCard";
+import { EncryptedCard } from "./EncryptedCard";
 import { EmptyState } from "./FlowBodyViewer";
 import { FlowCard } from "./FlowCard";
-import { NotDecrypted } from "./NotDecrypted";
 
 /**
- * The detail pane: the selected flow's card, or what the pane holds before one is selected. Side
- * by side, a wider gutter separates the card from the list and it sits a little under the header.
+ * The detail pane: the selected flow's card, or what the pane holds before one is selected. The
+ * split's gutter separates it from the list; side by side it sits a little under the header.
  */
 export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideBySide: boolean }) {
   const flow = useAtomValue(selectedFlowAtom);
@@ -16,7 +17,7 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
   return (
     <div
       style={style}
-      className={classNames("min-h-0 min-w-0 pb-2", sideBySide ? "pr-2 pl-3 pt-3" : "px-2")}
+      className={classNames("min-h-0 min-w-0 pb-2", sideBySide ? "pr-2 pt-3" : "px-2")}
     >
       <div
         className={classNames(
@@ -32,11 +33,11 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
               <span>Pause or resume recording</span>
               <Keys keys={["⌘", "R"]} />
               <span>Clear flows</span>
-              <Keys keys={["⌘", "K"]} />
+              <Keys keys={["⌘", "⇧", "K"]} />
             </div>
           </EmptyState>
-        ) : flow.tunnelled ? (
-          <NotDecrypted flow={flow} />
+        ) : flow.tunnelled || isRejection(flow) ? (
+          <EncryptedCard key={flow.id} flow={flow} />
         ) : (
           <FlowCard flow={flow} listBeside={sideBySide} />
         )}

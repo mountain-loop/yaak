@@ -1,12 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
-import type { HttpVersion, SystemProxyStatus } from "@yaakapp-internal/proxy-lib";
+import type { HttpVersion, SystemProxyStatus, TrafficRetention } from "@yaakapp-internal/proxy-lib";
 import {
   Button,
   Dialog,
   DialogFooter,
-  Heading,
   Icon,
+  IconTooltip,
   RadioDropdown,
   SettingRow,
   SettingRowBoolean,
@@ -15,14 +15,15 @@ import {
   SettingSelectControl,
   SettingSnippet,
   SettingsList,
+  SettingsPage,
   SettingsSection,
-  VStack,
 } from "@yaakapp-internal/ui";
-import { useAtomValue, useSetAtom, useStore } from "jotai";
+import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { useState } from "react";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
 import { helperDialogOpenAtom } from "../lib/atoms";
+import { confirmClearFlowsAtom } from "../lib/clearFlows";
 import {
   defaultShell,
   environmentBlock,
@@ -31,7 +32,6 @@ import {
   type TerminalShell,
 } from "../lib/env";
 import {
-  CAPTURE_LIMIT_OPTIONS,
   KEEP_TRAFFIC_OPTIONS,
   sizeFromOptionValue,
   sizeOptionsFor,
@@ -41,79 +41,65 @@ import { helperRow } from "../lib/systemProxy";
 import { proxyStateAtom, refreshProxyState } from "../lib/store";
 import { getOsType } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
-import { DecryptListEditor } from "./DecryptListEditor";
+import { DecryptionSettings } from "./DecryptListEditor";
 
 /**
- * The proxy's own settings tab: how it listens, what it decrypts, the system proxy and its
- * helper, how much traffic it keeps, and the environment for one terminal. Everything set once
- * and left alone, which is what left the state pill's menu.
+ * The proxy's own settings tab: how it listens and the system proxy, what it decrypts, what
+ * happens to captured traffic, and the environment for one terminal. Everything set once and
+ * left alone, which is what left the state pill's menu.
  */
 export function SettingsProxy() {
   const proxyState = useAtomValue(proxyStateAtom);
   const store = useStore();
   const refresh = { onSettled: () => void refreshProxyState(store) };
   const setHttpVersion = useRpcMutation("set_http_version", refresh);
-  const setCaptureLimit = useRpcMutation("set_capture_body_limit", refresh);
   const setAtLaunch = useRpcMutation("set_system_proxy_at_launch", refresh);
   const systemProxy = useRpcQuery("system_proxy_status", {});
   // Another process owning the engine wouldn't see changes until it restarts
   const elsewhere = proxyState?.otherOwner != null;
 
   return (
-    <VStack space={1.5} className="mb-4">
-      <div className="mb-3">
-        <Heading>Proxy</Heading>
-        <p className="text-text-subtle">Listening, decryption, storage and terminals</p>
-      </div>
+    <SettingsPage
+      title="Proxy"
+      description="Configure the port, decryption, recorded traffic, and terminal environment."
+    >
       <SettingsList className="space-y-8">
-        <SettingsSection title="Listening">
+        <SettingsSection title="Proxy">
           <PortRow disabled={elsewhere} />
           <SettingRowSelect<HttpVersion>
             name="httpVersion"
             title="HTTP version"
-            description="For new connections"
+            description="The change applies to new connections."
             value={proxyState?.httpVersion ?? "auto"}
             disabled={elsewhere}
             onChange={(httpVersion) => setHttpVersion.mutate({ httpVersion })}
             options={[
-              { label: "Auto", value: "auto" },
+              { label: "Automatic", value: "auto" },
               { label: "HTTP/1.1 only", value: "http1Only" },
             ]}
           />
-          <SettingRowSelect
-            name="captureBodyLimit"
-            title="Body limit"
-            description="Stored per body"
-            value={sizeOptionValue(proxyState?.captureBodyLimit ?? null)}
-            disabled={elsewhere}
-            onChange={(v) => {
-              const bytes = sizeFromOptionValue(v);
-              if (bytes != null) setCaptureLimit.mutate({ bytes });
-            }}
-            options={sizeOptionsFor(CAPTURE_LIMIT_OPTIONS, proxyState?.captureBodyLimit ?? null)
-              .filter((o) => o.bytes != null)
-              .map(({ label, value }) => ({ label, value }))}
-          />
+          {systemProxy.data?.supported === true && (
+            <>
+              <SettingRowBoolean
+                title="Override system proxy at launch"
+                description="Traffic from every app will be recorded."
+                checked={proxyState?.systemProxyAtLaunch ?? true}
+                disabled={setAtLaunch.isPending}
+                onChange={(enabled) => setAtLaunch.mutate({ enabled })}
+              />
+              <HelperRow status={systemProxy.data} />
+            </>
+          )}
         </SettingsSection>
 
-        <SettingsSection title="Decrypt">
-          <DecryptListEditor className="py-4" />
+        <SettingsSection title="Decryption">
+          <DecryptionSettings />
         </SettingsSection>
 
-        {systemProxy.data?.supported === true && (
-          <SettingsSection title="System proxy">
-            <SettingRowBoolean
-              title="Override at launch"
-              checked={proxyState?.systemProxyAtLaunch ?? true}
-              disabled={setAtLaunch.isPending}
-              onChange={(enabled) => setAtLaunch.mutate({ enabled })}
-            />
-            <HelperRow status={systemProxy.data} />
-          </SettingsSection>
-        )}
-
-        <SettingsSection title="Storage">
-          <KeepTrafficRow />
+        <SettingsSection title="Traffic">
+          <TrafficRow />
+          {proxyState?.traffic === "keep" && <KeepTrafficRow />}
+          <ConfirmClearRow />
           <ResetRow />
         </SettingsSection>
 
@@ -121,7 +107,7 @@ export function SettingsProxy() {
           <TerminalRow />
         </SettingsSection>
       </SettingsList>
-    </VStack>
+    </SettingsPage>
   );
 }
 
@@ -165,7 +151,7 @@ function PortRow({ disabled }: { disabled: boolean }) {
     setPort.mutate({ port });
   };
   return (
-    <SettingRow title="Port" description="Restarts the proxy">
+    <SettingRow title="Port" description="Changing the port restarts the proxy.">
       <PlainInput
         hideLabel
         size="sm"
@@ -202,7 +188,10 @@ function HelperRow({ status }: { status: SystemProxyStatus }) {
         unregister.error != null ? (
           <span className="text-danger">{unregister.error.message}</span>
         ) : (
-          `${capitalize(row.title.replace(/^Helper: /, ""))}. ${row.description}`
+          <span className="inline-flex items-center gap-1.5">
+            {row.description}
+            <IconTooltip iconSize="sm" content={row.tooltip} />
+          </span>
         )
       }
     >
@@ -218,13 +207,37 @@ function HelperRow({ status }: { status: SystemProxyStatus }) {
             ? "Install"
             : row.action === "approve"
               ? "Approve"
-              : "Unregister"}
+              : "Uninstall"}
         </Button>
       )}
     </SettingRow>
   );
 }
 
+/** Whether captured traffic is cleared as the app launches or kept between launches */
+function TrafficRow() {
+  const proxyState = useAtomValue(proxyStateAtom);
+  const store = useStore();
+  const setTraffic = useRpcMutation("set_traffic", {
+    onSettled: () => void refreshProxyState(store),
+  });
+  return (
+    <SettingRowSelect<TrafficRetention>
+      name="traffic"
+      title="Recorded traffic"
+      selectClassName="w-56!"
+      value={proxyState?.traffic ?? "clearOnLaunch"}
+      disabled={proxyState?.otherOwner != null}
+      onChange={(traffic) => setTraffic.mutate({ traffic })}
+      options={[
+        { label: "Clear on launch", value: "clearOnLaunch" },
+        { label: "Keep between launches", value: "keep" },
+      ]}
+    />
+  );
+}
+
+/** The most traffic kept between launches, beside what is stored now */
 function KeepTrafficRow() {
   const proxyState = useAtomValue(proxyStateAtom);
   const store = useStore();
@@ -234,7 +247,7 @@ function KeepTrafficRow() {
   });
   const keep = proxyState?.keepTrafficBytes ?? null;
   return (
-    <SettingRow title="Keep traffic" description="Oldest flows dropped past the limit">
+    <SettingRow title="Size limit" description="The oldest flows will be cleared first.">
       <div className="flex items-center gap-3">
         {size.data != null && (
           <span className="text-sm text-text-subtle tabular-nums whitespace-nowrap">
@@ -243,7 +256,7 @@ function KeepTrafficRow() {
         )}
         <SettingSelectControl
           name="keepTraffic"
-          label="Keep traffic"
+          label="Size limit"
           value={sizeOptionValue(keep)}
           disabled={proxyState?.otherOwner != null}
           onChange={(v) => setKeep.mutate({ bytes: sizeFromOptionValue(v) })}
@@ -257,6 +270,14 @@ function KeepTrafficRow() {
   );
 }
 
+/** Asking before Clear, which its dialog's "Don't ask again" turns off */
+function ConfirmClearRow() {
+  const [confirm, setConfirm] = useAtom(confirmClearFlowsAtom);
+  return (
+    <SettingRowBoolean title="Confirm before clearing" checked={confirm} onChange={setConfirm} />
+  );
+}
+
 function ResetRow() {
   const [confirming, setConfirming] = useState(false);
   const store = useStore();
@@ -266,21 +287,24 @@ function ResetRow() {
     onSuccess: () => {
       setConfirming(false);
       void queryClient.invalidateQueries();
-      showToast({ message: "Captured data reset" });
+      showToast({ message: "Recorded data reset" });
     },
     onSettled: () => void refreshProxyState(store),
   });
   return (
-    <SettingRow title="Reset captured data" description="Deletes all flows and their keys">
+    <SettingRow
+      title="Reset recorded data"
+      description="All traffic and its encryption keys will be deleted."
+    >
       <Button size="xs" variant="border" color="danger" onClick={() => setConfirming(true)}>
-        Reset…
+        Reset
       </Button>
       <Dialog
         open={confirming}
         onClose={() => setConfirming(false)}
         size="sm"
-        title="Reset captured data?"
-        description="Every captured flow and the keys that encrypt them are deleted."
+        title="Reset Recorded Data"
+        description="Permanently delete all traffic and its encryption keys?"
       >
         {reset.error != null && <p className="text-danger text-sm">{reset.error.message}</p>}
         <DialogFooter
@@ -337,8 +361,8 @@ function TerminalRow() {
           className="ml-auto"
           title={
             os === "macos"
-              ? "A new Terminal window with these set"
-              : "Not available on this platform yet"
+              ? "A new Terminal window will open with these variables set."
+              : "Opening a terminal is only supported on macOS."
           }
           disabled={caPath == null || os !== "macos"}
           isLoading={openTerminal.isPending}
@@ -349,7 +373,7 @@ function TerminalRow() {
           Open Terminal
         </Button>
       </div>
-      <p className="mt-1 text-sm text-text-subtle">Proxies one terminal instead of the system</p>
+      <p className="mt-1 text-sm text-text-subtle">Traffic from one terminal will be recorded.</p>
       {caPath != null && (
         <SettingSnippet
           className="mt-3"
@@ -359,8 +383,4 @@ function TerminalRow() {
       )}
     </div>
   );
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }

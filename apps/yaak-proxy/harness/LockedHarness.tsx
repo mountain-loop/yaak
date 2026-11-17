@@ -5,11 +5,12 @@ import { type ReactNode, useEffect, useState } from "react";
 import { ProxyLayout } from "../components/ProxyLayout";
 import { DragRegionCheck } from "./DragRegionCheck";
 import { useHotkeyContextValue } from "../lib/hotkeys";
-import { syncFlows, syncProxyState, syncSidebarSelection } from "../lib/store";
+import { syncNavigation, syncSidebarSelection } from "../lib/navigation";
+import { syncFlows, syncProxyState } from "../lib/store";
 
 const LOCKED =
-  "Traffic is locked: Yaak Proxy stores traffic encrypted and couldn't read its key from the " +
-  "keychain: Encryption error: User canceled the operation. Allow it access, then retry.";
+  "Traffic is locked: Failed to read the encryption key from the keychain: Encryption error: " +
+  "User canceled the operation";
 
 const STATE: GetProxyStateResponse = {
   state: "stopped",
@@ -23,6 +24,7 @@ const STATE: GetProxyStateResponse = {
   locked: { message: LOCKED, keychain: true },
   otherOwner: null,
   captureBodyLimit: 10 * 1024 * 1024,
+  traffic: "clearOnLaunch",
   keepTrafficBytes: null,
 };
 
@@ -80,9 +82,11 @@ export function LockedHarness() {
   const [synced, setSynced] = useState(false);
   useEffect(() => {
     syncProxyState(store);
-    syncFlows(store);
-    syncSidebarSelection(store);
-    setSynced(true);
+    void syncNavigation(store).then(() => {
+      syncFlows(store);
+      syncSidebarSelection(store);
+      setSynced(true);
+    });
   }, [store]);
   if (!synced) return null;
   return (

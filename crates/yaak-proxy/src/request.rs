@@ -17,8 +17,6 @@ use hyper::http::request::Parts;
 use hyper::http::uri::{Authority, PathAndQuery, Scheme};
 use hyper::upgrade::OnUpgrade;
 use hyper::{Method, Request, Response, StatusCode, Uri};
-#[cfg(not(target_os = "macos"))]
-use hyper_util::client::legacy::connect::HttpInfo;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use log::{debug, info, warn};
 use rustls::pki_types::ServerName;
@@ -27,13 +25,15 @@ use tokio::net::TcpStream;
 use tokio_rustls::{LazyConfigAcceptor, TlsConnector};
 
 use crate::body::{BodyParser, CaptureBody, Direction};
-use crate::connection::serve_tls;
+use crate::connection::{Reset, ResetHandle, serve_tls};
+use crate::decrypt::Verdict;
+use crate::dial::{self, Dialled, UpstreamIo};
 use crate::grpc::{self, GrpcParser};
 use crate::messages::{MessageDirection, StreamKind};
 use crate::sse::SseParser;
-use crate::tunnel::{Counted, Rewind, is_own_connection, splice, tunnel};
+use crate::tunnel::{Counted, Rewind, is_own_connection, relay, splice, tunnel};
 use crate::ws::{self, WsFlow};
-use crate::{ClientConn, Engine, ProxyEvent};
+use crate::{ClientConn, Engine, ProxyEvent, TunnelReason};
 
 pub(crate) type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
 type BoxError = Box<dyn Error + Send + Sync>;
@@ -190,15 +190,26 @@ impl Flow {
     }
 
     /// Records the connection the request goes on: its timings when it was opened for this
-    /// request, and its TLS either way.
-    fn goes_on(&self, conn: &UpstreamConn, reused: bool) {
-        let since = |at: Instant| {
-            (!reused).then(|| at.saturating_duration_since(self.start).as_millis() as u64)
+    /// request, and its TLS either way. One opened as the CONNECT came in is charged to its
+    /// first request as if opened just before it: the flow's times count from that much earlier.
+    fn goes_on(&mut self, conn: &UpstreamConn, reused: bool) {
+        let ms = |d: Duration| d.as_millis() as u64;
+        let (connect, tls) = if reused {
+            (None, None)
+        } else {
+            if let Some(took) = conn.tls.dialled_before {
+                self.start = self.start.checked_sub(took).unwrap_or(self.start);
+            }
+            let connect = match conn.tls.dialled_before {
+                Some(took) => took,
+                None => conn.tls.connected.saturating_duration_since(self.start),
+            };
+            (Some(ms(connect)), Some(ms(conn.tls.handshaken.saturating_duration_since(self.start))))
         };
         self.engine.emit(ProxyEvent::UpstreamConnection {
             id: self.id,
-            elapsed_connect_ms: since(conn.tls.connected),
-            elapsed_tls_ms: since(conn.tls.handshaken),
+            elapsed_connect_ms: connect,
+            elapsed_tls_ms: tls,
             tls_version: conn.tls.version.clone(),
             tls_cipher: conn.tls.cipher.clone(),
         });
@@ -266,6 +277,21 @@ impl Flow {
             .unwrap()
     }
 
+    /// Ends the flow as an error, its server unreachable, and resets the client's connection
+    /// unanswered, so the client reports a connection error of its own, as it would without the
+    /// proxy. A response of the engine's would look the server's.
+    fn unreachable(mut self, unreachable: &dial::Unreachable, conn: &ResetHandle) -> Reset {
+        self.answered = true;
+        let error = unreachable.to_string();
+        debug!("Flow {} could not reach the server: {error}", self.id);
+        self.engine.emit(ProxyEvent::Error {
+            id: self.id,
+            error,
+            elapsed_ms: self.start.elapsed().as_millis() as u64,
+        });
+        conn.reset()
+    }
+
     fn fail(mut self, error: String) -> Response<BoxBody> {
         // The request failed because the client stopped sending its body: it cancelled. The
         // answer goes nowhere, and dropping the flow unanswered says so.
@@ -303,13 +329,16 @@ fn bad_gateway(body: String) -> Response<BoxBody> {
     Response::builder().status(StatusCode::BAD_GATEWAY).body(text_body(body)).unwrap()
 }
 
+/// Serves a request to the listener. A plain HTTP request whose server can't be reached resets
+/// the client's connection through `conn`, failing with the [`Reset`].
 pub(crate) async fn handle_request(
     mut req: Request<Incoming>,
     client: ClientConn,
     engine: Arc<Engine>,
-) -> Result<Response<BoxBody>, Infallible> {
+    conn: ResetHandle,
+) -> Result<Response<BoxBody>, Reset> {
     if req.method() == Method::CONNECT {
-        return Ok(handle_connect(req, client, engine));
+        return Ok(handle_connect(req, client, engine).await);
     }
 
     // A request the engine sent that was routed back to it, as iCloud Private Relay does with
@@ -335,21 +364,16 @@ pub(crate) async fn handle_request(
 
     let (parts, body) = req.into_parts();
     let outgoing = Request::from_parts(parts, flow.capture_request(body));
-    Ok(match engine.http_client.request(outgoing).await {
+    match engine.http_client.request(outgoing).await {
         Ok(resp) => {
-            let remote_addr = plain_remote_addr(&resp);
-            flow.respond(resp, remote_addr)
+            let remote_addr = resp.extensions().get::<dial::RemoteAddr>().map(|a| a.0);
+            Ok(flow.respond(resp, remote_addr))
         }
-        Err(e) => flow.fail(error_chain(&e)),
-    })
-}
-
-/// The address `Engine::http_client` connected to for `resp`.
-fn plain_remote_addr(resp: &Response<Incoming>) -> Option<SocketAddr> {
-    #[cfg(target_os = "macos")]
-    return resp.extensions().get::<crate::nw::RemoteAddr>().map(|a| a.0);
-    #[cfg(not(target_os = "macos"))]
-    resp.extensions().get::<HttpInfo>().map(|i| i.remote_addr())
+        Err(e) => match dial::unreachable_of(&e) {
+            Some(unreachable) => Err(flow.unreachable(unreachable, &conn)),
+            None => Ok(flow.fail(error_chain(&e))),
+        },
+    }
 }
 
 /// Whether `req` carries this engine's `Via` mark, which it adds to every plain-HTTP request it
@@ -394,7 +418,10 @@ struct Target {
     port: u16,
 }
 
-fn handle_connect(
+/// Answers a CONNECT once its server is reached, with the connection handed on to the tunnel or
+/// the first request, or with a 502 or 504 when it can't be, so the client reports a connection
+/// error of its own.
+async fn handle_connect(
     req: Request<Incoming>,
     client: ClientConn,
     engine: Arc<Engine>,
@@ -407,19 +434,33 @@ fn handle_connect(
     };
     let host = authority.host().to_string();
     let port = authority.port_u16().unwrap_or(443);
+    let target = Target {
+        server_name: host.trim_start_matches('[').trim_end_matches(']').to_string(),
+        authority: if port == 443 { host.clone() } else { format!("{host}:{port}") },
+        addr: format!("{host}:{port}"),
+        port,
+    };
+
+    // One that may be the engine's own connection coming back is answered first, as its loop
+    // guard can only tell once it is, and is dialled behind that guard.
+    let dialled = if dial::may_be_own_connection(&host, port) {
+        None
+    } else {
+        let (started_at, start) = (SystemTime::now(), Instant::now());
+        match dial::dial(&host, port).await {
+            Ok(dialled) => Some(dialled),
+            Err(unreachable) => {
+                return refuse_connect(&engine, &target, client, &unreachable, started_at, start);
+            }
+        }
+    };
 
     tokio::spawn(async move {
         let upgraded = match hyper::upgrade::on(req).await {
             Ok(u) => TokioIo::new(u),
             Err(e) => return warn!("CONNECT upgrade failed for {host}: {e}"),
         };
-        let target = Target {
-            server_name: host.trim_start_matches('[').trim_end_matches(']').to_string(),
-            authority: if port == 443 { host.clone() } else { format!("{host}:{port}") },
-            addr: format!("{host}:{port}"),
-            port,
-        };
-        if let Err(e) = intercept(upgraded, target, client, engine).await {
+        if let Err(e) = intercept(upgraded, target, dialled, client, engine).await {
             debug!("Tunnel to {host}:{port} ended: {}", error_chain(e.as_ref()));
         }
     });
@@ -427,29 +468,72 @@ fn handle_connect(
     Response::new(text_body(Bytes::new()))
 }
 
+/// Records a CONNECT whose server could not be reached as a flow of its own, and answers it.
+fn refuse_connect(
+    engine: &Engine,
+    target: &Target,
+    conn: ClientConn,
+    unreachable: &dial::Unreachable,
+    started_at: SystemTime,
+    start: Instant,
+) -> Response<BoxBody> {
+    let error = unreachable.to_string();
+    debug!("Could not connect to {}: {error}", target.addr);
+    engine.emit(ProxyEvent::ConnectFailed {
+        id: engine.next_flow_id(),
+        started_at,
+        authority: target.authority.clone(),
+        connection: conn.connection,
+        client_addr: conn.addr,
+        error: error.clone(),
+        elapsed_ms: start.elapsed().as_millis() as u64,
+    });
+    Response::builder()
+        .status(unreachable.status())
+        .header(CONTENT_TYPE, "text/plain; charset=utf-8")
+        .body(text_body(format!("Yaak Proxy could not connect to {}: {error}", target.addr)))
+        .unwrap()
+}
+
+/// Judges an answered CONNECT and serves it: tunnelled, or decrypted. `dialled` is its server's
+/// connection, opened before the CONNECT was answered; without it, the server is dialled here.
 async fn intercept<S>(
     mut client: S,
     target: Target,
+    dialled: Option<Dialled>,
     conn: ClientConn,
     engine: Arc<Engine>,
 ) -> Result<(), BoxError>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    if !engine.decrypts(&target.server_name, target.port, conn.connection).await {
-        debug!("Tunneling {} undecrypted, as the decrypt list leaves it out", target.addr);
-        return Ok(tunnel_flow(client, &target, conn, &engine).await?);
-    }
+    let reason = match engine.verdict(&target.server_name, target.port, conn.connection).await {
+        Verdict::Decrypt => None,
+        Verdict::NotListed => {
+            debug!("Tunneling {} undecrypted, as the decrypt list leaves it out", target.addr);
+            Some(TunnelReason::NotListed)
+        }
+        Verdict::Excluded(entry) => {
+            debug!("Tunneling {} undecrypted, as {entry} excludes it", target.addr);
+            Some(TunnelReason::Excluded { entry: entry.to_string(), built_in: entry.built_in })
+        }
+    };
     // The fallback for clients that rejected the engine's certificate.
-    if engine.is_passthrough(&target.addr) {
-        return Ok(tunnel_flow(client, &target, conn, &engine).await?);
+    let reason = reason.or_else(|| {
+        engine
+            .passthrough_of(&target.addr)
+            .map(|rejected_by| TunnelReason::Rejected { rejected_by })
+    });
+    if let Some(reason) = reason {
+        let upstream = dialled.map(|d| d.io);
+        return Ok(tunnel_flow(client, &target, upstream, conn, &engine, reason).await?);
     }
 
     let mut buf = vec![0u8; 4096];
     let Ok(n) = tokio::time::timeout(CLIENT_FIRST_BYTES_TIMEOUT, client.read(&mut buf)).await
     else {
         debug!("Client sent nothing, tunneling server-first traffic to {}", target.addr);
-        return Ok(tunnel(client, &target.addr, &[]).await?);
+        return Ok(tunnel_to(client, &target, dialled.map(|d| d.io), &[]).await?);
     };
     let n = n?;
     if n == 0 {
@@ -458,9 +542,10 @@ where
     buf.truncate(n);
     if buf[0] != TLS_HANDSHAKE_RECORD {
         debug!("Tunneling non-TLS traffic to {}", target.addr);
-        return Ok(tunnel(client, &target.addr, &buf).await?);
+        return Ok(tunnel_to(client, &target, dialled.map(|d| d.io), &buf).await?);
     }
 
+    let attempt = HandshakeAttempt { started_at: SystemTime::now(), start: Instant::now() };
     let acceptor = rustls::server::Acceptor::default();
     let start = LazyConfigAcceptor::new(acceptor, Rewind::new(Bytes::from(buf), client)).await?;
     let server_name = start
@@ -472,7 +557,11 @@ where
     let mut tls = match start.into_stream(config).await {
         Ok(tls) => tls,
         Err(e) => {
-            record_handshake_failure(&engine, &target.addr, is_certificate_rejection(&e), &e);
+            let rejection = certificate_rejection(&e)
+                .map(String::from)
+                .or_else(|| is_hang_up(&e).then(|| HANG_UP.to_string()));
+            let alert = certificate_rejection(&e).is_some();
+            record_handshake_failure(&engine, &target, conn, &attempt, alert, rejection, &e);
             return Ok(());
         }
     };
@@ -484,7 +573,8 @@ where
     let n = match tls.read(&mut buf).await {
         Ok(n) => n,
         Err(e) if is_hang_up(&e) => {
-            record_handshake_failure(&engine, &target.addr, false, &e);
+            let rejection = Some(HANG_UP.to_string());
+            record_handshake_failure(&engine, &target, conn, &attempt, false, rejection, &e);
             return Ok(());
         }
         Err(e) => return Err(e.into()),
@@ -497,37 +587,68 @@ where
 
     let http2 = tls.get_ref().1.alpn_protocol() == Some(b"h2");
     let tls = Rewind::new(Bytes::from(buf), tls);
-    let upstreams = Arc::new(Upstreams::new(Target { server_name, ..target }));
+    let upstreams = Arc::new(Upstreams::new(Target { server_name, ..target }, dialled));
     serve_tls(tls, http2, move |req| forward_https(req, upstreams.clone(), conn, engine.clone()))
         .await
 }
 
-/// Tunnels a CONNECT undecrypted, recorded as a flow of its own with the bytes each way. Not
-/// one of the engine's own connections coming back, which [`tunnel`] refuses.
-async fn tunnel_flow<S>(
+/// Relays `client` to the server over `upstream`, the connection dialled before the CONNECT was
+/// answered, or else over a new one, after sending `prefix` (bytes already read from the client).
+async fn tunnel_to<S>(
     client: S,
     target: &Target,
-    conn: ClientConn,
-    engine: &Engine,
+    upstream: Option<UpstreamIo>,
+    prefix: &[u8],
 ) -> std::io::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
-    if is_own_connection(&target.addr).await {
+    match upstream {
+        Some(upstream) => relay(client, upstream, prefix).await,
+        None => tunnel(client, &target.addr, prefix).await,
+    }
+}
+
+/// Tunnels a CONNECT undecrypted, recorded as a flow of its own with the bytes each way. Not
+/// one of the engine's own connections coming back, which [`tunnel`] refuses: one that may be
+/// was answered without dialling, so has no `upstream`.
+async fn tunnel_flow<S>(
+    client: S,
+    target: &Target,
+    upstream: Option<UpstreamIo>,
+    conn: ClientConn,
+    engine: &Engine,
+    reason: TunnelReason,
+) -> std::io::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    if upstream.is_none() && is_own_connection(&target.addr).await {
         return tunnel(client, &target.addr, &[]).await;
     }
     let id = engine.next_flow_id();
     let start = Instant::now();
+    // Registered before its start is announced, so it can be closed as soon as it is known.
+    let (close_tx, close_rx) = tokio::sync::oneshot::channel();
+    engine.tunnels.lock().unwrap().insert(id, close_tx);
     engine.emit(ProxyEvent::TunnelStart {
         id,
         started_at: SystemTime::now(),
         authority: target.authority.clone(),
+        host: target.server_name.clone(),
+        port: target.port,
         connection: conn.connection,
         client_addr: conn.addr,
+        reason,
     });
     let client = Counted::new(client);
     let (sent, received) = client.counters();
-    let result = tunnel(client, &target.addr, &[]).await;
+    // Closed on request: dropping the relay closes both sides.
+    let (result, reconnect_requested) = tokio::select! {
+        result = tunnel_to(client, target, upstream, &[]) => (result, false),
+        _ = close_rx => (Ok(()), true),
+    };
+    engine.tunnels.lock().unwrap().remove(&id);
     let (sent, received) = (sent.load(Ordering::Relaxed), received.load(Ordering::Relaxed));
     // A tunnel that carried the server's bytes and then broke ended as connections do; one that
     // never did failed to reach the server.
@@ -541,21 +662,52 @@ where
         received,
         elapsed_ms: start.elapsed().as_millis() as u64,
         error,
+        reconnect_requested,
     });
     result
 }
 
+/// When a client's TLS handshake with the engine began.
+struct HandshakeAttempt {
+    started_at: SystemTime,
+    start: Instant,
+}
+
+/// How a client that hangs up on the engine's handshake is recorded as rejecting it.
+const HANG_UP: &str = "hang_up";
+
+/// Counts a failed handshake toward passing the address through, and, when this one starts
+/// passing it through, records the failure as a flow of its own.
 fn record_handshake_failure(
     engine: &Engine,
-    addr: &str,
-    certificate_rejected: bool,
+    target: &Target,
+    conn: ClientConn,
+    attempt: &HandshakeAttempt,
+    certificate_alert: bool,
+    rejection: Option<String>,
     e: &std::io::Error,
 ) {
-    if engine.record_handshake_failure(addr, certificate_rejected) {
+    let addr = &target.addr;
+    let failed = |id| ProxyEvent::HandshakeFailed {
+        id,
+        started_at: attempt.started_at,
+        authority: target.authority.clone(),
+        connection: conn.connection,
+        client_addr: conn.addr,
+        rejection,
+        error: error_chain(e),
+        elapsed_ms: attempt.start.elapsed().as_millis() as u64,
+    };
+    if engine.record_handshake_failure(addr, certificate_alert, failed) {
         info!("Client rejected the proxy for {addr}, passing it through: {e}");
     } else {
         debug!("TLS handshake with client failed for {addr}: {e}");
     }
+}
+
+/// The server closed the connection before or during the TLS handshake.
+fn closed_by_server(e: &std::io::Error) -> bool {
+    is_hang_up(e) || e.kind() == std::io::ErrorKind::BrokenPipe
 }
 
 /// The client closed the connection without a TLS `close_notify`, or reset it.
@@ -564,22 +716,27 @@ fn is_hang_up(e: &std::io::Error) -> bool {
     matches!(e.kind(), UnexpectedEof | ConnectionReset | ConnectionAborted)
 }
 
-fn is_certificate_rejection(e: &std::io::Error) -> bool {
+/// The alert a client sent rejecting the engine's certificate, by its name in the TLS spec, or
+/// None when `e` is not such an alert.
+fn certificate_rejection(e: &std::io::Error) -> Option<&'static str> {
     use rustls::AlertDescription::{
         BadCertificate, CertificateExpired, CertificateRevoked, CertificateUnknown, UnknownCA,
         UnsupportedCertificate,
     };
-    matches!(
-        e.get_ref().and_then(|inner| inner.downcast_ref::<rustls::Error>()),
-        Some(rustls::Error::AlertReceived(
-            BadCertificate
-                | UnsupportedCertificate
-                | CertificateRevoked
-                | CertificateExpired
-                | CertificateUnknown
-                | UnknownCA
-        ))
-    )
+    let Some(rustls::Error::AlertReceived(alert)) =
+        e.get_ref().and_then(|inner| inner.downcast_ref::<rustls::Error>())
+    else {
+        return None;
+    };
+    Some(match alert {
+        BadCertificate => "bad_certificate",
+        UnsupportedCertificate => "unsupported_certificate",
+        CertificateRevoked => "certificate_revoked",
+        CertificateExpired => "certificate_expired",
+        CertificateUnknown => "certificate_unknown",
+        UnknownCA => "unknown_ca",
+        _ => return None,
+    })
 }
 
 enum Upstream {
@@ -597,21 +754,29 @@ struct UpstreamConn {
 /// When a connection to the server was made, and the TLS it negotiated.
 #[derive(Debug, Clone)]
 struct TlsInfo {
+    /// When the TCP connection was made, or, for one opened as its CONNECT came in, when it was
+    /// taken up for TLS.
     connected: Instant,
+    /// How long opening it took, when it was opened as its CONNECT came in, before any request.
+    dialled_before: Option<Duration>,
     handshaken: Instant,
     version: Option<String>,
     cipher: Option<String>,
 }
 
 impl TlsInfo {
-    fn of(conn: &rustls::ClientConnection, connected: Instant) -> Self {
+    fn of(
+        conn: &rustls::ClientConnection,
+        connected: Instant,
+        dialled_before: Option<Duration>,
+    ) -> Self {
         let version = conn.protocol_version().map(|v| match v {
             rustls::ProtocolVersion::TLSv1_3 => "TLSv1.3".to_string(),
             rustls::ProtocolVersion::TLSv1_2 => "TLSv1.2".to_string(),
             other => format!("{other:?}"),
         });
         let cipher = conn.negotiated_cipher_suite().map(|s| format!("{:?}", s.suite()));
-        Self { connected, handshaken: Instant::now(), version, cipher }
+        Self { connected, dialled_before, handshaken: Instant::now(), version, cipher }
     }
 }
 
@@ -660,6 +825,8 @@ const MAX_IDLE_H1: usize = 6;
 /// them all at once; an HTTP/1.1 one a request at a time.
 struct Upstreams {
     target: Target,
+    /// The connection dialled before the CONNECT was answered, for the first one to the server.
+    dialled: std::sync::Mutex<Option<Dialled>>,
     conns: tokio::sync::Mutex<Vec<UpstreamConn>>,
     /// The server answered in HTTP/1.1, so each request in flight needs a connection of its
     /// own, and new ones need not wait to see whether the one before can be shared.
@@ -667,8 +834,20 @@ struct Upstreams {
 }
 
 impl Upstreams {
-    fn new(target: Target) -> Self {
-        Self { target, conns: tokio::sync::Mutex::new(Vec::new()), h1: AtomicBool::new(false) }
+    fn new(target: Target, dialled: Option<Dialled>) -> Self {
+        Self {
+            target,
+            dialled: std::sync::Mutex::new(dialled),
+            conns: tokio::sync::Mutex::new(Vec::new()),
+            h1: AtomicBool::new(false),
+        }
+    }
+
+    /// A new connection to the server: over the one dialled before the CONNECT was answered,
+    /// the first time, and dialled anew after.
+    async fn connect(&self, engine: &Engine, h1_only: bool) -> Result<UpstreamConn, BoxError> {
+        let dialled = self.dialled.lock().unwrap().take();
+        connect_upstream(engine, &self.target, h1_only, dialled).await
     }
 
     /// A connection for one request, and whether it carried one before. Requests that arrive
@@ -685,9 +864,9 @@ impl Upstreams {
         }
         if self.h1.load(Ordering::Relaxed) {
             drop(conns);
-            return Ok((connect_upstream(engine, &self.target, false).await?, false));
+            return Ok((self.connect(engine, false).await?, false));
         }
-        let conn = connect_upstream(engine, &self.target, false).await?;
+        let conn = self.connect(engine, false).await?;
         match &conn.sender {
             Upstream::H2(s) => conns.push(conn.share(Upstream::H2(s.clone()))),
             Upstream::H1(_) => self.h1.store(true, Ordering::Relaxed),
@@ -712,18 +891,40 @@ impl Upstreams {
     }
 }
 
+/// Opens a connection to the server for requests: over `dialled` when there is one, and over a
+/// new TCP connection otherwise, or when `dialled` was closed while it waited.
 async fn connect_upstream(
     engine: &Engine,
     target: &Target,
     h1_only: bool,
+    dialled: Option<Dialled>,
 ) -> Result<UpstreamConn, BoxError> {
-    let tcp = TcpStream::connect(&target.addr).await?;
-    let connected = Instant::now();
-    let remote_addr = tcp.peer_addr().ok();
     let config = if h1_only { &engine.upstream_tls_h1 } else { &engine.upstream_tls };
+    let connector = TlsConnector::from(config.clone());
     let server_name = ServerName::try_from(target.server_name.clone())?;
-    let tls = TlsConnector::from(config.clone()).connect(server_name, tcp).await?;
-    let tls_info = TlsInfo::of(tls.get_ref().1, connected);
+    let mut tls = None;
+    if let Some(Dialled { io, took }) = dialled {
+        let (connected, remote_addr) = (Instant::now(), io.remote_addr());
+        match connector.connect(server_name.clone(), io).await {
+            Ok(stream) => tls = Some((stream, connected, Some(took), remote_addr)),
+            // The server closed it while it waited for the first request.
+            Err(e) if closed_by_server(&e) => {
+                debug!("Connection to {} closed before its first request: {e}", target.addr);
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+    let (tls, connected, dialled_before, remote_addr) = match tls {
+        Some(tls) => tls,
+        None => {
+            let tcp = TcpStream::connect(&target.addr).await?;
+            let connected = Instant::now();
+            let remote_addr = tcp.peer_addr().ok();
+            let stream = connector.connect(server_name, UpstreamIo::Tcp(tcp)).await?;
+            (stream, connected, None, remote_addr)
+        }
+    };
+    let tls_info = TlsInfo::of(tls.get_ref().1, connected, dialled_before);
     let is_h2 = tls.get_ref().1.alpn_protocol() == Some(b"h2");
     let io = TokioIo::new(tls);
 
@@ -815,13 +1016,13 @@ async fn forward_https(
     let target = &upstreams.target;
     let path = req.uri().path_and_query().map(|pq| pq.to_string()).unwrap_or_else(|| "/".into());
     let url = format!("https://{}{path}", target.authority);
-    let flow = Flow::begin(engine.clone(), client, &req, url);
+    let mut flow = Flow::begin(engine.clone(), client, &req, url);
 
     // Only HTTP/1.1 has `Upgrade`. Its connection is the tunnel afterwards, so it is not shared.
     let client_upgrade: Option<OnUpgrade> =
         req.headers().contains_key(UPGRADE).then(|| hyper::upgrade::on(&mut req));
     let taken = match client_upgrade {
-        Some(_) => connect_upstream(&engine, target, true).await.map(|c| (c, false)),
+        Some(_) => upstreams.connect(&engine, true).await.map(|c| (c, false)),
         None => upstreams.take(&engine).await,
     };
     let (mut conn, mut reused) = match taken {
@@ -847,7 +1048,7 @@ async fn forward_https(
             return Ok(flow.fail(error_chain(e.error())));
         };
         debug!("Upstream connection to {} was closed, retrying on a new one", target.addr);
-        conn = match connect_upstream(&engine, target, false).await {
+        conn = match upstreams.connect(&engine, false).await {
             Ok(conn) => conn,
             Err(e) => return Ok(flow.fail(error_chain(e.as_ref()))),
         };

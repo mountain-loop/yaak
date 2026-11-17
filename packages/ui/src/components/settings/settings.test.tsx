@@ -7,6 +7,7 @@ import { SettingsDialog } from "./SettingsDialog";
 import { SettingsGeneral } from "./SettingsGeneral";
 import { SettingsInterface } from "./SettingsInterface";
 import { SettingsLicense } from "./SettingsLicense";
+import { SettingsPage } from "./SettingsPage";
 import { SettingsTheme } from "./SettingsTheme";
 import type { SettingsCallbacks, SettingsLicenseStatus, SettingsView } from "./types";
 
@@ -128,6 +129,22 @@ describe("SettingsGeneral", () => {
     expect(withFeedback).toContain("Prompt for feedback");
   });
 
+  test("leaves out the notifications row only when the app asks", () => {
+    const shown = text(render(<SettingsGeneral view={stubView()} callbacks={callbacks} />));
+    expect(shown).toContain("Check for notifications");
+
+    const hidden = text(
+      render(
+        <SettingsGeneral
+          view={stubView({ updates: { checking: false, notificationsSetting: false } })}
+          callbacks={callbacks}
+        />,
+      ),
+    );
+    expect(hidden).toContain("Update Channel");
+    expect(hidden).not.toContain("Check for notifications");
+  });
+
   test("puts the app's banner under the heading and its own sections before App Info", () => {
     const t = text(
       render(
@@ -142,6 +159,36 @@ describe("SettingsGeneral", () => {
     expect(t.indexOf("Banner slot")).toBeLessThan(t.indexOf("Updates"));
     expect(t.indexOf("Extra section")).toBeGreaterThan(t.indexOf("Send anonymous"));
     expect(t.indexOf("Extra section")).toBeLessThan(t.indexOf("App Info"));
+  });
+});
+
+describe("SettingsPage", () => {
+  function NoBanner() {
+    return null;
+  }
+
+  test("puts a banner between the header and the content, each the same gap apart", () => {
+    const html = render(
+      <SettingsPage title="General" description="About it" banner={<p>Banner</p>}>
+        <p>Content</p>
+      </SettingsPage>,
+    );
+    expect(html).toMatch(/<div class="mt-6 [^"]*:hidden"><p>Banner<\/p><\/div>/);
+    expect(html).toContain('<div class="mt-6"><p>Content</p></div>');
+    expect(text(html)).toBe("General About it Banner Content");
+  });
+
+  test("hides the banner slot when the banner renders nothing or only an empty wrapper", () => {
+    for (const banner of [<NoBanner key="null" />, <div key="wrapper" className="w-full" />]) {
+      const html = render(
+        <SettingsPage title="General" banner={banner}>
+          <p>Content</p>
+        </SettingsPage>,
+      );
+      // The slot hides itself when nothing inside it has content
+      expect(html).toMatch(/<div class="mt-6 \[&amp;:not\(:has\(:not\(:empty\)\)\)\]:hidden">/);
+      expect(text(html)).toBe("General Content");
+    }
   });
 });
 

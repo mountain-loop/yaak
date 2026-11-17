@@ -1,7 +1,9 @@
+export { ACTIONS_BAR_CONTAINER, ActionsBar, PINNED_ACTION } from "./components/ActionsBar";
 export type { BannerProps } from "./components/Banner";
 export { Banner } from "./components/Banner";
 export type { ButtonProps } from "./components/Button";
-export { Button } from "./components/Button";
+export { Button, CONTROL_TOOLTIP_DELAY } from "./components/Button";
+export { ButtonInfiniteLoading } from "./components/ButtonInfiniteLoading";
 export type { CheckboxProps } from "./components/Checkbox";
 export { Checkbox } from "./components/Checkbox";
 export type { CopyIconButtonProps } from "./components/CopyIconButton";
@@ -15,6 +17,7 @@ export { DropMarker } from "./components/DropMarker";
 export type {
   ContextMenuProps,
   DropdownItem,
+  DropdownItemAction,
   DropdownItemContent,
   DropdownItemDefault,
   DropdownItemSeparator,
@@ -60,7 +63,13 @@ export type {
 export { eventDeltas, formatEventDelta, formatEventTime } from "./components/events/streamEvents";
 export type { ExternalLinkProps } from "./components/ExternalLink";
 export { ExternalLink } from "./components/ExternalLink";
-export { ConfirmLargeResponse } from "./components/http/ConfirmLargeResponse";
+export type { PrettyView } from "./components/http/BodyViewModeSwitch";
+export {
+  BodyViewModeSwitch,
+  prettyViewFor,
+  viewModeLabels,
+} from "./components/http/BodyViewModeSwitch";
+export { ConfirmLargeResponse, LARGE_BODY_BYTES } from "./components/http/ConfirmLargeResponse";
 export { FormMultipartEditor } from "./components/http/FormMultipartEditor";
 export { FormUrlencodedEditor } from "./components/http/FormUrlencodedEditor";
 export { HeadersEditor } from "./components/http/HeadersEditor";
@@ -125,8 +134,11 @@ export type { SelectProps } from "./components/Select";
 export { Select } from "./components/Select";
 export type { ErrorBoundaryProps } from "./components/ErrorBoundary";
 export { ErrorBoundary } from "./components/ErrorBoundary";
+export type { FormattableEditor } from "./components/FormatAction";
+export { FormatAction, formatEditor } from "./components/FormatAction";
 export { FormattedError } from "./components/FormattedError";
 export { HeaderSize } from "./components/HeaderSize";
+export { HeaderTint } from "./components/HeaderTint";
 export type { HeadersTableProps } from "./components/HeadersTable";
 export { HeadersTable } from "./components/HeadersTable";
 export { Heading } from "./components/Heading";
@@ -147,6 +159,8 @@ export { Overlay } from "./components/Overlay";
 export type { PlainInputProps } from "./components/PlainInput";
 export { PlainInput } from "./components/PlainInput";
 export { Portal } from "./components/Portal";
+export type { SegmentedControlOption, SegmentedControlProps } from "./components/SegmentedControl";
+export { SegmentedControl } from "./components/SegmentedControl";
 export type { SeparatorAction } from "./components/Separator";
 export { Separator } from "./components/Separator";
 export type { SettingRowBaseProps, SettingSnippetLanguage } from "./components/settings/SettingRow";
@@ -182,6 +196,8 @@ export type { SettingsInterfaceProps } from "./components/settings/SettingsInter
 export { SettingsInterface } from "./components/settings/SettingsInterface";
 export type { SettingsLicenseProps } from "./components/settings/SettingsLicense";
 export { SettingsLicense } from "./components/settings/SettingsLicense";
+export type { SettingsPageProps } from "./components/settings/SettingsPage";
+export { SettingsPage } from "./components/settings/SettingsPage";
 export type { SettingsThemeProps } from "./components/settings/SettingsTheme";
 export { SettingsTheme } from "./components/settings/SettingsTheme";
 export * from "./components/settings/types";
@@ -283,3 +299,17 @@ export { getNodeText } from "./lib/getNodeText";
 export { minPromiseMillis } from "./lib/minPromiseMillis";
 export type { ShowToastArgs, ToastInstance } from "./lib/toast";
 export { hideToast, hideToastById, showToast, toastsAtom } from "./lib/toast";
+export type {
+  ShowUpdateAvailableToastArgs,
+  ShowUpdateInstalledToastArgs,
+  UpdateToastInfo,
+  UpdateToastState,
+} from "./components/updates/updateToasts";
+export {
+  showUpdateAvailableToast,
+  showUpdateInstalledToast,
+  showUpdateStateToast,
+  UPDATE_STATE_TOAST_ID,
+  UPDATE_TOAST_ID,
+  updateStateMessage,
+} from "./components/updates/updateToasts";

@@ -47,7 +47,7 @@ function NameDialog({ dialog, onClose }: { dialog: SavedSearchDialog; onClose: (
       open
       onClose={onClose}
       size="dynamic"
-      title={dialog.mode === "save" ? "Save search" : "Rename search"}
+      title={dialog.mode === "save" ? "Save Search" : "Rename Search"}
       className="w-[26rem]"
     >
       <form

@@ -5,7 +5,9 @@ import {
   asOneTerm,
   countsBackFromNow,
   fieldTerm,
+  orGroupShapes,
   pathTerm,
+  queryShape,
   termKeys,
   widerQueries,
 } from "./query";
@@ -32,13 +34,38 @@ describe("terms", () => {
     ]);
     expect(termKeys("")).toEqual([]);
   });
+
+  test("come in the groups `OR` separates at the top, a parenthesised one whole", () => {
+    expect(orGroupShapes("@host:x.com @app:Slack OR (a OR b) OR -@is:system")).toEqual([
+      "And(@app:slack,@host:x.com)",
+      "Or(a,b)",
+      "-@is:system",
+    ]);
+    expect(orGroupShapes("@app:Slack")).toEqual(["@app:slack"]);
+    expect(orGroupShapes(" ")).toEqual([]);
+  });
+
+  test("have a shape that keeps AND and OR apart, whatever the order or case", () => {
+    expect(queryShape("@app:Slack @host:x.com")).toBe(queryShape("@HOST:x.com @app:slack"));
+    expect(queryShape("a OR b")).not.toBe(queryShape("a b"));
+    expect(queryShape("")).toBeNull();
+  });
 });
 
 describe("activeQuery", () => {
   test("is null for all traffic, and carries hiding System", () => {
     expect(activeQuery("  ", false)).toBeNull();
-    expect(activeQuery("", true)).toEqual({ query: "", hideSystem: true });
-    expect(activeQuery(" stripe ", false)).toEqual({ query: "stripe", hideSystem: false });
+    expect(activeQuery("", true)).toEqual({ query: "", hideSystem: true, hideEncrypted: false });
+    expect(activeQuery(" stripe ", false)).toEqual({
+      query: "stripe",
+      hideSystem: false,
+      hideEncrypted: false,
+    });
+    expect(activeQuery("", false, true)).toEqual({
+      query: "",
+      hideSystem: false,
+      hideEncrypted: true,
+    });
   });
 });
 

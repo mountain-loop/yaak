@@ -4,13 +4,14 @@ import { describe, expect, test, vi } from "vite-plus/test";
 import type { FlowBodyData } from "../lib/flowViews";
 import { FlowRequestBody } from "./FlowRequestBody";
 
-// The package's index reaches for the window as it loads; these three are all this renders.
+// The package's index reaches for the window as it loads; these four are all this renders.
 vi.mock("@yaakapp-internal/ui", () => ({
   Banner: ({ children, color }: { children: ReactNode; color?: string }) => (
     <div data-banner={color}>{children}</div>
   ),
   EmptyStateText: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   LoadingIcon: () => <span>LOADING</span>,
+  IconTooltip: ({ content }: { content: string }) => <span data-tooltip={content} />,
 }));
 
 const data = (truncated = false): FlowBodyData => ({
@@ -19,17 +20,9 @@ const data = (truncated = false): FlowBodyData => ({
   storedSize: 7,
 });
 
-function render(
-  body: Parameters<typeof FlowRequestBody>[0]["body"],
-  binaryViewer: string | null = null,
-) {
+function render(body: Parameters<typeof FlowRequestBody>[0]["body"]) {
   return renderToStaticMarkup(
-    <FlowRequestBody
-      body={body}
-      editor={<div>EDITOR</div>}
-      binaryViewer={binaryViewer == null ? null : <div>{binaryViewer}</div>}
-      requestSize={2048}
-    />,
+    <FlowRequestBody body={body} viewer={<div>EDITOR</div>} requestSize={2048} />,
   );
 }
 
@@ -47,15 +40,17 @@ describe("FlowRequestBody", () => {
     expect(html).toContain("LOADING");
   });
 
-  test("the editor once loaded, the proxy's viewer for a binary body", () => {
+  test("the viewer once loaded", () => {
     expect(render({ data: data(), isLoading: false, error: null })).toContain("EDITOR");
-    expect(render({ data: data(), isLoading: false, error: null }, "HEXDUMP")).toContain("HEXDUMP");
   });
 
-  test("a cut body says how much was kept", () => {
+  test("a truncated body says how much is shown, and why behind its info icon", () => {
     const html = render({ data: data(true), isLoading: false, error: null });
     expect(html).toContain("EDITOR");
     expect(html).toContain('data-banner="notice"');
-    expect(html).toContain("kept");
+    expect(html.replaceAll("<!-- -->", "")).toContain("The first 7 B of 2 KB is shown.");
+    expect(html).toContain(
+      'data-tooltip="The body was truncated at the capture limit. The app sent all of it."',
+    );
   });
 });

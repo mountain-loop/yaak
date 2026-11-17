@@ -19,6 +19,8 @@ interface Props {
   onReset?: () => void;
   side: "left" | "right" | "top";
   justify: "center" | "end" | "start";
+  /** Fills the space it is given, all of it taking the pointer, with its bar centred in it */
+  fill?: boolean;
 }
 
 export function ResizeHandle({
@@ -30,6 +32,7 @@ export function ResizeHandle({
   onResizeMove,
   onReset,
   side,
+  fill = false,
 }: Props) {
   const vertical = side === "top";
   const [isResizing, setIsResizing] = useState<boolean>(false);
@@ -89,8 +92,12 @@ export function ResizeHandle({
       onPointerDown={handlePointerDown}
       className={classNames(
         className,
-        "group z-10 flex select-none transition-colors hover:bg-surface-active rounded-full",
-        vertical ? "w-full h-1.5 cursor-row-resize" : "h-full w-1.5 cursor-col-resize",
+        "group z-10 flex select-none",
+        vertical ? "cursor-row-resize" : "cursor-col-resize",
+        fill
+          ? "w-full h-full items-center"
+          : "transition-colors hover:bg-surface-active rounded-full",
+        !fill && (vertical ? "w-full h-1.5" : "h-full w-1.5"),
         justify === "center" && "justify-center",
         justify === "end" && "justify-end",
         justify === "start" && "justify-start",
@@ -99,6 +106,15 @@ export function ResizeHandle({
         side === "top" && "top-0",
       )}
     >
+      {fill && (
+        <div
+          className={classNames(
+            "rounded-full transition-colors group-hover:bg-surface-active",
+            vertical ? "w-full h-1.5" : "h-full w-1.5",
+            isResizing && "bg-surface-active",
+          )}
+        />
+      )}
       {isResizing && (
         <div
           className={classNames(

@@ -1,10 +1,10 @@
 import { platform } from "@yaakapp-internal/platform";
 import { settingsAtom, workspacesAtom } from "@yaakapp-internal/models";
-import { Banner, HeaderSize, HStack, SidebarLayout } from "@yaakapp-internal/ui";
+import { Banner, HeaderSize, HeaderTint, HStack, SidebarLayout } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import * as m from "motion/react-m";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   getActiveCookieJar,
   useEnsureActiveCookieJar,
@@ -61,12 +61,6 @@ export function Workspace() {
   const activeEnvironment = useAtomValue(activeEnvironmentAtom);
   const [floating, setFloating] = useState(false);
 
-  const environmentBgStyle = useMemo(() => {
-    if (activeEnvironment?.color == null) return undefined;
-    const background = `linear-gradient(to right, ${activeEnvironment.color} 15%, transparent 40%)`;
-    return { background };
-  }, [activeEnvironment?.color]);
-
   if (workspaces.length === 0) {
     return <RedirectToLatestWorkspace />;
   }
@@ -81,13 +75,7 @@ export function Workspace() {
       useNativeTitlebar={settings.useNativeTitlebar}
       interfaceScale={settings.interfaceScale}
     >
-      <div className="absolute inset-0 pointer-events-none">
-        <div style={environmentBgStyle} className="absolute inset-0 opacity-[0.07]" />
-        <div
-          style={environmentBgStyle}
-          className="absolute left-0 right-0 -bottom-px h-px opacity-20"
-        />
-      </div>
+      <HeaderTint color={activeEnvironment?.color ?? null} />
       <WorkspaceHeader className="pointer-events-none" floatingSidebar={floating} />
     </HeaderSize>
   );

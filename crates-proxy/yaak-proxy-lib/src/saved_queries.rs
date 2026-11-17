@@ -2,6 +2,7 @@
 
 use crate::db::ProxyQueryManager;
 use crate::flows::{self, FlowFilter};
+use crate::query::Hidden;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use yaak_database::generate_prefixed_id;
@@ -115,13 +116,17 @@ pub fn delete(db: &ProxyQueryManager, id: &str) -> Result<bool, String> {
     .map_err(|e| failed("delete", e))
 }
 
-/// Each saved query's count of flows, with System's left out when `hide_system`, as the list
-/// would show it, read from one snapshot.
-pub fn counts(db: &ProxyQueryManager, hide_system: bool) -> Result<Vec<SavedQueryCount>, String> {
+/// Each saved query's count of flows, with what `hidden` says left out, as the list would show
+/// it, read from one snapshot.
+pub fn counts(db: &ProxyQueryManager, hidden: Hidden) -> Result<Vec<SavedQueryCount>, String> {
     let saved = list(db)?;
     let filters: Vec<FlowFilter> = saved
         .iter()
-        .map(|s| FlowFilter { hide_system, ..FlowFilter::search(s.query.clone()) })
+        .map(|s| FlowFilter {
+            hide_system: hidden.system,
+            hide_encrypted: hidden.encrypted,
+            ..FlowFilter::search(s.query.clone())
+        })
         .collect();
     let counts = flows::count_each(db, &filters)?;
     Ok(saved
@@ -165,7 +170,7 @@ mod tests {
             ["Errors", "Fine"]
         );
 
-        let counts = counts(&db, false).unwrap();
+        let counts = counts(&db, false.into()).unwrap();
         assert_eq!(
             counts,
             vec![

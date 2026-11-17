@@ -71,6 +71,9 @@ objc2-service-management = { version = "0.3.2", default-features = false, featur
     "SMAppService",
 ] }
 plist = "1.7"
+# Told when the system proxy changes underneath the app, as Proxyman or System Settings change it.
+core-foundation = "0.9"
+system-configuration = "0.7"
 
 [dev-dependencies]
 base64 = "0.23.1"
@@ -84,7 +87,9 @@ protoc-bin-vendored = "3"
 tonic = { version = "0.14.6", default-features = false }
 tonic-reflection = "0.14.6"
 reqwest = { workspace = true }
+rustls = { workspace = true, features = ["ring"] }
 tempfile = "3"
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "time"] }
+tokio-rustls = "0.26"
 yaak-crypto = { workspace = true, features = ["test-support"] }
 yaak-proxy-helper = { workspace = true, features = ["test-support"] }

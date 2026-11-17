@@ -3,7 +3,7 @@
 //! and `blobs.sqlite` read-only so captured traffic stays reachable.
 
 use crate::bodies::{self, DecodedBody};
-use crate::ca::CaStatus;
+use crate::ca::CaTrustResult;
 use crate::control::{
     self, ControlInfo, ControlStatus, DecryptRequest, ErrorBody, NOTE_HEADER, RecordingRequest,
     StartRequest, SystemProxyRequest, TRUNCATED_HEADER,
@@ -16,6 +16,7 @@ use crate::macos::SystemProxyStatus;
 use crate::models::{Flow, FlowBody};
 use crate::save::{SaveFlowRequest, SaveFlowResponse, WorkspaceSummary};
 use crate::settings::{DecryptList, ProxySettings};
+use crate::tunnels::{OpenTunnel, TunnelScope};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::path::Path;
@@ -129,8 +130,47 @@ impl ControlClient {
         resp.text().await.map_err(|e| e.to_string())
     }
 
-    pub async fn trust_ca(&self) -> Result<CaStatus, String> {
+    pub async fn trust_ca(&self) -> Result<CaTrustResult, String> {
         self.post("/ca/trust", &serde_json::json!({})).await
+    }
+
+    /// The addresses the owner's engine passes through after clients rejected the CA.
+    pub async fn passthrough(&self) -> Result<crate::PassthroughResponse, String> {
+        self.get("/passthrough").await
+    }
+
+    /// Has the owner's engine intercept one passed-through address again.
+    pub async fn forget_passthrough(
+        &self,
+        req: &crate::ForgetPassthroughRequest,
+    ) -> Result<crate::ForgetPassthroughResponse, String> {
+        self.post("/passthrough/forget", req).await
+    }
+
+    /// The owner's open tunnels its decrypt list would decrypt if their clients reconnected.
+    pub async fn reconnectable_tunnels(
+        &self,
+        scope: &TunnelScope,
+    ) -> Result<Vec<OpenTunnel>, String> {
+        let query = {
+            let mut query = url::form_urlencoded::Serializer::new(String::new());
+            if let Some(entry) = &scope.entry {
+                query.append_pair("entry", entry);
+            }
+            if let Some(flow_id) = &scope.flow_id {
+                query.append_pair("flowId", flow_id);
+            }
+            query.finish()
+        };
+        self.get(&format!("/tunnels/reconnectable?{query}")).await
+    }
+
+    /// Closes tunnels in the owner's engine so their clients reconnect.
+    pub async fn reconnect_tunnels(
+        &self,
+        req: &crate::ReconnectTunnelsRequest,
+    ) -> Result<crate::ReconnectTunnelsResponse, String> {
+        self.post("/tunnels/reconnect", req).await
     }
 
     /// Resumes or pauses storing flows in the owner's engine.
@@ -154,7 +194,7 @@ impl ControlClient {
     pub async fn edit_decrypt_list(
         &self,
         edit: &crate::EditDecryptListRequest,
-    ) -> Result<DecryptList, String> {
+    ) -> Result<crate::DecryptListSaved, String> {
         let body = serde_json::to_vec(edit).map_err(|e| e.to_string())?;
         let req = self
             .http
@@ -166,7 +206,10 @@ impl ControlClient {
     }
 
     /// Replaces the decrypt list in the owner, which saves it and applies it to its engine.
-    pub async fn set_decrypt_list(&self, entries: &[String]) -> Result<DecryptList, String> {
+    pub async fn set_decrypt_list(
+        &self,
+        entries: &[String],
+    ) -> Result<crate::DecryptListSaved, String> {
         let body = serde_json::to_vec(&DecryptRequest { entries: entries.to_vec() })
             .map_err(|e| e.to_string())?;
         let req = self

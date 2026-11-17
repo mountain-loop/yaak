@@ -1,11 +1,11 @@
 import type { Flow } from "@yaakapp-internal/proxy-lib";
-import { useSetAtom } from "jotai";
+import { useSetAtom, useStore } from "jotai";
 import { useLayoutEffect, useMemo, useState } from "react";
 import { FlowDetail } from "../components/FlowDetail";
 import { FlowList } from "../components/FlowList";
 import { ProxyEditorHost } from "../components/ProxyEditorHost";
 import { MessageSourceContext } from "../hooks/useFlowMessages";
-import { selectedFlowAtom } from "../lib/atoms";
+import { goToPlace } from "../lib/navigation";
 import { flowWindowAtom } from "../lib/store";
 import { fixtureSource, type StreamFixture, streamFixtures } from "./streamFixtures";
 
@@ -51,15 +51,16 @@ function listedFlows(shown: Flow): Flow[] {
 
 function StreamDetail({ fixture }: { fixture: StreamFixture }) {
   const source = useMemo(() => fixtureSource(fixture), [fixture]);
-  const setSelected = useSetAtom(selectedFlowAtom);
+  const store = useStore();
   const setWindow = useSetAtom(flowWindowAtom);
   const [flow, setFlow] = useState(fixture.flow);
   const withList = new URLSearchParams(location.search).has("list");
   useLayoutEffect(() => {
     const flows = listedFlows(flow);
     setWindow({ flows, hasOlder: false, total: flows.length });
-    setSelected(flows.find((f) => f.id === flow.id) ?? flow);
-  }, [flow, setSelected, setWindow]);
+    const shown = flows.find((f) => f.id === flow.id) ?? flow;
+    goToPlace(store, "update", { selection: [shown.id], flow: shown });
+  }, [flow, store, setWindow]);
   // The count on the flow follows its messages, as the engine writes it
   useLayoutEffect(
     () => source.subscribe(() => setFlow((f) => ({ ...f, messageCount: f.messageCount + 1 }))),

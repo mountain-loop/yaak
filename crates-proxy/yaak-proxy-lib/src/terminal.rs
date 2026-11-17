@@ -44,7 +44,7 @@ pub fn open(vars: &[(String, String)]) -> Result<(), String> {
 
 #[cfg(not(target_os = "macos"))]
 pub fn open(_vars: &[(String, String)]) -> Result<(), String> {
-    Err("Opening a terminal with the proxy set is only supported on macOS so far".to_string())
+    Err("Opening a terminal is only supported on macOS".to_string())
 }
 
 #[cfg(test)]

@@ -58,7 +58,14 @@ const flow: Flow = {
   grpcMethod: null,
   grpcStatus: null,
   grpcMessage: null,
+  graphqlOperation: null,
   tunnelled: false,
+  tunnelReason: null,
+  tunnelExcludedBy: null,
+  tunnelExcludedBuiltIn: false,
+  tunnelRejectedBy: null,
+  reconnectRequested: false,
+  tlsRejected: null,
   agentRead: false,
   clientAddr: null,
   elapsedConnectMs: null,
@@ -218,7 +225,7 @@ describe("flowResponseToView", () => {
 
   test("says when the client gave up before a response", () => {
     const view = flowResponseToView({ ...flow, status: null, elapsedMs: null, cancelled: true });
-    expect(view?.error).toBe("Cancelled by the client");
+    expect(view?.error).toBe("Cancelled by the app");
   });
 });
 

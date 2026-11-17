@@ -28,7 +28,7 @@ export function LockedState({ lock }: { lock: ProxyLock }) {
         <div className="text-lg font-semibold whitespace-nowrap">
           {encrypting != null ? (
             <>
-              Encrypting stored traffic,{" "}
+              Encrypting recorded traffic,{" "}
               {/* Sized for "100%" and right-aligned, so the centred line never changes width as
                   the number ticks: a changing width re-rasterizes every glyph at a new
                   sub-pixel offset, and the line shakes */}

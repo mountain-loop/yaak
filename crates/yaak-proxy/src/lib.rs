@@ -3,6 +3,7 @@ mod cert;
 mod connection;
 mod decode;
 mod decrypt;
+mod dial;
 mod grpc;
 mod messages;
 #[cfg(target_os = "macos")]
@@ -12,8 +13,8 @@ mod sse;
 mod tunnel;
 mod ws;
 
+use std::collections::HashMap;
 use std::collections::hash_map::RandomState;
-use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasher, Hasher};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -24,8 +25,6 @@ use std::time::SystemTime;
 use bytes::Bytes;
 use http::HeaderValue;
 use hyper_util::client::legacy::Client;
-#[cfg(not(target_os = "macos"))]
-use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use rustls::ClientConfig;
 use rustls::pki_types::CertificateDer;
@@ -34,13 +33,15 @@ use tokio::net::TcpListener;
 pub use cert::{CaStore, KeyCipher};
 use connection::handle_connection;
 pub use decrypt::{
-    BUILT_IN_EXCLUSIONS, DecryptApp, DecryptEntry, DecryptPolicy, DecryptQuery, DecryptTarget,
+    BUILT_IN_EXCLUSIONS, BuiltInKind, DecryptApp, DecryptEntry, DecryptPolicy, DecryptQuery,
+    DecryptTarget, Verdict, built_in_kind,
 };
 pub use grpc::{detect as detect_grpc, service_and_method};
 pub use messages::{MessageDirection, MessageKind, RAW_LIMIT, StreamKind, StreamMessage};
 use request::BoxBody;
 
-const PASSTHROUGH_AFTER_FAILURES: u32 = 2;
+/// Hang-ups and other handshake errors in a row that pass an address through.
+pub const PASSTHROUGH_AFTER_FAILURES: u32 = 2;
 
 /// Default for [`ProxyConfig::capture_body_limit`]: 10 MB.
 pub const DEFAULT_CAPTURE_BODY_LIMIT: usize = 10 * 1024 * 1024;
@@ -103,8 +104,11 @@ impl ProxyConfig {
 /// server-sent events, gRPC) has a `StreamStart` and then a `Message` for each message as it
 /// passes. An HTTPS connection the engine tunnels without decrypting, because the decrypt policy
 /// leaves it out or its client rejected the engine's certificate, is a flow of its own, from
-/// `TunnelStart` to `TunnelEnd`. Other traffic tunnelled blind (non-TLS CONNECT payloads,
-/// upgrades to protocols other than WebSocket) produces no events.
+/// `TunnelStart` to `TunnelEnd`. A client's failed handshake that starts its address being
+/// passed through is a flow too, of the one event `HandshakeFailed`, and so is a CONNECT whose
+/// server could not be reached, of the one event `ConnectFailed`. Other traffic tunnelled
+/// blind (non-TLS CONNECT payloads, upgrades to protocols other than WebSocket) produces no
+/// events.
 #[derive(Debug, Clone)]
 pub enum ProxyEvent {
     /// Request headers arrived from the client.
@@ -147,7 +151,11 @@ pub enum ProxyEvent {
     UpstreamConnection {
         id: u64,
         /// Milliseconds from `started_at` to the TCP connection, and to the TLS handshake's
-        /// end. None when the connection was opened for an earlier request and reused.
+        /// end. None when the connection was opened for an earlier request and reused. A
+        /// connection opened as its CONNECT came in, before this request, is charged to the
+        /// first request on it, as if opened just before it: `elapsed_connect_ms` is how long
+        /// opening it took, and this flow's later times are counted from that much before its
+        /// `started_at`, so they stay in order.
         elapsed_connect_ms: Option<u64>,
         elapsed_tls_ms: Option<u64>,
         /// `TLSv1.3`, `TLSv1.2`.
@@ -191,9 +199,11 @@ pub enum ProxyEvent {
         /// connection. Not an error of the engine's or the server's.
         cancelled: bool,
     },
-    /// No response: connecting to or requesting from upstream failed, and the client got a 502,
-    /// or the engine refused the request (no host to send it to, or it looped back to the engine)
-    /// with a 4xx or 5xx of its own.
+    /// No response. The server could not be reached, so the client's connection was dropped
+    /// unanswered, as it would have failed without the proxy: `error` is then the reason in plain
+    /// words and the system's error, as a `ConnectFailed`'s. Or the request failed once it was
+    /// on its way, and the client got a 502. Or the engine refused the request (no host to send
+    /// it to) with a 4xx of its own.
     Error {
         id: u64,
         error: String,
@@ -215,14 +225,19 @@ pub enum ProxyEvent {
         error: Option<String>,
     },
     /// A CONNECT is tunnelled without being decrypted: its bytes pass untouched, and only their
-    /// count is recorded.
+    /// count is recorded. Open until its `TunnelEnd`; [`ProxyHandle::close_tunnels`] closes it
+    /// by `id`.
     TunnelStart {
         id: u64,
         started_at: SystemTime,
         /// `host[:port]`, the port left out when it is 443.
         authority: String,
+        /// The host, without an IPv6 address's brackets, and the port, as the policy judged them.
+        host: String,
+        port: u16,
         connection: u64,
         client_addr: SocketAddr,
+        reason: TunnelReason,
     },
     /// The tunnel closed, with `error` when connecting upstream or relaying failed.
     TunnelEnd {
@@ -233,7 +248,58 @@ pub enum ProxyEvent {
         received: u64,
         elapsed_ms: u64,
         error: Option<String>,
+        /// Closed by [`ProxyHandle::close_tunnels`], so the client reconnects.
+        reconnect_requested: bool,
     },
+    /// A client's TLS handshake with the engine failed, and its address (`host:port`) is now
+    /// passed through: sent once per address each time it joins the pass-through set, not for
+    /// every failure. At once for a certificate alert; after [`PASSTHROUGH_AFTER_FAILURES`] in a
+    /// row for a hang-up or any other handshake error. A flow of its own, which nothing follows.
+    HandshakeFailed {
+        id: u64,
+        started_at: SystemTime,
+        /// `host[:port]`, the port left out when it is 443.
+        authority: String,
+        connection: u64,
+        client_addr: SocketAddr,
+        /// How the client rejected the engine's certificate: its alert (`unknown_ca`,
+        /// `bad_certificate`, `certificate_unknown`, ...) or `hang_up`. None for any other
+        /// handshake error, which is not a rejection.
+        rejection: Option<String>,
+        /// The error the handshake ended with.
+        error: String,
+        /// Milliseconds from `started_at` to the failure.
+        elapsed_ms: u64,
+    },
+    /// A CONNECT's server could not be reached, so the CONNECT was answered with a 502, or a 504
+    /// when it timed out, and nothing was tunnelled or decrypted. A flow of its own, which
+    /// nothing follows.
+    ConnectFailed {
+        id: u64,
+        started_at: SystemTime,
+        /// `host[:port]`, the port left out when it is 443.
+        authority: String,
+        connection: u64,
+        client_addr: SocketAddr,
+        /// The reason in plain words, then the system's error: `DNS lookup failed: ...`,
+        /// `Connection refused: ...`, `Host unreachable: ...`, `Timed out: ...`.
+        error: String,
+        /// Milliseconds from `started_at` to the failure.
+        elapsed_ms: u64,
+    },
+}
+
+/// Why a CONNECT is tunnelled rather than decrypted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TunnelReason {
+    /// No positive entry of the decrypt list matches it.
+    NotListed,
+    /// A positive entry matches it, and this exclusion keeps it out.
+    Excluded { entry: String, built_in: bool },
+    /// The policy decrypts it, but a client rejected the engine's certificate for its address,
+    /// which is passed through for the rest of the run: `rejected_by` is the id of the
+    /// `HandshakeFailed` flow that started it.
+    Rejected { rejected_by: u64 },
 }
 
 /// A running engine. Dropping it stops the listener and joins its thread.
@@ -257,6 +323,34 @@ impl ProxyHandle {
     pub fn forget_passthrough(&self) {
         self.engine.passthrough.lock().unwrap().clear();
         self.engine.handshake_failures.lock().unwrap().clear();
+    }
+
+    /// Forgets one address (`host:port`) passed through after a client rejected the CA, so its
+    /// next connection is intercepted again. Returns whether it was passed through.
+    pub fn forget_passthrough_address(&self, addr: &str) -> bool {
+        self.engine.handshake_failures.lock().unwrap().remove(addr);
+        self.engine.passthrough.lock().unwrap().remove(addr).is_some()
+    }
+
+    /// The addresses (`host:port`) passed through after clients rejected the CA, sorted.
+    pub fn passthrough(&self) -> Vec<String> {
+        let mut addrs: Vec<String> =
+            self.engine.passthrough.lock().unwrap().keys().cloned().collect();
+        addrs.sort();
+        addrs
+    }
+
+    /// Closes the open tunnels among `ids`, the `id`s of their `TunnelStart`s, so their clients
+    /// reconnect. Each ends with a `TunnelEnd` whose `reconnect_requested` is set. Returns how
+    /// many were open.
+    pub fn close_tunnels(&self, ids: &[u64]) -> usize {
+        let mut tunnels = self.engine.tunnels.lock().unwrap();
+        ids.iter()
+            .filter_map(|id| tunnels.remove(id))
+            .map(|close| {
+                let _ = close.send(());
+            })
+            .count()
     }
 
     /// Offers HTTP/2 to clients, or stops, from the next connection on. Connections already
@@ -312,8 +406,12 @@ pub(crate) struct Engine {
     http_client: HttpClient,
     upstream_tls: Arc<ClientConfig>,
     upstream_tls_h1: Arc<ClientConfig>,
-    passthrough: Mutex<HashSet<String>>,
+    /// Addresses (`host:port`) passed through after a client rejected the engine's certificate,
+    /// each with the id of the `HandshakeFailed` flow that started it.
+    passthrough: Mutex<HashMap<String, u64>>,
     handshake_failures: Mutex<HashMap<String, u32>>,
+    /// Each open tunnel's way to close it, by its flow id. Touched as tunnels open and close.
+    tunnels: Mutex<HashMap<u64, tokio::sync::oneshot::Sender<()>>>,
     /// Offer HTTP/2 to clients in intercepted TLS.
     http2: AtomicBool,
     websocket_capture: bool,
@@ -346,12 +444,12 @@ impl Engine {
         self.decrypt.read().unwrap().clone()
     }
 
-    /// Whether the policy decrypts a CONNECT to `host:port` on `connection`, looking up its app
+    /// What the policy makes of a CONNECT to `host:port` on `connection`, looking up its app
     /// only when an entry names one.
-    async fn decrypts(&self, host: &str, port: u16, connection: u64) -> bool {
+    async fn verdict(&self, host: &str, port: u16, connection: u64) -> Verdict {
         let policy = self.decrypt_policy();
         if !policy.decrypts_anything() {
-            return false;
+            return Verdict::NotListed;
         }
         let app = match &self.app_of {
             Some(app_of) if policy.needs_app() => {
@@ -360,16 +458,29 @@ impl Engine {
             }
             _ => None,
         };
-        policy.decrypts(&DecryptQuery { host: host.to_string(), port, app })
+        policy.judge(&DecryptQuery { host: host.to_string(), port, app })
+    }
+
+    /// The id of the `HandshakeFailed` flow that started passing `addr` through, while it is.
+    fn passthrough_of(&self, addr: &str) -> Option<u64> {
+        self.passthrough.lock().unwrap().get(addr).copied()
     }
 
     fn is_passthrough(&self, addr: &str) -> bool {
-        self.passthrough.lock().unwrap().contains(addr)
+        self.passthrough_of(addr).is_some()
     }
 
-    /// Returns whether `addr` is now passed through. macOS and Windows clients reject the CA with
-    /// a bare hang-up, indistinguishable from an abandoned connection, so those need two in a row.
-    fn record_handshake_failure(&self, addr: &str, certificate_rejected: bool) -> bool {
+    /// Counts a failed handshake toward passing `addr` through. macOS and Windows clients reject
+    /// the CA with a bare hang-up, indistinguishable from an abandoned connection, so those need
+    /// two in a row. When this failure is the one that adds `addr` to the pass-through set, which
+    /// happens once however many fail together, emits `failed` with a new flow id, before any
+    /// tunnel passed through for it can name that id, and returns true.
+    fn record_handshake_failure(
+        &self,
+        addr: &str,
+        certificate_rejected: bool,
+        failed: impl FnOnce(u64) -> ProxyEvent,
+    ) -> bool {
         let mut failures = self.handshake_failures.lock().unwrap();
         let count = failures.entry(addr.to_string()).or_default();
         *count += 1;
@@ -377,8 +488,16 @@ impl Engine {
             return false;
         }
         failures.remove(addr);
-        self.passthrough.lock().unwrap().insert(addr.to_string());
-        true
+        let mut passthrough = self.passthrough.lock().unwrap();
+        match passthrough.entry(addr.to_string()) {
+            std::collections::hash_map::Entry::Occupied(_) => false,
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                let id = self.next_flow_id();
+                slot.insert(id);
+                self.emit(failed(id));
+                true
+            }
+        }
     }
 
     fn record_handshake_success(&self, addr: &str) {
@@ -400,19 +519,13 @@ fn upstream_tls_config(
     Ok(Arc::new(config))
 }
 
-/// Sends plain HTTP upstream. On macOS it connects through Network.framework, so Private Relay
-/// can't route the engine's own port-80 connections back into the engine (see [`nw`]).
-#[cfg(target_os = "macos")]
-type HttpClient = Client<nw::Connector, BoxBody>;
-#[cfg(not(target_os = "macos"))]
-type HttpClient = Client<HttpConnector, BoxBody>;
+/// Sends plain HTTP upstream, connecting as a CONNECT's dial does (see [`dial::Connector`]). On
+/// macOS it connects through Network.framework, so Private Relay can't route the engine's own
+/// port-80 connections back into the engine (see [`nw`]).
+type HttpClient = Client<dial::Connector, BoxBody>;
 
 fn http_client() -> HttpClient {
-    let builder = Client::builder(TokioExecutor::new());
-    #[cfg(target_os = "macos")]
-    return builder.build(nw::Connector);
-    #[cfg(not(target_os = "macos"))]
-    builder.build_http()
+    Client::builder(TokioExecutor::new()).build(dial::Connector)
 }
 
 fn via_marker() -> HeaderValue {
@@ -440,8 +553,9 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
         http_client: http_client(),
         upstream_tls: upstream_tls_config(&roots, &[b"h2", b"http/1.1"])?,
         upstream_tls_h1: upstream_tls_config(&roots, &[b"http/1.1"])?,
-        passthrough: Mutex::new(HashSet::new()),
+        passthrough: Mutex::new(HashMap::new()),
         handshake_failures: Mutex::new(HashMap::new()),
+        tunnels: Mutex::new(HashMap::new()),
         http2: AtomicBool::new(config.http2),
         websocket_capture: config.websocket_capture,
         decrypt: RwLock::new(Arc::new(config.decrypt)),

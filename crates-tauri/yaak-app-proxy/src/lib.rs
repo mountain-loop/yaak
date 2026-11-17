@@ -6,6 +6,7 @@ use yaak_proxy_lib::{MasterKeySource, ProxyCtx};
 use yaak_rpc::{RpcEventEmitter, RpcRouter};
 use yaak_window::window::CreateWindowConfig;
 
+mod updates;
 mod window_menu;
 
 fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) {
@@ -22,6 +23,12 @@ fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) {
     #[cfg(not(target_os = "linux"))]
     win.app_handle().set_menu(menu).expect("Failed to set app menu");
 
+    handle_menu_events(win);
+}
+
+/// Carries out the app menu's items while `win` is focused. A window opened after the main one
+/// takes the menu as it is, so the state its items are in, such as Go's, is kept.
+fn handle_menu_events<R: Runtime>(win: &WebviewWindow<R>) {
     let webview_window = win.clone();
     win.on_menu_event(move |w, event| {
         if !w.is_focused().unwrap() {
@@ -35,6 +42,29 @@ fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) {
                     info!("Closing window {}", w.label());
                     let _ = w.close();
                 });
+            }
+            window_menu::EXPORT_HAR_ID => {
+                if let Err(e) = webview_window.emit(window_menu::EXPORT_HAR_EVENT, ()) {
+                    error!("Failed to emit the HAR export: {e}");
+                }
+            }
+            // To the window it was chosen in alone, which checks and shows what it finds
+            window_menu::CHECK_FOR_UPDATES_ID => {
+                if let Err(e) =
+                    webview_window.emit_to(w.label(), window_menu::CHECK_FOR_UPDATES_EVENT, ())
+                {
+                    error!("Failed to emit {}: {e}", window_menu::CHECK_FOR_UPDATES_EVENT);
+                }
+            }
+            window_menu::GO_BACK_ID | window_menu::GO_FORWARD_ID => {
+                let event = if event_id == window_menu::GO_BACK_ID {
+                    window_menu::GO_BACK_EVENT
+                } else {
+                    window_menu::GO_FORWARD_EVENT
+                };
+                if let Err(e) = webview_window.emit(event, ()) {
+                    error!("Failed to emit {event}: {e}");
+                }
             }
             "dev.refresh" => webview_window.eval("location.reload()").unwrap(),
             "dev.toggle_devtools" => {
@@ -67,6 +97,66 @@ fn bundled_protoc<R: Runtime>(app: &tauri::AppHandle<R>) -> Option<yaak_proxy_li
         .then_some(yaak_proxy_lib::GrpcConfig { protoc_include_dir, protoc_bin_path })
 }
 
+/// The main window's label.
+const MAIN_WINDOW_LABEL: &str = "main_0";
+/// The name the Settings window is opened under, and the key its size and position are kept by.
+const SETTINGS_WINDOW_NAME: &str = "settings";
+/// The Settings window's label, by which its page renders the settings alone: its name with the
+/// prefix the shared code gives each child window, as Yaak's Settings window has.
+const SETTINGS_WINDOW_LABEL: &str = "other__settings";
+/// The event that moves an open Settings window to another tab.
+const SETTINGS_TAB_EVENT: &str = "settings_tab";
+/// The Settings window's size, as Yaak's.
+const SETTINGS_WINDOW_SIZE: (f64, f64) = (750.0, 600.0);
+/// The smallest the Settings window goes, still showing the tabs beside their content.
+const SETTINGS_WINDOW_MIN_SIZE: (f64, f64) = (600.0, 450.0);
+
+/// Sets the tab a new Settings window opens on, before its page loads, so it needs no URL.
+fn settings_tab_script(tab: &str) -> String {
+    let tab = serde_json::to_string(tab).unwrap_or_else(|_| "null".to_string());
+    format!("window.__YAAK_SETTINGS_TAB__ = {tab};")
+}
+
+/// Opens Settings on `tab` in a child of the main window, or, when it is open, brings it forward
+/// and moves it to `tab` if one is given. As Yaak's, the child sits over the middle of the main
+/// window the first time and where it was left after; it stays in front, taking focus back when
+/// the main window is clicked, and closes with it.
+#[tauri::command]
+async fn cmd_open_settings(
+    app_handle: tauri::AppHandle,
+    tab: Option<String>,
+) -> Result<(), String> {
+    if let Some(win) = app_handle.get_webview_window(SETTINGS_WINDOW_LABEL) {
+        if win.is_minimized().unwrap_or(false) {
+            win.unminimize().map_err(|e| e.to_string())?;
+        }
+        win.set_focus().map_err(|e| e.to_string())?;
+        if let Some(tab) = tab {
+            win.emit_to(SETTINGS_WINDOW_LABEL, SETTINGS_TAB_EVENT, tab)
+                .map_err(|e| e.to_string())?;
+        }
+        return Ok(());
+    }
+
+    let main = app_handle
+        .get_webview_window(MAIN_WINDOW_LABEL)
+        .ok_or("Failed to open Settings: the main window is closed")?;
+    let win = yaak_window::window::create_child_window(
+        &main,
+        "/",
+        SETTINGS_WINDOW_NAME,
+        "Yaak Proxy Settings",
+        SETTINGS_WINDOW_SIZE,
+        tab.as_deref().map(settings_tab_script),
+        false,
+    )
+    .map_err(|e| e.to_string())?;
+    let (width, height) = SETTINGS_WINDOW_MIN_SIZE;
+    win.set_min_size(Some(tauri::LogicalSize::new(width, height))).map_err(|e| e.to_string())?;
+    handle_menu_events(&win);
+    Ok(())
+}
+
 #[tauri::command]
 async fn rpc(
     router: State<'_, RpcRouter<ProxyCtx>>,
@@ -77,12 +167,29 @@ async fn rpc(
     router.dispatch(&cmd, payload, &ctx).await.map_err(|e| e.message)
 }
 
+/// Go's Back and Forward, enabled as the window has somewhere to go.
+#[tauri::command]
+fn set_go_menu(app: tauri::AppHandle, back: bool, forward: bool) {
+    window_menu::set_go_enabled(&app, back, forward);
+}
+
 pub fn run() {
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(yaak_mac_window::init())
+        .plugin(yaak_mac_window::init());
+
+    #[cfg(feature = "updater")]
+    {
+        builder = builder.plugin(tauri_plugin_updater::Builder::default().build());
+    }
+
+    builder
+        .manage(tokio::sync::Mutex::new(updates::ProxyUpdater::default()))
+        // The one update this process runs at a time, whichever window or trigger asks
+        .manage(yaak_updater::UpdateGate::default())
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
@@ -130,7 +237,14 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![rpc])
+        .invoke_handler(tauri::generate_handler![
+            rpc,
+            set_go_menu,
+            cmd_open_settings,
+            updates::cmd_updater_enabled,
+            updates::cmd_check_for_updates,
+            updates::cmd_restart
+        ])
         .build(tauri::generate_context!())
         .expect("error while building yaak proxy tauri application")
         .run(|app_handle, event| {
@@ -139,12 +253,14 @@ pub fn run() {
                 let ctx = app_handle.state::<ProxyCtx>();
                 ctx.shutdown();
                 ctx.stop_control_api();
+                // Relaunches after an update, once the system proxy is put back
+                yaak_updater::restart::relaunch_if_requested();
                 return;
             }
             if let RunEvent::Ready = event {
                 let config = CreateWindowConfig {
                     url: "/",
-                    label: "main_0",
+                    label: MAIN_WINDOW_LABEL,
                     title: "Yaak Proxy",
                     inner_size: Some((1000.0, 700.0)),
                     hidden: true,
@@ -193,5 +309,52 @@ mod tests {
         for needed in ["opener:allow-open-url", "opener:allow-reveal-item-in-dir"] {
             assert!(permissions.contains(&needed), "{needed} missing from {permissions:?}");
         }
+    }
+
+    /// The Settings window gets the main window's permissions: without them its links, folders,
+    /// Escape closing it and the events that keep both windows in step would all be refused.
+    #[test]
+    fn the_settings_window_has_the_main_windows_permissions() {
+        let capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        let windows: Vec<&str> =
+            capability["windows"].as_array().unwrap().iter().filter_map(|w| w.as_str()).collect();
+        for label in [MAIN_WINDOW_LABEL, SETTINGS_WINDOW_LABEL] {
+            assert!(
+                windows.contains(&"*") || windows.contains(&label),
+                "{label} missing from {windows:?}"
+            );
+        }
+        let permissions: Vec<&str> = capability["permissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p.as_str())
+            .collect();
+        for needed in ["core:default", "core:window:allow-close"] {
+            assert!(permissions.contains(&needed), "{needed} missing from {permissions:?}");
+        }
+    }
+
+    /// The page knows the Settings window by the label the shared code gives a child window
+    /// opened under its name, or it would render the whole app in it.
+    #[test]
+    fn the_page_knows_the_settings_window_by_its_label() {
+        assert_eq!(SETTINGS_WINDOW_LABEL, format!("other__{SETTINGS_WINDOW_NAME}"));
+        let windows = include_str!("../../../apps/yaak-proxy/lib/windows.ts");
+        assert!(
+            windows.contains(&format!("SETTINGS_WINDOW_LABEL = \"{SETTINGS_WINDOW_LABEL}\"")),
+            "the page's Settings window label is not {SETTINGS_WINDOW_LABEL}"
+        );
+    }
+
+    /// The tab reaches the new window's page as a string literal, whatever it holds.
+    #[test]
+    fn the_settings_tab_script_quotes_the_tab() {
+        assert_eq!(settings_tab_script("proxy"), r#"window.__YAAK_SETTINGS_TAB__ = "proxy";"#);
+        assert_eq!(
+            settings_tab_script(r#"a";alert(1);""#),
+            r#"window.__YAAK_SETTINGS_TAB__ = "a\";alert(1);\"";"#
+        );
     }
 }

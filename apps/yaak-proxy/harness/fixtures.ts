@@ -50,7 +50,14 @@ const base: Flow = {
   grpcMethod: null,
   grpcStatus: null,
   grpcMessage: null,
+  graphqlOperation: null,
   tunnelled: false,
+  tunnelReason: null,
+  tunnelExcludedBy: null,
+  tunnelExcludedBuiltIn: false,
+  tunnelRejectedBy: null,
+  reconnectRequested: false,
+  tlsRejected: null,
   agentRead: false,
   clientAddr: "127.0.0.1:54321",
   elapsedConnectMs: 18,
@@ -69,7 +76,43 @@ const jsonResponse = JSON.stringify({
   status: "succeeded",
   charges: { data: [{ id: "ch_1", paid: true }] },
 });
+const graphqlRequest = JSON.stringify({
+  query: "query GetViewer { viewer { login } }",
+  operationName: "GetViewer",
+});
 const formRequest = "grant_type=client_credentials&client_id=yaak-proxy&scope=read+write";
+const csvResponse = [
+  "id,email,plan,created_at",
+  "1,ada@example.com,pro,2026-10-01",
+  "2,grace@example.com,team,2026-10-14",
+  "3,linus@example.com,free,2026-11-02",
+].join("\n");
+const tsvResponse = [
+  "sku\tname\tstock\tnote",
+  "A-100\tDesk lamp\t42\tWarm white, dimmable, ships with a long braided fabric cable",
+  "A-101\tMonitor arm\t7\t",
+  "A-102\tKeyboard tray\t0\tBack in stock next week",
+].join("\n");
+const multipartBoundary = "yaakBoundary7MA4YWxk";
+const multipartRequest = [
+  `--${multipartBoundary}`,
+  'Content-Disposition: form-data; name="title"',
+  "",
+  "Quarterly report",
+  `--${multipartBoundary}`,
+  'Content-Disposition: form-data; name="meta"; filename="meta.json"',
+  "Content-Type: application/json",
+  "",
+  '{"pages":12,"draft":false}',
+  `--${multipartBoundary}`,
+  'Content-Disposition: form-data; name="rows"; filename="rows.csv"',
+  "Content-Type: text/csv",
+  "",
+  "region,revenue\nnorth,1200\nsouth,980",
+  `--${multipartBoundary}--`,
+  "",
+].join("\r\n");
+const textResponse = "Uploaded 3 parts";
 const htmlResponse =
   "<!doctype html><html><body style='font-family:sans-serif'><h1>Signed in</h1><p>You can close this window.</p></body></html>";
 // A 24x24 PNG gradient
@@ -172,8 +215,97 @@ export const fixtures: FlowFixture[] = [
       requestSize: 3_412,
       responseSize: 48_210,
       tunnelled: true,
+      tunnelReason: "not_listed",
+    },
+    requestBody: body(""),
+    responseBody: body(""),
+  },
+  {
+    label: "GraphQL POST",
+    flow: {
+      ...base,
+      id: "fl_graphql",
+      method: "POST",
+      url: "https://api.github.com/graphql",
+      contentType: "application/json",
+      requestHeaders: [{ name: "Content-Type", value: "application/json" }],
+      responseHeaders: [{ name: "X-Cache", value: "MISS" }],
+      requestSize: graphqlRequest.length,
+      responseSize: 64,
+      graphqlOperation: "GetViewer",
+    },
+    requestBody: body(graphqlRequest),
+    responseBody: body('{"data":{"viewer":{"login":"yaak"}}}'),
+  },
+  {
+    label: "CSV GET",
+    flow: {
+      ...base,
+      id: "fl_csv",
+      url: "https://api.example.com/users/export.csv",
+      contentType: "text/csv",
+      requestHeaders: [{ name: "Accept", value: "text/csv" }],
+      responseHeaders: [{ name: "Content-Type", value: "text/csv; charset=utf-8" }],
+      responseSize: csvResponse.length,
+    },
+    requestBody: body(""),
+    responseBody: body(csvResponse),
+  },
+  {
+    label: "TSV GET",
+    flow: {
+      ...base,
+      id: "fl_tsv",
+      url: "https://api.example.com/inventory.tsv",
+      contentType: "text/tab-separated-values",
+      requestHeaders: [{ name: "Accept", value: "text/tab-separated-values" }],
+      responseHeaders: [{ name: "Content-Type", value: "text/tab-separated-values" }],
+      responseSize: tsvResponse.length,
+    },
+    requestBody: body(""),
+    responseBody: body(tsvResponse),
+  },
+  {
+    label: "Multipart POST",
+    flow: {
+      ...base,
+      id: "fl_multipart",
+      method: "POST",
+      url: "https://api.example.com/reports",
+      contentType: "text/plain",
+      requestHeaders: [
+        {
+          name: "Content-Type",
+          value: `multipart/form-data; boundary=${multipartBoundary}`,
+        },
+      ],
+      responseHeaders: [{ name: "Content-Type", value: "text/plain; charset=utf-8" }],
+      requestSize: multipartRequest.length,
+      responseSize: textResponse.length,
+    },
+    requestBody: body(multipartRequest),
+    responseBody: body(textResponse),
+  },
+  {
+    label: "gRPC call",
+    flow: {
+      ...base,
+      id: "fl_grpc",
+      method: "POST",
+      url: "https://grpc.example.com/pkg.Greeter/SayHello",
+      contentType: "application/grpc",
+      clientHttpVersion: "HTTP/2",
+      upstreamHttpVersion: "HTTP/2",
+      requestHeaders: [{ name: "Content-Type", value: "application/grpc" }],
+      responseHeaders: [{ name: "Content-Type", value: "application/grpc" }],
+      grpcService: "pkg.Greeter",
+      grpcMethod: "SayHello",
+      grpcStatus: 0,
     },
     requestBody: body(""),
     responseBody: body(""),
   },
 ];
+
+/** An app icon for every flow in the harness, as base64 PNG */
+export const appIconPng = btoa(String.fromCharCode(...png));

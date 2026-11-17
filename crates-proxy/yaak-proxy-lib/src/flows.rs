@@ -1,7 +1,7 @@
 use crate::bodies;
 use crate::db::{ProxyQueryManager, Stores};
 use crate::models::{Flow, FlowBody};
-use crate::query::{FlowColumns, FlowQuery};
+use crate::query::{FlowColumns, FlowQuery, Hidden};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use rusqlite::types::Value;
@@ -23,6 +23,10 @@ pub struct FlowFilter {
     /// `@is:system` itself.
     #[ts(optional, as = "Option<bool>")]
     pub hide_system: bool,
+    /// Leaves out HTTPS connections passed through undecrypted, as hiding Encrypted does,
+    /// unless the query says `@is:encrypted` itself.
+    #[ts(optional, as = "Option<bool>")]
+    pub hide_encrypted: bool,
     /// At most this many flows, the newest.
     #[ts(optional, type = "number")]
     pub limit: Option<usize>,
@@ -34,6 +38,302 @@ pub struct FlowFilter {
     /// through older traffic.
     #[ts(optional)]
     pub before: Option<String>,
+    /// The order to list in, the list's column sort: each key in turn, then by start and id,
+    /// oldest first. Empty lists newest first, as without it. With keys, `before` does not
+    /// apply; `cursor` pages instead.
+    #[ts(optional, as = "Option<Vec<FlowSortKey>>")]
+    pub sort: Vec<FlowSortKey>,
+    /// Only flows after these values in `sort`'s order, for paging through a sort: the `cursor`
+    /// of the page before, the sort values of its last flow as it was read, so a change to that
+    /// flow since does not move where the next page starts.
+    #[ts(optional, as = "Option<Vec<SortValue>>")]
+    pub cursor: Option<Vec<SortValue>>,
+}
+
+/// One of a flow's sort values, as the database sorted it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(untagged)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub enum SortValue {
+    Int(#[ts(type = "number")] i64),
+    Text(String),
+}
+
+impl SortValue {
+    fn from_sql(value: Value) -> Self {
+        match value {
+            Value::Integer(i) => Self::Int(i),
+            Value::Real(f) => Self::Int(f as i64),
+            Value::Text(t) => Self::Text(t),
+            Value::Null | Value::Blob(_) => Self::Text(String::new()),
+        }
+    }
+
+    fn to_sql(&self) -> Value {
+        match self {
+            Self::Int(i) => Value::Integer(*i),
+            Self::Text(t) => Value::Text(t.clone()),
+        }
+    }
+}
+
+/// A column the list sorts by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub enum SortColumn {
+    Number,
+    App,
+    Method,
+    Host,
+    Path,
+    Query,
+    Status,
+    Type,
+    Size,
+    RequestSize,
+    Time,
+    Latency,
+    Started,
+    Remote,
+    Version,
+    Tls,
+    Operation,
+}
+
+/// One key of a sort.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct FlowSortKey {
+    #[ts(type = "SortColumn | `field:${string}`")]
+    pub column: SortBy,
+    pub descending: bool,
+}
+
+/// What a sort key sorts by: a column the list has built in, or a column the person added for
+/// a header or query parameter, written `field:header.x-cache` as the app names the column.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SortBy {
+    Column(SortColumn),
+    Field(FieldPath),
+}
+
+impl From<SortColumn> for SortBy {
+    fn from(column: SortColumn) -> Self {
+        Self::Column(column)
+    }
+}
+
+const FIELD_PREFIX: &str = "field:";
+
+impl Serialize for SortBy {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Column(column) => column.serialize(serializer),
+            Self::Field(field) => serializer.serialize_str(&format!("{FIELD_PREFIX}{field}")),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for SortBy {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::{Error, IntoDeserializer};
+        let text = String::deserialize(deserializer)?;
+        if let Some(path) = text.strip_prefix(FIELD_PREFIX) {
+            return FieldPath::parse(path)
+                .map(Self::Field)
+                .ok_or_else(|| D::Error::custom(format!("Invalid sort field {path:?}")));
+        }
+        let column: serde::de::value::StrDeserializer<'_, D::Error> =
+            text.as_str().into_deserializer();
+        SortColumn::deserialize(column).map(Self::Column)
+    }
+}
+
+/// The map a custom column's field is under, as the query language names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldMap {
+    /// `header.`: the response's header, or the request's when the response has none.
+    Header,
+    RequestHeader,
+    ResponseHeader,
+    Query,
+}
+
+impl FieldMap {
+    // `req.header.` and `res.header.` before `header.`, which neither starts with, all the same
+    const ALL: [Self; 4] = [
+        Self::RequestHeader,
+        Self::ResponseHeader,
+        Self::Header,
+        Self::Query,
+    ];
+
+    fn prefix(self) -> &'static str {
+        match self {
+            Self::Header => "header.",
+            Self::RequestHeader => "req.header.",
+            Self::ResponseHeader => "res.header.",
+            Self::Query => "query.",
+        }
+    }
+}
+
+/// A custom column's field: a header or query parameter by name, `header.x-cache`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldPath {
+    map: FieldMap,
+    /// Lowercased: names compare without regard to case
+    name: String,
+}
+
+impl FieldPath {
+    /// The field `path` names, by the rule the app's `customPath` in `lib/columns.ts` keeps for
+    /// a custom column: a map, then a name of the characters the query language takes in a
+    /// field path, so the column's value makes a term a search can run.
+    pub fn parse(path: &str) -> Option<Self> {
+        let lower = path.to_ascii_lowercase();
+        let map = FieldMap::ALL.into_iter().find(|m| lower.starts_with(m.prefix()))?;
+        let name = &lower[map.prefix().len()..];
+        if name.contains('.') || !yaak_query::is_valid_path(name) {
+            return None;
+        }
+        Some(Self { map, name: name.to_string() })
+    }
+
+    /// The value the column shows, as text in SQL, NULL when the flow has none: the first value
+    /// under the name, as `customValue` in the app's `lib/columns.ts` reads it. Each `?` is
+    /// bound to the name, one parameter for each.
+    fn sql(&self) -> (String, Vec<Value>) {
+        let first = |json: &str| {
+            format!(
+                "(SELECT json_extract(kv.value, '$.value') FROM json_each({json}) AS kv \
+                WHERE q_lower(json_extract(kv.value, '$.name')) = ? ORDER BY kv.key LIMIT 1)"
+            )
+        };
+        let (sql, sides) = match self.map {
+            FieldMap::Header => (
+                format!("coalesce({}, {})", first("response_headers"), first("request_headers")),
+                2,
+            ),
+            FieldMap::RequestHeader => (first("request_headers"), 1),
+            FieldMap::ResponseHeader => (first("response_headers"), 1),
+            FieldMap::Query => (first("url_query_json(url)"), 1),
+        };
+        (sql, vec![Value::Text(self.name.clone()); sides])
+    }
+}
+
+impl std::fmt::Display for FieldPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.map.prefix(), self.name)
+    }
+}
+
+/// What an empty number sorts as: below every value, as an empty text's `''` is.
+const EMPTY_NUMBER: &str = "-1000000000000000000";
+
+impl SortColumn {
+    /// The value the column sorts by, in SQL, never NULL: empty values (none, `''` or `0`)
+    /// lowest, text without regard to ASCII case. `columnSortKey` in the app's
+    /// `lib/columns.ts` makes the same values for flows it places itself.
+    fn sql(self, columns: &FlowColumns) -> String {
+        let c = |n: &str| columns.col(n);
+        let number = |v: &str| format!("coalesce(nullif({v}, 0), {EMPTY_NUMBER})");
+        let text = |v: &str| format!("(coalesce({v}, '') COLLATE NOCASE)");
+        match self {
+            Self::Number => "flows.rowid".into(),
+            Self::App => text(&format!(
+                "coalesce({}, {}, {})",
+                c("client_name"),
+                c("client_bundle_id"),
+                c("client_path")
+            )),
+            Self::Method => text("method"),
+            Self::Host => text("url_authority(url)"),
+            Self::Path => text("url_path(url)"),
+            Self::Query => text("url_query_string(url)"),
+            Self::Status => {
+                format!("CASE WHEN error IS NOT NULL THEN -1 ELSE {} END", number("status"))
+            }
+            Self::Type => text("content_type"),
+            Self::Size => format!(
+                "CASE WHEN error IS NOT NULL AND status IS NULL THEN {EMPTY_NUMBER} ELSE {} END",
+                number("response_size")
+            ),
+            Self::RequestSize => number("request_size"),
+            Self::Time => number("elapsed_ms"),
+            Self::Latency => number("elapsed_headers_ms"),
+            Self::Started => "started_at".into(),
+            Self::Remote => text("remote_addr"),
+            Self::Version => text("coalesce(upstream_http_version, client_http_version)"),
+            Self::Tls => text(&c("upstream_tls_version")),
+            Self::Operation => {
+                let (service, method) = (c("grpc_service"), c("grpc_method"));
+                text(&format!(
+                    "CASE WHEN {service} IS NOT NULL AND {method} IS NOT NULL \
+                    THEN {service} || '/' || {method} ELSE {} END",
+                    c("graphql_operation")
+                ))
+            }
+        }
+    }
+}
+
+impl SortBy {
+    /// The value the key sorts by, in SQL, as [`SortColumn::sql`] makes it, and the parameters
+    /// its `?`s are bound to, in order.
+    fn sql(&self, columns: &FlowColumns) -> (String, Vec<Value>) {
+        match self {
+            Self::Column(column) => (column.sql(columns), Vec::new()),
+            // Text, as the other text columns sort
+            Self::Field(field) => {
+                let (value, params) = field.sql();
+                (format!("(coalesce({value}, '') COLLATE NOCASE)"), params)
+            }
+        }
+    }
+}
+
+/// One term of a sort in SQL: its value, the parameters the value's `?`s are bound to, and
+/// whether it descends.
+struct SortTerm {
+    sql: String,
+    params: Vec<Value>,
+    descending: bool,
+}
+
+/// A sort's keys in SQL, then start and id, ascending.
+fn sort_terms(sort: &[FlowSortKey], columns: &FlowColumns) -> Vec<SortTerm> {
+    let tiebreak = |sql: &str| SortTerm { sql: sql.into(), params: Vec::new(), descending: false };
+    sort.iter()
+        .map(|k| {
+            let (sql, params) = k.column.sql(columns);
+            SortTerm { sql, params, descending: k.descending }
+        })
+        .chain([tiebreak("started_at"), tiebreak("flows.id")])
+        .collect()
+}
+
+/// The condition for the flows after `cursor`'s values in a sort, and its parameters: each key
+/// equal up to one that is past the cursor's.
+fn sort_after(terms: &[SortTerm], cursor: &[Value]) -> (String, Vec<Value>) {
+    let mut params = Vec::new();
+    let mut alternatives = Vec::new();
+    for (i, term) in terms.iter().enumerate() {
+        let mut parts = Vec::new();
+        for (before, value) in terms[..i].iter().zip(cursor) {
+            parts.push(format!("{} = ?", before.sql));
+            params.extend(before.params.iter().cloned());
+            params.push(value.clone());
+        }
+        parts.push(format!("{} {} ?", term.sql, if term.descending { "<" } else { ">" }));
+        params.extend(term.params.iter().cloned());
+        params.push(cursor[i].clone());
+        alternatives.push(format!("({})", parts.join(" AND ")));
+    }
+    (format!("({})", alternatives.join(" OR ")), params)
 }
 
 impl FlowFilter {
@@ -42,7 +342,8 @@ impl FlowFilter {
         Self { query: Some(query.into()), ..Self::default() }
     }
 
-    /// The filter from a query string's `query`, `hide_system`, `limit`, `after` and `before`.
+    /// The filter from a query string's `query`, `hide_system`, `hide_encrypted`, `limit`,
+    /// `after` and `before`.
     pub fn from_query(query: &str) -> Result<Self, String> {
         let mut filter = Self::default();
         for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
@@ -52,6 +353,12 @@ impl FlowFilter {
                 "hide_system" => {
                     filter.hide_system = value
                         .map(|v| v.parse().map_err(|_| format!("Invalid hide_system {v:?}")))
+                        .transpose()?
+                        .unwrap_or_default()
+                }
+                "hide_encrypted" => {
+                    filter.hide_encrypted = value
+                        .map(|v| v.parse().map_err(|_| format!("Invalid hide_encrypted {v:?}")))
                         .transpose()?
                         .unwrap_or_default()
                 }
@@ -72,9 +379,11 @@ impl FlowFilter {
         let mut query = url::form_urlencoded::Serializer::new(String::new());
         let limit = self.limit.map(|l| l.to_string());
         let hide_system = self.hide_system.then(|| "true".to_string());
+        let hide_encrypted = self.hide_encrypted.then(|| "true".to_string());
         for (key, value) in [
             ("query", &self.query),
             ("hide_system", &hide_system),
+            ("hide_encrypted", &hide_encrypted),
             ("limit", &limit),
             ("after", &self.after),
             ("before", &self.before),
@@ -88,7 +397,12 @@ impl FlowFilter {
 
     /// The search, prepared to run now.
     pub fn flow_query(&self) -> FlowQuery {
-        FlowQuery::new(self.query.as_deref().unwrap_or_default(), self.hide_system)
+        FlowQuery::new(self.query.as_deref().unwrap_or_default(), self.hidden())
+    }
+
+    /// What the filter leaves out unless its query names it.
+    pub fn hidden(&self) -> Hidden {
+        Hidden { system: self.hide_system, encrypted: self.hide_encrypted }
     }
 
     /// Narrows more than `after`, `before` and `limit` do, so it covers fewer than all flows.
@@ -197,20 +511,52 @@ pub fn page(
     db: &ProxyQueryManager,
     filter: &FlowFilter,
 ) -> Result<(Vec<Flow>, usize, Option<usize>), String> {
+    let page = sorted_page(db, filter)?;
+    Ok((page.flows, page.total, page.matching))
+}
+
+/// A page of flows, as [`page`] reads it, with where a sort's next page starts.
+pub struct Page {
+    pub flows: Vec<Flow>,
+    pub total: usize,
+    pub matching: Option<usize>,
+    /// The sort values of the last flow, for the next page's `cursor`. None without a sort.
+    pub cursor: Option<Vec<SortValue>>,
+}
+
+/// [`page`], with the cursor for a sort's next page.
+pub fn sorted_page(db: &ProxyQueryManager, filter: &FlowFilter) -> Result<Page, String> {
     db.with_conn(|c| {
         let tx = c.conn().resolve().unchecked_transaction().map_err(|e| e.to_string())?;
-        let flows = list_in(&tx, filter)?;
+        let (flows, cursor) = list_and_cursor(&tx, filter)?;
         let total = count_in(&tx)?;
         let matching = if filter.narrows() { Some(count_matching(&tx, filter)?) } else { None };
         tx.commit().map_err(|e| e.to_string())?;
-        Ok((flows, total, matching))
+        Ok(Page { flows, total, matching, cursor })
     })
 }
 
 fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
-    let (condition, mut params) = filter.condition_in(conn);
-    // The rowid, for the flow's number.
-    let mut sql = format!("SELECT rowid, * FROM flows WHERE {condition}");
+    list_and_cursor(conn, filter).map(|(flows, _)| flows)
+}
+
+/// The flows `filter` covers and, sorted, the sort values of the last one.
+fn list_and_cursor(
+    conn: &rusqlite::Connection,
+    filter: &FlowFilter,
+) -> Result<(Vec<Flow>, Option<Vec<SortValue>>), String> {
+    let terms = if filter.sort.is_empty() {
+        Vec::new()
+    } else {
+        sort_terms(&filter.sort, &FlowColumns::of(conn))
+    };
+    // The rowid, for the flow's number, and a sort's values, for its cursor and its order.
+    let keys: String =
+        terms.iter().enumerate().map(|(i, t)| format!(", {} AS sort_{i}", t.sql)).collect();
+    let mut params: Vec<Value> = terms.iter().flat_map(|t| t.params.iter().cloned()).collect();
+    let (condition, condition_params) = filter.condition_in(conn);
+    params.extend(condition_params);
+    let mut sql = format!("SELECT rowid, *{keys} FROM flows WHERE {condition}");
     push_clear_mark(conn, &mut sql, &mut params);
     if let Some(id) = &filter.after {
         // By rowid, which only grows as flows are written.
@@ -220,24 +566,55 @@ fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>
         sql.push_str(" AND rowid > ?");
         params.push(rowid.into());
     }
-    if let Some(id) = &filter.before {
-        let started_at: Value = conn
-            .query_row("SELECT started_at FROM flows WHERE id = ?", [id], |r| r.get(0))
-            .map_err(|_| format!("No flow {id}"))?;
-        sql.push_str(" AND (started_at, id) < (?, ?)");
-        params.push(started_at);
-        params.push(id.clone().into());
+    if !terms.is_empty() {
+        if let Some(cursor) = &filter.cursor {
+            if cursor.len() != terms.len() {
+                return Err("The cursor is not for this sort".into());
+            }
+            let cursor: Vec<Value> = cursor.iter().map(SortValue::to_sql).collect();
+            let (after, after_params) = sort_after(&terms, &cursor);
+            sql.push_str(" AND ");
+            sql.push_str(&after);
+            params.extend(after_params);
+        }
+        // By the values selected above, so a key with parameters is computed once a row
+        let order: Vec<String> = terms
+            .iter()
+            .enumerate()
+            .map(|(i, t)| format!("sort_{i} {}", if t.descending { "DESC" } else { "ASC" }))
+            .collect();
+        sql.push_str(" ORDER BY ");
+        sql.push_str(&order.join(", "));
+    } else {
+        if let Some(id) = &filter.before {
+            let started_at: Value = conn
+                .query_row("SELECT started_at FROM flows WHERE id = ?", [id], |r| r.get(0))
+                .map_err(|_| format!("No flow {id}"))?;
+            sql.push_str(" AND (started_at, id) < (?, ?)");
+            params.push(started_at);
+            params.push(id.clone().into());
+        }
+        sql.push_str(" ORDER BY started_at DESC, id DESC");
     }
-    sql.push_str(" ORDER BY started_at DESC, id DESC");
     if let Some(limit) = filter.limit {
         sql.push_str(" LIMIT ?");
         params.push((limit.min(i64::MAX as usize) as i64).into());
     }
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map(rusqlite::params_from_iter(params), Flow::from_row)
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    let mut cursor = None;
+    let mut flows = Vec::new();
+    let mut rows = stmt.query(rusqlite::params_from_iter(params)).map_err(|e| e.to_string())?;
+    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        flows.push(Flow::from_row(row).map_err(|e| e.to_string())?);
+        if !terms.is_empty() {
+            let values = (0..terms.len())
+                .map(|i| row.get::<_, Value>(format!("sort_{i}").as_str()).map(SortValue::from_sql))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            cursor = Some(values);
+        }
+    }
+    Ok((flows, cursor))
 }
 
 fn count_matching(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<usize, String> {
@@ -322,6 +699,27 @@ pub fn clear(db: &ProxyQueryManager) -> Result<usize, String> {
         Ok::<_, yaak_database::Error>(cleared as usize)
     })
     .map_err(|e| format!("Failed to clear flows: {e}"))
+}
+
+/// Deletes every flow and message from `proxy.db` in one transaction, with what was left of a
+/// clear or sweep, for a launch that starts empty. Saved searches and gRPC schemas stay. Only
+/// before anything else writes: unlike [`clear`], flows being written are not spared. Their
+/// bodies are in `blobs.sqlite`, which goes whole ([`crate::db::remove_blobs`]).
+pub fn delete_all(db: &ProxyQueryManager) -> Result<(), String> {
+    db.with_tx(|c| {
+        let conn = c.conn().resolve();
+        // Unconditional, so SQLite drops each table's pages whole rather than row by row.
+        for table in [
+            "flow_messages",
+            "flows",
+            "flow_clear_mark",
+            "flow_sweep_pending",
+        ] {
+            conn.execute(&format!("DELETE FROM {table}"), [])?;
+        }
+        Ok::<_, yaak_database::Error>(())
+    })
+    .map_err(|e| format!("Failed to delete recorded traffic: {e}"))
 }
 
 /// Flows deleted per transaction while deleting cleared ones, so a flow being written never
@@ -1014,6 +1412,145 @@ mod tests {
         assert_eq!(matching, None);
     }
 
+    /// A sort on several columns orders by each in turn, text without regard to case, empty
+    /// values lowest and start as the last tiebreak, and pages through that order from a cursor.
+    #[test]
+    fn a_sort_on_several_columns_pages_in_its_order() {
+        let (_dir, db) = db_of(vec![
+            flow("https://B.com/x", "GET", Some(200), None),
+            flow("https://a.com/y", "GET", Some(404), None),
+            flow("https://a.com/z", "GET", None, None),
+            flow("https://c.com/", "GET", Some(200), None),
+            flow("https://a.com/", "GET", None, Some("boom")),
+            flow("https://b.com/q", "GET", Some(200), None),
+            flow("https://A.com/", "GET", Some(404), None),
+            flow("https://c.com/", "GET", Some(200), None),
+        ]);
+        let key =
+            |column: SortColumn, descending| FlowSortKey { column: column.into(), descending };
+        let read = |sort: &[FlowSortKey], cursor: Option<Vec<SortValue>>, limit| {
+            let filter = FlowFilter {
+                sort: sort.to_vec(),
+                cursor,
+                limit: Some(limit),
+                ..Default::default()
+            };
+            let page = sorted_page(&db, &filter).unwrap();
+            let ids: Vec<String> = page.flows.iter().map(|f| f.id[3..].to_string()).collect();
+            (ids, page.cursor)
+        };
+        let sorted = |sort: &[FlowSortKey]| read(sort, None, 100).0;
+        let by_status = [key(SortColumn::Status, true), key(SortColumn::Host, false)];
+        let all = sorted(&by_status);
+        assert_eq!(all, ["001", "006", "000", "005", "003", "007", "004", "002"]);
+        let mut paged: Vec<String> = Vec::new();
+        let mut cursor = None;
+        loop {
+            let (page, next) = read(&by_status, cursor.clone(), 3);
+            if page.is_empty() {
+                break;
+            }
+            cursor = next;
+            paged.extend(page);
+        }
+        assert_eq!(paged, all);
+
+        // The last flow of a page changing does not move where the next page starts.
+        let (first, cursor) = read(&by_status, None, 3);
+        assert_eq!(first, ["001", "006", "000"]);
+        db.with_conn(|c| {
+            c.conn().resolve().execute("UPDATE flows SET status = 100 WHERE id = 'fl_000'", [])
+        })
+        .unwrap();
+        let (next, _) = read(&by_status, cursor, 3);
+        assert_eq!(next, ["005", "003", "007"]);
+
+        let ascending = [key(SortColumn::Status, false), key(SortColumn::Host, false)];
+        assert_eq!(sorted(&ascending), ["002", "004", "000", "005", "003", "007", "001", "006"]);
+
+        // Query alone: the flows without one first, in start order.
+        let all = sorted(&[key(SortColumn::Query, true)]);
+        assert_eq!(all, ["000", "001", "002", "003", "004", "005", "006", "007"]);
+    }
+
+    /// Flows and the order each sort lists them in, shared with the app's `lib/columns.test.ts`,
+    /// whose in-memory sort must agree with the database's.
+    #[derive(Deserialize)]
+    struct SortFixture {
+        flows: Vec<Flow>,
+        sorts: Vec<SortCase>,
+    }
+
+    #[derive(Deserialize)]
+    struct SortCase {
+        sort: Vec<FlowSortKey>,
+        order: Vec<usize>,
+    }
+
+    /// A custom column sorts by the value it shows: a header's first value, the response's over
+    /// the request's for `header.`, or a query parameter's, as text without regard to case and
+    /// empty lowest; alone, after a built-in key or before another, and paged from a cursor.
+    #[test]
+    fn a_custom_column_sorts_by_its_value_and_pages() {
+        let fixture: SortFixture =
+            serde_json::from_str(include_str!("../tests/fixtures/custom_column_sort.json"))
+                .unwrap();
+        let (_dir, db) = db_of(fixture.flows);
+        let read = |sort: &[FlowSortKey], cursor: Option<Vec<SortValue>>, limit| {
+            let filter = FlowFilter {
+                sort: sort.to_vec(),
+                cursor,
+                limit: Some(limit),
+                ..Default::default()
+            };
+            let page = sorted_page(&db, &filter).unwrap();
+            let order: Vec<usize> = page.flows.iter().map(|f| f.id[3..].parse().unwrap()).collect();
+            (order, page.cursor)
+        };
+        for case in &fixture.sorts {
+            let (all, _) = read(&case.sort, None, 100);
+            assert_eq!(all, case.order, "{:?}", case.sort);
+            let mut paged = Vec::new();
+            let mut cursor = None;
+            loop {
+                let (page, next) = read(&case.sort, cursor.clone(), 3);
+                if page.is_empty() {
+                    break;
+                }
+                cursor = next;
+                paged.extend(page);
+            }
+            assert_eq!(paged, case.order, "paged {:?}", case.sort);
+        }
+    }
+
+    /// A custom column's key names it as the app does, `field:` and its path, and takes only
+    /// the paths a custom column can have.
+    #[test]
+    fn a_sort_key_names_a_custom_column_by_its_path() {
+        let parse = |column: &str| {
+            serde_json::from_value::<FlowSortKey>(
+                serde_json::json!({ "column": column, "descending": false }),
+            )
+            .map(|k| k.column)
+        };
+        assert_eq!(parse("status").unwrap(), SortBy::Column(SortColumn::Status));
+        let field = parse("field:Res.Header.X-Cache").unwrap();
+        assert_eq!(serde_json::to_value(&field).unwrap(), "field:res.header.x-cache");
+        assert_eq!(serde_json::to_value(parse("tls").unwrap()).unwrap(), "tls");
+        for path in [
+            "field:host",
+            "field:header.",
+            "field:header.a b",
+            "field:header.a.b",
+            "field:query.x'); DROP TABLE flows; --",
+            "field:query.filter[status]",
+            "nope",
+        ] {
+            assert!(parse(path).is_err(), "{path}");
+        }
+    }
+
     #[test]
     fn a_search_reads_the_newest_page_through_the_index() {
         let (_dir, db) = db_of(vec![]);
@@ -1348,6 +1885,67 @@ mod tests {
         assert_eq!(hidden("@host:*.github.com OR @is:SYSTEM"), vec!["fl_daemon", "fl_node"]);
     }
 
+    /// Hiding encrypted connections leaves them out of the list and its count, the totals the
+    /// sidebar reads, and saved searches' counts, unless the search names them.
+    #[test]
+    fn hides_encrypted_connections() {
+        let dir = tempfile::tempdir().unwrap();
+        let db =
+            ProxyQueryManager::new(&dir.path().join("proxy.db"), &crate::db::test_key()).unwrap();
+        let flow = |id: &str, url: &str, tunnelled: bool, path: Option<&str>| Flow {
+            id: id.into(),
+            url: url.into(),
+            method: if tunnelled { "CONNECT" } else { "GET" }.into(),
+            tunnelled,
+            client_path: path.map(String::from),
+            ..Default::default()
+        };
+        for f in [
+            flow("fl_get", "https://api.example.com/v1", false, None),
+            flow("fl_tunnel", "https://bank.example.com", true, None),
+            flow("fl_daemon_tunnel", "https://p01.icloud.com", true, Some("/usr/libexec/trustd")),
+        ] {
+            db.with_tx(|tx| tx.upsert(&f, &yaak_database::UpdateSource::Background)).unwrap();
+        }
+        let filter = |query: &str, hide_system: bool| FlowFilter {
+            hide_encrypted: true,
+            hide_system,
+            ..FlowFilter::search(query)
+        };
+        let ids = |filter: FlowFilter| -> Vec<String> {
+            let mut ids: Vec<String> =
+                list(&db, &filter).unwrap().into_iter().map(|f| f.id).collect();
+            ids.sort();
+            ids
+        };
+        assert_eq!(ids(filter("", false)), vec!["fl_get"]);
+        assert_eq!(ids(filter("example", false)), vec!["fl_get"]);
+        assert_eq!(ids(filter("@is:encrypted", false)), vec!["fl_daemon_tunnel", "fl_tunnel"]);
+        assert_eq!(ids(filter("@is:encrypted", true)), vec!["fl_tunnel"]);
+        assert_eq!(ids(filter("@is:tunnelled", false)).len(), 2);
+
+        // The totals: everything stored, and what shows with encrypted connections hidden.
+        let page = sorted_page(&db, &FlowFilter { limit: Some(0), ..filter("", false) }).unwrap();
+        assert_eq!((page.total, page.matching), (3, Some(1)));
+        let page = sorted_page(&db, &FlowFilter::default()).unwrap();
+        assert_eq!((page.total, page.matching), (3, None));
+        assert!(FlowFilter { hide_encrypted: true, ..Default::default() }.narrows());
+        assert_eq!(
+            count_each(&db, &[filter("", false), filter("@is:encrypted", true)]).unwrap(),
+            [1, 1]
+        );
+
+        // Saved searches count as the list would show them.
+        let all = crate::saved_queries::create(&db, "All HTTPS", "@scheme:https").unwrap();
+        let count = |hidden: Hidden| {
+            let counts = crate::saved_queries::counts(&db, hidden).unwrap();
+            counts.into_iter().find(|c| c.id == all.id).unwrap().count
+        };
+        assert_eq!(count(Hidden::default()), 3);
+        assert_eq!(count(Hidden { system: false, encrypted: true }), 1);
+        assert_eq!(count(Hidden { system: true, encrypted: false }), 2);
+    }
+
     #[test]
     fn tells_system_daemons_apart() {
         assert!(is_system(None, Some("/usr/libexec/nsurlsessiond")));
@@ -1378,6 +1976,13 @@ mod tests {
         };
         assert_eq!(filter.to_query(), "query=post+%40status%3A4xx&hide_system=true&limit=20");
         assert_eq!(FlowFilter::from_query(&filter.to_query()).unwrap(), filter);
+        let filter = FlowFilter { hide_encrypted: true, ..filter };
+        assert_eq!(
+            filter.to_query(),
+            "query=post+%40status%3A4xx&hide_system=true&hide_encrypted=true&limit=20"
+        );
+        assert_eq!(FlowFilter::from_query(&filter.to_query()).unwrap(), filter);
+        assert!(FlowFilter::from_query("hide_encrypted=maybe").is_err());
         assert_eq!(FlowFilter::from_query("").unwrap(), FlowFilter::default());
         assert!(FlowFilter::from_query("limit=lots").is_err());
         assert!(FlowFilter::from_query("hide_system=maybe").is_err());

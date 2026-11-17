@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import type { CaStatus, SystemProxyStatus } from "@yaakapp-internal/proxy-lib";
+import type { SystemProxyStatus } from "@yaakapp-internal/proxy-lib";
 import {
   Button,
   Checkbox,
@@ -12,63 +12,73 @@ import {
 import classNames from "classnames";
 import { useAtom, useAtomValue } from "jotai";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { canTrustHere, useDecrypt, useTrustCertificate } from "../hooks/useDecrypt";
+import { useDecryptList } from "../hooks/useDecryptList";
 import { useRpcEvent } from "../hooks/useRpcEvent";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
 import { helperRegisteredAtAtom } from "../lib/atoms";
+import { decryptsAnything, decryptsEverything, everythingEdit, listSummary } from "../lib/decrypt";
 import { encryptingPercent } from "../lib/encrypting";
 import { environmentExports } from "../lib/env";
+import { proxyStatusOf } from "../lib/proxyStatus";
 import { proxyStateAtom, systemProxyEverOnAtom } from "../lib/store";
 import { helperPollInterval, recordingLabel, systemProxySwitch } from "../lib/systemProxy";
 import { onWindowFocus } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
 
 /**
- * The header's state pill and its menu of four rows: the state, Pause or Resume Recording,
- * Override system proxy, and the certificate. The engine runs for as long as the app does, so the
- * pill shows whether flows are being stored. A certificate that is not trusted steps out of the
- * menu beside the pill until it is. Everything set once and left alone lives in Settings.
+ * The header's state pill and its menu: the listening address, which copies itself, the state,
+ * Pause or Resume Recording, Override system proxy, and Decrypt everything. The engine runs for
+ * as long as the app does, so the pill shows whether flows are being stored. A certificate that
+ * is not trusted while something is listed to decrypt steps out of the menu beside the pill
+ * until it is. Everything set once and left alone lives in Settings.
  */
 export function ProxyStatus() {
   const dropdownRef = useRef<DropdownRef>(null);
+  const [copied, setCopied] = useCopied();
   const proxyState = useAtomValue(proxyStateAtom);
   const setup = useProxySetup();
   const execute = useRpcMutation("execute_action");
   const retry = useRpcMutation("take_over");
-  const { caStatus, trust, systemProxy, setSystemProxy } = setup;
+  const { caStatus, systemProxy, setSystemProxy } = setup;
   const systemSwitch = useSystemProxySwitch(setup);
 
   const running = proxyState?.state === "running";
   const recording = proxyState?.recording !== false;
   const other = proxyState?.otherOwner ?? null;
   const port = proxyState?.port ?? other?.proxyPort ?? null;
-  const untrusted = caStatus.data != null && !caStatus.data.trusted;
-  // Traffic stored before encryption is being encrypted; the engine starts once it is.
-  const encrypting = !running && other == null ? encryptingPercent(proxyState) : null;
+  const decryptList = useDecryptList();
+  // Something is listed to decrypt but the certificate isn't trusted, so it can't be.
+  // Only where the app can trust it itself: elsewhere the status always reads untrusted.
+  const broken =
+    canTrustHere() &&
+    caStatus.data != null &&
+    !caStatus.data.trusted &&
+    decryptsAnything(decryptList);
+  // The same status the header's tint takes its colour from
+  const status = proxyStatusOf(proxyState);
+  const encrypting = status === "encrypting" ? encryptingPercent(proxyState) : null;
 
   const stateRow =
-    encrypting != null ? (
+    status === "encrypting" ? (
       <MenuRow
         icon={<LoadingIcon size="sm" className="text-text-subtle" />}
-        title={`Encrypting stored traffic, ${encrypting}`}
-        description="Traffic captured before this version is being encrypted on disk. Recording starts when it's done."
+        title={`Encrypting recorded traffic, ${encrypting}`}
+        description="Recording will start once encryption finishes."
       />
-    ) : other != null ? (
+    ) : status === "cli" && other != null ? (
       <MenuRow
         icon={<StateDot state="cli" />}
         title="Running from the CLI"
-        description={`Started by yaak proxy start, pid ${other.pid}, since ${timeOf(other.startedAt)}.${other.proxyPort == null ? "" : ` Port ${other.proxyPort}.`}`}
+        description={`The proxy was started by the CLI at ${timeOf(other.startedAt)}.`}
       />
-    ) : running ? (
+    ) : status === "recording" || status === "paused" ? (
       <MenuRow
-        icon={<StateDot state={recording ? "recording" : "paused"} />}
+        icon={<StateDot state={status} />}
         title={recording ? `Recording on port ${port}` : `Paused on port ${port}`}
-        description={
-          recording
-            ? "Every flow is stored as it passes."
-            : "Traffic passes through untouched, and nothing is stored."
-        }
+        description={recording ? null : "Traffic passes through without being recorded."}
       />
     ) : (
       <MenuRow
@@ -76,7 +86,7 @@ export function ProxyStatus() {
         title="Not running"
         description={
           <span className="text-danger">
-            {retry.error?.message ?? proxyState?.startError ?? "The proxy has not started."}
+            {retry.error?.message ?? proxyState?.startError ?? "The proxy failed to start."}
           </span>
         }
         action={
@@ -102,7 +112,23 @@ export function ProxyStatus() {
     systemProxy.data.helper !== "enabled" &&
     systemProxy.data.helper !== "unavailable";
 
+  const address = port == null ? null : `127.0.0.1:${port}`;
   const items: DropdownItem[] = [
+    {
+      label: <span className="font-mono text-editor">{address}</span>,
+      hidden: address == null,
+      keepOpenOnSelect: true,
+      rightSlot: copied ? (
+        <span className="text-xs text-text-subtle">Copied</span>
+      ) : (
+        <Icon icon="copy" size="sm" className="text-text-subtlest" />
+      ),
+      onSelect: () => {
+        if (address == null) return;
+        navigator.clipboard.writeText(address).then(setCopied, console.error);
+      },
+    },
+    { type: "separator", hidden: address == null },
     { type: "content", label: stateRow },
     {
       label: recordingLabel(recording),
@@ -126,9 +152,7 @@ export function ProxyStatus() {
                 {systemSwitch.description}
               </span>
               {helperNotice && (
-                <span className="block text-notice">
-                  macOS asks for your password each time until the helper is approved in Settings.
-                </span>
+                <span className="block text-notice">macOS will ask for a password each time.</span>
               )}
             </>
           }
@@ -147,75 +171,28 @@ export function ProxyStatus() {
         />
       ),
     },
-    {
-      type: "content",
-      label: caStatus.data?.trusted ? (
-        <MenuRow
-          icon={<Icon icon="shield_check" color="success" size="sm" />}
-          title="Certificate trusted"
-          description="Yaak Proxy CA, in your login keychain."
-        />
-      ) : (
-        <MenuRow
-          icon={<Icon icon="shield_off" color="warning" size="sm" />}
-          title="Certificate not trusted"
-          description={
-            trust.error != null ? (
-              <span className="text-danger">{trust.error.message}</span>
-            ) : trust.isPending ? (
-              "Waiting for your password in the macOS prompt."
-            ) : (
-              "So HTTPS reads as plain text. macOS asks for your login password once."
-            )
-          }
-          action={
-            <Button
-              size="2xs"
-              variant="border"
-              color="primary"
-              isLoading={trust.isPending}
-              onClick={(e) => {
-                e.stopPropagation();
-                trust.mutate({});
-              }}
-            >
-              {trust.error != null ? "Try again" : "Trust certificate"}
-            </Button>
-          }
-        />
-      ),
-    },
+    { type: "content", label: <DecryptEverythingRow broken={broken} /> },
   ];
 
   return (
     <>
       <Dropdown ref={dropdownRef} items={items}>
-        <Pill
-          color={
-            !running && other == null && encrypting == null && proxyState != null
-              ? "warning"
-              : undefined
-          }
-        >
-          {encrypting != null ? (
+        <Pill color={status === "stopped" ? "warning" : undefined}>
+          {status === "encrypting" ? (
             <>
               <LoadingIcon size="xs" />
               <span className="text-text">Encrypting</span>
               <span className="font-mono text-text-subtle">{encrypting}</span>
             </>
-          ) : other != null ? (
+          ) : status === "cli" && other != null ? (
             <>
               <StateDot state="cli" />
               <span className="text-text">CLI</span>
-              {other.proxyPort != null && (
-                <span className="font-mono text-text-subtle">:{other.proxyPort}</span>
-              )}
             </>
-          ) : running ? (
+          ) : status === "recording" || status === "paused" ? (
             <>
-              <StateDot state={recording ? "recording" : "paused"} />
+              <StateDot state={status} />
               <span className="text-text">{recording ? "Recording" : "Paused"}</span>
-              {port != null && <span className="font-mono text-text-subtle">:{port}</span>}
             </>
           ) : (
             <>
@@ -226,13 +203,80 @@ export function ProxyStatus() {
           <Icon icon="chevron_down" size="xs" className="text-text-subtlest" />
         </Pill>
       </Dropdown>
-      {untrusted && (
+      {broken && (
         <Pill color="warning" onClick={() => dropdownRef.current?.open()}>
           <Icon icon="shield_off" size="xs" />
           Certificate not trusted
         </Pill>
       )}
     </>
+  );
+}
+
+/**
+ * Decrypt everything, `*` on the list, as a switch: what else is listed when off, and Trust
+ * while something is listed and the certificate isn't trusted.
+ */
+function DecryptEverythingRow({ broken }: { broken: boolean }) {
+  const list = useDecryptList();
+  const { apply, trusting } = useDecrypt();
+  const trust = useTrustCertificate();
+  const on = decryptsEverything(list);
+  if (broken) {
+    return (
+      <MenuRow
+        icon={<Icon icon="shield_off" size="sm" color="warning" />}
+        title="Decrypt everything"
+        description={<span className="text-warning">Certificate not trusted</span>}
+        action={
+          <Button
+            size="2xs"
+            color="primary"
+            isLoading={trusting}
+            onClick={(e) => {
+              e.stopPropagation();
+              trust.mutate({});
+            }}
+          >
+            {trusting ? "Waiting for macOS" : "Trust"}
+          </Button>
+        }
+      />
+    );
+  }
+  return (
+    <MenuRow
+      icon={<Icon icon="lock_open" size="sm" color="secondary" />}
+      title="Decrypt everything"
+      description={
+        trusting
+          ? "Waiting for macOS"
+          : on
+            ? "Excluded hosts and apps stay encrypted."
+            : (listSummary(list) ?? "No hosts or apps")
+      }
+      action={
+        <KeepMenuOpen>
+          <Checkbox
+            title="Decrypt everything"
+            hideLabel
+            checked={on}
+            disabled={trusting}
+            onChange={(checked) =>
+              void apply(
+                checked
+                  ? {
+                      edit: everythingEdit(true),
+                      message: "Decrypting everything",
+                      sub: "Excluded hosts and apps stay encrypted.",
+                    }
+                  : { edit: everythingEdit(false), message: "Stopped decrypting everything" },
+              )
+            }
+          />
+        </KeepMenuOpen>
+      }
+    />
   );
 }
 
@@ -256,10 +300,6 @@ export function useProxySetup() {
   // The user comes back from System Settings, maybe having just allowed the helper.
   const { refetch: refetchSystemProxy } = systemProxy;
   useEffect(() => onWindowFocus(() => void refetchSystemProxy()), [refetchSystemProxy]);
-  const trust = useRpcMutation("ca_trust", {
-    mutationKey: ["ca_trust"],
-    onSuccess: (status) => queryClient.setQueryData<CaStatus>(["ca_status", {}], status),
-  });
   const setSystemProxy = useRpcMutation("system_proxy_set", {
     mutationKey: ["system_proxy_set"],
     onSuccess: (status) => {
@@ -275,7 +315,7 @@ export function useProxySetup() {
   useEffect(() => {
     if (on && !everOn) setEverOn(true);
   }, [on, everOn, setEverOn]);
-  return { caStatus, trust, systemProxy, setSystemProxy };
+  return { caStatus, systemProxy, setSystemProxy };
 }
 
 /** The system proxy switch's state, from where it points and the change in flight */
@@ -304,13 +344,25 @@ export function useCopyEnvironment() {
     try {
       await navigator.clipboard.writeText(environmentExports(port, caPath));
       showToast({
-        message: "Copied the environment. Paste it into a terminal to proxy what runs there.",
+        message: "Copied the environment. Paste it into a terminal.",
       });
     } catch (err) {
       showToast({ message: `Failed to copy: ${String(err)}`, color: "danger" });
     }
   };
 }
+
+/** Whether something was just copied, for a moment, and the call that says it was */
+function useCopied(): [boolean, () => void] {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timeout = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timeout);
+  }, [copied]);
+  return [copied, () => setCopied(true)];
+}
+
 /** Keeps a click on a control inside a menu row from closing the menu, as a row's click does */
 function KeepMenuOpen({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -371,6 +423,7 @@ function MenuRow({
 }: {
   icon: ReactNode;
   title: string;
+  /** Under the title; null for a title that says it all */
   description: ReactNode;
   action?: ReactNode;
 }) {
@@ -379,7 +432,9 @@ function MenuRow({
       <span className="h-5 flex items-center justify-center">{icon}</span>
       <div>
         <div className="text-sm text-text">{title}</div>
-        <div className="text-xs text-text-subtle mt-0.5">{description}</div>
+        {description != null && (
+          <div className="text-xs text-text-subtle mt-0.5">{description}</div>
+        )}
       </div>
       <span className="self-center">{action}</span>
     </div>

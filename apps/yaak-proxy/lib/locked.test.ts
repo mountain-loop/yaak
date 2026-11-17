@@ -14,8 +14,8 @@ describe("lockedLine", () => {
   test("gives any other reason without the title's words", () => {
     const lock = {
       keychain: false,
-      message: "Traffic is locked: the proxy is already running in the yaak CLI (pid 4).",
+      message: "Traffic is locked: the proxy is already running in the CLI (pid 4).",
     };
-    expect(lockedLine(lock, "macos")).toBe("The proxy is already running in the yaak CLI (pid 4).");
+    expect(lockedLine(lock, "macos")).toBe("The proxy is already running in the CLI (pid 4).");
   });
 });

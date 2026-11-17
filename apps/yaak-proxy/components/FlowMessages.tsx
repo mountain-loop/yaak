@@ -120,7 +120,9 @@ export function FlowMessages({ flow }: { flow: Flow }) {
       header={header}
       error={error ?? (open ? null : flow.error)}
       isLoading={loading && events.length === 0}
-      emptyMessage={open ? `Waiting for the first ${noun.toLowerCase()}` : `No ${noun}s`}
+      emptyMessage={
+        open ? `Waiting for the first ${noun.toLowerCase()}` : `No ${noun.toLowerCase()}s`
+      }
       splitLayoutStorageKey="proxy_flow_messages"
       columns={columns}
       loadPayload={loadPayload}

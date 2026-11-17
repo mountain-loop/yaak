@@ -2,7 +2,8 @@ import type { Color } from "@yaakapp-internal/plugins";
 import classNames from "classnames";
 
 interface Props {
-  count: number | true;
+  /** A number, a dot for `true`, or a short word such as a body's type */
+  count: number | true | string;
   count2?: number | true;
   className?: string;
   color?: Color;

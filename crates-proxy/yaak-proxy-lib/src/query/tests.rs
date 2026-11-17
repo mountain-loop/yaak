@@ -381,6 +381,53 @@ fn headers_on_either_side_or_one() {
     );
 }
 
+/// `@is:encrypted` finds tunnelled connections, as `@is:tunnelled` did and still does, and
+/// `@is:rejected` refused handshakes; hiding encrypted connections leaves them out unless the
+/// query names them.
+#[test]
+fn encrypted_and_rejected() {
+    let rejected = Flow {
+        id: "fl_rejected".into(),
+        url: "https://my.1password.com".into(),
+        client_http_version: "HTTP/1.1".into(),
+        tls_rejected: Some("unknown_ca".into()),
+        error: Some("Certificate rejected by the app".into()),
+        elapsed_ms: Some(3),
+        started_at: (now() - Duration::minutes(5)).naive_utc(),
+        ..Default::default()
+    };
+    let mut flows = fixture();
+    flows.push(rejected);
+    let (_dir, db, flows) = db_of(flows);
+    let find = |query: &str, hidden: Hidden| {
+        let prepared = FlowQuery::at(query, hidden, now());
+        let sql = sql_ids(&db, &prepared);
+        assert_eq!(sql, memory_ids(&flows, &prepared), "the two disagree on {query:?}");
+        sql
+    };
+    let none = Hidden::default();
+    let encrypted = Hidden { system: false, encrypted: true };
+    assert_eq!(find("@is:encrypted", none), ids(&["fl_tunnel"]));
+    assert_eq!(find("@is:tunnelled", none), ids(&["fl_tunnel"]));
+    assert_eq!(find("@is:TUNNELLED", none), ids(&["fl_tunnel"]));
+    assert_eq!(find("@is:rejected", none), ids(&["fl_rejected"]));
+    assert!(find("@is:error", none).contains(&"fl_rejected".to_string()));
+    // Hidden, unless named.
+    let all = find("", none);
+    let shown = find("", encrypted);
+    assert_eq!(shown.len(), all.len() - 1);
+    assert!(!shown.contains(&"fl_tunnel".to_string()));
+    assert_eq!(find("@is:encrypted", encrypted), ids(&["fl_tunnel"]));
+    assert_eq!(find("@is:tunnelled", encrypted), ids(&["fl_tunnel"]));
+    assert_eq!(find("bank", encrypted), Vec::<String>::new());
+    // Both hidden.
+    let both = find("", Hidden { system: true, encrypted: true });
+    assert_eq!(both.len(), all.len() - 2);
+    assert_eq!(diagnostics("@is:encrypted @is:rejected @is:tunnelled"), vec![]);
+    assert!(FLAGS.contains(&"encrypted") && FLAGS.contains(&"rejected"));
+    assert!(!FLAGS.contains(&"tunnelled"), "an alias, not offered");
+}
+
 #[test]
 fn flags() {
     assert_eq!(finds("@is:system"), ids(&["fl_daemon"]));
@@ -690,10 +737,21 @@ fn sample(count: usize) -> Vec<Flow> {
                 client_pid: rng.chance(50).then(|| (rng.next() % 1000) as i32),
                 stream_kind: *rng.pick(&streams),
                 grpc_status: *rng.pick(&[None, Some(0), Some(5)]),
+                grpc_service: rng
+                    .chance(20)
+                    .then(|| rng.pick(&["pkg.Greeter", "Users"]).to_string()),
+                grpc_method: rng.chance(20).then(|| rng.pick(&["SayHello", "getUser"]).to_string()),
+                graphql_operation: rng
+                    .chance(25)
+                    .then(|| rng.pick(&["GetUser", "", "Feed +2", "createÉtat"]).to_string()),
                 error: rng.chance(15).then(|| "connection reset".to_string()),
                 cancelled: rng.chance(10),
                 saved_request_id: rng.chance(15).then(|| "rq_x".to_string()),
                 tunnelled,
+                tls_rejected: rng
+                    .chance(10)
+                    .then(|| rng.pick(&["unknown_ca", "hang_up"]).to_string())
+                    .filter(|_| !tunnelled),
                 agent_read: rng.chance(20),
                 ..Default::default()
             }
@@ -859,6 +917,18 @@ const BATTERY: &[&str] = &[
     "@is:ws",
     "@is:sse",
     "@is:grpc",
+    "@is:graphql",
+    "-@is:graphql",
+    "@graphql.operation:getuser",
+    "@graphql.operation:feed*",
+    "@graphql.operation:*",
+    "-@graphql.operation:*",
+    "@graphql.operation:createétat",
+    "@grpc.service:pkg.greeter",
+    "@grpc.service:*",
+    "@grpc.method:SayHello",
+    "-@grpc.method:*",
+    "@grpc.service:users @grpc.method:get*",
     "@is:*",
     "-@is:*",
     "@is:s*",
@@ -869,6 +939,12 @@ const BATTERY: &[&str] = &[
     "@nope:x",
     "-@nope:x",
     "@status:4xx OR @is:tunnelled",
+    "@is:encrypted",
+    "-@is:encrypted",
+    "@is:rejected",
+    "@is:rejected OR @is:encrypted",
+    "-@is:rejected @is:error",
+    "@is:e*",
     "(@status:4xx OR @is:error) -@method:post",
     "-(@status:* OR @is:pending)",
     "github -@host:github.com",
@@ -884,8 +960,9 @@ fn the_database_and_the_evaluator_find_the_same_flows() {
     let (_dir, db, flows) = db_of(sample(400));
     let mut checked = 0;
     for query in BATTERY {
-        for hide_system in [false, true] {
-            let prepared = FlowQuery::at(query, hide_system, now());
+        for (system, encrypted) in [(false, false), (true, false), (false, true), (true, true)] {
+            let hidden = Hidden { system, encrypted };
+            let prepared = FlowQuery::at(query, hidden, now());
             let sql = sql_ids(&db, &prepared);
             let memory = memory_ids(&flows, &prepared);
             if sql != memory {
@@ -896,14 +973,14 @@ fn the_database_and_the_evaluator_find_the_same_flows() {
                     .or(only_memory.first())
                     .map(|id| flows.iter().find(|f| &&f.id == id).cloned());
                 panic!(
-                    "{query:?} (hide_system {hide_system}): only in SQL {only_sql:?}, \
+                    "{query:?} ({hidden:?}): only in SQL {only_sql:?}, \
                     only in memory {only_memory:?}; e.g. {example:#?}"
                 );
             }
             checked += 1;
         }
     }
-    assert_eq!(checked, BATTERY.len() * 2);
+    assert_eq!(checked, BATTERY.len() * 4);
     // The battery means something only if the sample spreads its answers.
     let spread = BATTERY
         .iter()
@@ -919,9 +996,9 @@ fn live_search_matches_as_the_list_does() {
     let live = LiveSearch::default();
     let flow = fixture().remove(0);
     assert_eq!(live.check(&flow), None);
-    live.watch(Some(("k1".into(), "@status:2xx @host:*.github.com".into(), false)));
+    live.watch(Some(("k1".into(), "@status:2xx @host:*.github.com".into(), false.into())));
     assert_eq!(live.check(&flow), Some(SearchMatch { key: "k1".into(), matches: true }));
-    live.watch(Some(("k2".into(), "@status:4xx".into(), false)));
+    live.watch(Some(("k2".into(), "@status:4xx".into(), false.into())));
     let payload = live.payload(flow, true);
     assert_eq!(payload.search, Some(SearchMatch { key: "k2".into(), matches: false }));
     live.watch(None);
@@ -961,11 +1038,58 @@ fn seen_values_for_completion() {
         "size",
         "duration",
         "time",
-        "query",
         "query.page",
     ] {
         assert!(values(path).is_empty(), "{path}");
     }
+    // A query parameter's names, for `@query.`, but not its values
+    let mut params = values("query");
+    params.sort();
+    assert_eq!(params, vec!["page", "sort"]);
+}
+
+/// GraphQL operations and gRPC calls, by name and by flag, and offered for completion.
+#[test]
+fn graphql_and_grpc_fields() {
+    let base = |id: &str, url: &str| Flow {
+        id: id.into(),
+        url: url.into(),
+        method: "POST".into(),
+        started_at: now().naive_utc(),
+        ..Default::default()
+    };
+    let flows = vec![
+        Flow {
+            graphql_operation: Some("GetUser".into()),
+            ..base("fl_named", "https://api.example.com/graphql")
+        },
+        Flow {
+            graphql_operation: Some(String::new()),
+            ..base("fl_anonymous", "https://api.example.com/graphql")
+        },
+        Flow {
+            grpc_service: Some("pkg.Greeter".into()),
+            grpc_method: Some("SayHello".into()),
+            ..base("fl_call", "https://grpc.example.com/pkg.Greeter/SayHello")
+        },
+        base("fl_plain", "https://example.com/"),
+    ];
+    let (_dir, db, all) = db_of(flows);
+    let finds = |query: &str| {
+        let prepared = FlowQuery::at(query, false, now());
+        let sql = sql_ids(&db, &prepared);
+        assert_eq!(sql, memory_ids(&all, &prepared), "the two disagree on {query:?}");
+        sql
+    };
+    assert_eq!(finds("@is:graphql"), ids(&["fl_anonymous", "fl_named"]));
+    assert_eq!(finds("@graphql.operation:getuser"), ids(&["fl_named"]));
+    assert_eq!(finds("@graphql.operation:*"), ids(&["fl_named"]));
+    assert_eq!(finds("@grpc.service:pkg.Greeter"), ids(&["fl_call"]));
+    assert_eq!(finds("@grpc.method:say*"), ids(&["fl_call"]));
+    assert_eq!(finds("-@grpc.method:*"), ids(&["fl_anonymous", "fl_named", "fl_plain"]));
+    assert_eq!(seen_values(&db, "graphql.operation").unwrap(), vec!["GetUser"]);
+    assert_eq!(seen_values(&db, "grpc.service").unwrap(), vec!["pkg.Greeter"]);
+    assert_eq!(seen_values(&db, "grpc.method").unwrap(), vec!["SayHello"]);
 }
 
 #[test]

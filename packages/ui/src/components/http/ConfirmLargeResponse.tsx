@@ -24,7 +24,8 @@ interface Props {
   renderCopyButton?: (getText: () => Promise<string | null>) => ReactNode;
 }
 
-const LARGE_BYTES = 2 * 1000 * 1000;
+/** Bytes above which a body is held back until asked for, and opens raw once shown */
+export const LARGE_BODY_BYTES = 2 * 1000 * 1000;
 
 /** Holds back a body big enough to slow the window down, until asked to show it */
 export function ConfirmLargeResponse({
@@ -40,14 +41,14 @@ export function ConfirmLargeResponse({
   const [showLargeResponse, toggleShowLargeResponse] = useToggle();
   const isProbablyText = useMemo(() => isProbablyTextContentType(contentType), [contentType]);
 
-  const isLarge = (contentLength ?? 0) > LARGE_BYTES;
+  const isLarge = (contentLength ?? 0) > LARGE_BODY_BYTES;
   if (!showLargeResponse && isLarge) {
     return (
       <Banner color="primary" className="flex flex-col gap-3">
         <p>
           Showing {noun} over{" "}
           <InlineCode>
-            <SizeTag contentLength={LARGE_BYTES} />
+            <SizeTag contentLength={LARGE_BODY_BYTES} />
           </InlineCode>{" "}
           may impact performance
         </p>
