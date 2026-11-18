@@ -15,6 +15,7 @@ mod import_source_resources;
 mod import_sources;
 mod key_values;
 mod model_changes;
+mod model_versions;
 mod plugin_key_values;
 mod plugins;
 mod settings;

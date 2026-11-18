@@ -132,6 +132,7 @@ impl<'a> WriteDb<'a> {
         source: &UpdateSource,
     ) -> Result<WebsocketRequest> {
         self.delete_all_websocket_connections_for_request(websocket_request.id.as_str(), source)?;
+        self.delete_model_versions_for_model(websocket_request.id.as_str())?;
         self.delete(websocket_request, source)
     }
 
@@ -167,6 +168,8 @@ impl<'a> WriteDb<'a> {
         websocket_request: &WebsocketRequest,
         source: &UpdateSource,
     ) -> Result<WebsocketRequest> {
-        self.upsert(websocket_request, source)
+        let request = self.upsert(websocket_request, source)?;
+        self.move_model_versions_to_workspace(&request.id, &request.workspace_id)?;
+        Ok(request)
     }
 }

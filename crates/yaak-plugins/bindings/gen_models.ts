@@ -138,6 +138,10 @@ export type GrpcConnection = {
   state: GrpcConnectionState;
   trailers: { [key in string]?: string };
   url: string;
+  /**
+   * The request version this connection was opened from, when one was captured.
+   */
+  versionId: string | null;
 };
 
 export type GrpcConnectionState = "initialized" | "connected" | "closed";
@@ -242,6 +246,10 @@ export type HttpResponse = {
   state: HttpResponseState;
   url: string;
   version: string | null;
+  /**
+   * The request version this response was sent from, when one was captured.
+   */
+  versionId: string | null;
 };
 
 export type HttpResponseEvent = {
@@ -431,6 +439,10 @@ export type WebsocketConnection = {
   state: WebsocketConnectionState;
   status: number;
   url: string;
+  /**
+   * The request version this connection was opened from, when one was captured.
+   */
+  versionId: string | null;
 };
 
 export type WebsocketConnectionState = "initialized" | "connected" | "closing" | "closed";

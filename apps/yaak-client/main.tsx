@@ -8,6 +8,7 @@ import { createRoot } from "react-dom/client";
 import { initGit } from "./init/git";
 import { initSync } from "./init/sync";
 import { initGlobalListeners } from "./lib/initGlobalListeners";
+import { initRequestVersionSnapshots } from "./lib/requestVersions";
 import { jotaiStore } from "./lib/jotai";
 import { router } from "./lib/router";
 
@@ -36,6 +37,7 @@ initGit();
 initSync();
 initModelStore(jotaiStore);
 initGlobalListeners();
+initRequestVersionSnapshots();
 await changeModelStoreWorkspace(null); // Load global models
 
 console.log("Creating React root");

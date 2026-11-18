@@ -63,6 +63,10 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
     db.rpc("models_get_graphql_introspection", payload),
   models_upsert_graphql_introspection: (payload, db) =>
     db.rpc("models_upsert_graphql_introspection", payload),
+  models_snapshot_request: (payload, db) => db.rpc("models_snapshot_request", payload),
+  models_request_version: (payload, db) => db.rpc("models_request_version", payload),
+  models_restore_request_version: (payload, db) =>
+    db.rpc("models_restore_request_version", payload),
   models_grpc_events: (payload, db) => db.rpc("models_grpc_events", payload),
   models_websocket_events: (payload, db) => db.rpc("models_websocket_events", payload),
   cmd_get_workspace_meta: (payload, db) => db.rpc("cmd_get_workspace_meta", payload),

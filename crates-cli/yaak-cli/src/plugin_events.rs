@@ -14,7 +14,9 @@ use yaak::plugin_events::{
     GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
 use yaak::response_body::FileResponseBodyStore;
-use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
+use yaak::send::{
+    SendHttpRequestWithPluginsParams, SendRequestSource, send_http_request_with_plugins,
+};
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::cookies::get_cookie_value_from_jar;
 use yaak_http::manager::HttpConnectionManager;
@@ -255,6 +257,8 @@ async fn build_plugin_reply(
                     query_manager: &host_context.query_manager,
                     blob_manager: &host_context.blob_manager,
                     request: http_request,
+                    // A plugin may have rendered it, so it is versioned from the stored row
+                    request_source: SendRequestSource::Supplied,
                     environment_id: environment_id.as_deref(),
                     update_source: UpdateSource::Plugin,
                     cookie_jar_id,

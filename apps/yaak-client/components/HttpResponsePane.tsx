@@ -3,6 +3,7 @@ import {
   CountBadge,
   type ExtraPaneTab,
   type HostBodyViewerArgs,
+  HStack,
   HttpResponsePaneView,
   Icon,
   type ResponseTextViewerExtras,
@@ -29,6 +30,7 @@ import { IconButton } from "./core/IconButton";
 import { PillButton } from "./core/PillButton";
 import { HttpResponseTimeline } from "./HttpResponseTimeline";
 import { RecentHttpResponsesDropdown } from "./RecentHttpResponsesDropdown";
+import { RequestVersionDropdown } from "./RequestVersionDropdown";
 import { EventStreamViewer } from "./responseViewers/EventStreamViewer";
 import { RecentFiltersDropdown } from "./responseViewers/RecentFiltersDropdown";
 
@@ -170,11 +172,14 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
       }
       statusLineRight={
         activeResponse != null && (
-          <RecentHttpResponsesDropdown
-            responses={responses}
-            activeResponse={activeResponse}
-            onPinnedResponseId={setPinnedResponseId}
-          />
+          <HStack space={1}>
+            <RequestVersionDropdown response={activeResponse} />
+            <RecentHttpResponsesDropdown
+              responses={responses}
+              activeResponse={activeResponse}
+              onPinnedResponseId={setPinnedResponseId}
+            />
+          </HStack>
         )
       }
     />

@@ -4,10 +4,11 @@
 use crate::error::Result;
 use crate::host::{Host, PluginHost};
 use yaak_models::models::{
-    AnyModel, GraphQlIntrospection, GrpcEvent, HttpRequestHeader, Settings, WebsocketEvent,
-    WorkspaceMeta,
+    AnyModel, GraphQlIntrospection, GrpcEvent, HttpRequestHeader, ModelVersion,
+    RequestVersionComparison, Settings, WebsocketEvent, WorkspaceMeta,
 };
 use yaak_models::queries::workspaces::default_headers;
+use yaak_models::versions::version_document;
 use yaak_rpc_schema::*;
 
 pub async fn models_upsert<H: Host>(host: H, req: ModelsUpsertReq) -> Result<String> {
@@ -44,6 +45,44 @@ pub async fn models_duplicate<H: Host>(host: H, req: ModelsDuplicateReq) -> Resu
     Ok(host.query_manager().with_tx(|tx| {
         yaak_models::models_ops::duplicate_model(tx, &req.model_type, &req.model_id, &source)
     })?)
+}
+
+/// Capture the request's current content, from an edit-session boundary the
+/// frontend can see: switching away, losing focus, closing, or falling idle.
+///
+/// The frontend does not track whether anything actually changed — versions are
+/// content-addressed, so an unchanged request returns the version it already
+/// had and the trigger code stays a one-liner.
+pub async fn models_snapshot_request<H: Host>(
+    host: H,
+    req: ModelsSnapshotRequestReq,
+) -> Result<ModelVersion> {
+    Ok(host.query_manager().with_tx(|tx| tx.snapshot_request_by_id(&req.request_id, req.reason))?)
+}
+
+/// A version and the live request side by side, for the diff and for deciding
+/// whether there is anything worth offering.
+pub async fn models_request_version<H: Host>(
+    host: H,
+    req: ModelsRequestVersionReq,
+) -> Result<RequestVersionComparison> {
+    let db = host.db();
+    let version = db.get_model_version(&req.version_id)?;
+    let current_document = version_document(&db.get_any_request(&version.model_id)?.to_value()?)?;
+    let differs = !db.request_matches_version(&version)?;
+    Ok(RequestVersionComparison { version, current_document, differs })
+}
+
+/// Returns the restored request, so the frontend can put it in its store
+/// without waiting for the change event to come back around.
+pub async fn models_restore_request_version<H: Host>(
+    host: H,
+    req: ModelsRestoreRequestVersionReq,
+) -> Result<AnyModel> {
+    let source = host.update_source();
+    let restored =
+        host.query_manager().with_tx(|tx| tx.restore_request_version(&req.version_id, &source))?;
+    Ok(restored.into())
 }
 
 pub async fn models_websocket_events<H: Host>(
