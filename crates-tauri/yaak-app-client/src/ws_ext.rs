@@ -288,10 +288,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
         let http_url = convert_ws_url_to_http(&url);
         if let Some(cookie_header_value) = store.get_cookie_header(&http_url) {
             debug!("Inserting cookies into WS upgrade to {}: {}", url, cookie_header_value);
-            headers.insert(
-                http::HeaderName::from_static("cookie"),
-                HeaderValue::from_str(&cookie_header_value).unwrap(),
-            );
+            insert_cookie_header(&mut headers, &cookie_header_value);
         }
     }
 
@@ -469,6 +466,16 @@ pub async fn cmd_ws_connect<R: Runtime>(
     Ok(connection)
 }
 
+/// Add jar cookies to the upgrade request, keeping any `Cookie` header the user set
+/// (same merge as HTTP requests: RFC 6265 allows a single Cookie field).
+fn insert_cookie_header(headers: &mut HeaderMap, cookie_header_value: &str) {
+    let merged = match headers.get(http::header::COOKIE).and_then(|v| v.to_str().ok()) {
+        Some(existing) => format!("{}; {}", existing, cookie_header_value),
+        None => cookie_header_value.to_string(),
+    };
+    headers.insert(http::header::COOKIE, HeaderValue::from_str(&merged).unwrap());
+}
+
 /// Convert WS URL to HTTP URL for cookie filtering
 /// WebSocket upgrade requests are HTTP requests initially, so HttpOnly cookies should apply
 fn convert_ws_url_to_http(ws_url: &Url) -> Url {
@@ -487,4 +494,28 @@ fn convert_ws_url_to_http(ws_url: &Url) -> Url {
     }
 
     http_url
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn insert_cookie_header_sets_jar_cookies() {
+        let mut headers = HeaderMap::new();
+
+        insert_cookie_header(&mut headers, "session=abc");
+
+        assert_eq!(headers.get(http::header::COOKIE).unwrap(), "session=abc");
+    }
+
+    #[test]
+    fn insert_cookie_header_keeps_request_cookie_header() {
+        let mut headers = HeaderMap::new();
+        headers.insert(http::header::COOKIE, HeaderValue::from_static("custom=1"));
+
+        insert_cookie_header(&mut headers, "session=abc");
+
+        assert_eq!(headers.get(http::header::COOKIE).unwrap(), "custom=1; session=abc");
+    }
 }
