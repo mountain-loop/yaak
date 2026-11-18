@@ -178,7 +178,7 @@ export const plugin: PluginDefinition = {
         const httpRequest = await ctx.httpRequest.getById({ id: requestId });
         if (httpRequest == null) return null;
         const header = httpRequest.headers.find(
-          (h) => h.name.toLowerCase() === headerName.toLowerCase(),
+          (h) => h.enabled !== false && h.name.toLowerCase() === headerName.toLowerCase(),
         );
         return String(
           await ctx.templates.render({
