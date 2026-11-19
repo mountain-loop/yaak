@@ -183,6 +183,13 @@ fn parse_set_cookie(header_value: &str, request_url: &Url) -> Option<Cookie> {
             return None;
         }
 
+        // Reject cookies whose Domain doesn't cover the request host (RFC 6265 Section 5.3, step 6)
+        let request_host = request_url.host_str().unwrap_or("").to_lowercase();
+        if !host_domain_matches(&request_host, &domain) {
+            debug!("Rejecting cookie with Domain={} for host {}", domain, request_host);
+            return None;
+        }
+
         CookieDomain::Suffix(domain)
     } else {
         // No domain attribute - host-only cookie
@@ -231,6 +238,11 @@ fn parse_set_cookie(header_value: &str, request_url: &Url) -> Option<Cookie> {
         http_only: parsed.http_only().unwrap_or(false),
         same_site,
     })
+}
+
+/// Check if a request host is covered by a cookie Domain attribute (exact or subdomain match)
+fn host_domain_matches(host: &str, domain: &str) -> bool {
+    host == domain || host.strip_suffix(domain).is_some_and(|prefix| prefix.ends_with('.'))
 }
 
 /// Get the default cookie path from a request path (RFC 6265 Section 5.1.4)
@@ -562,6 +574,23 @@ mod tests {
         // Should be rejected - no cookies stored
         assert_eq!(store.get_all_cookies().len(), 0);
         assert!(store.get_cookie_header(&url).is_none());
+    }
+
+    #[test]
+    fn test_reject_cookie_domain_not_covering_host() {
+        let store = CookieStore::new();
+        let url = Url::parse("https://example.com/").unwrap();
+
+        // Domain=other.com does not cover example.com, so the cookie must be rejected
+        store.store_cookies_from_response(&url, &["bad=cookie; Domain=other.com".to_string()]);
+        // Sibling-suffix lookalike must also be rejected
+        store.store_cookies_from_response(&url, &["bad2=cookie; Domain=ample.com".to_string()]);
+        assert_eq!(store.get_all_cookies().len(), 0);
+
+        // A parent domain of the request host is still accepted
+        let sub = Url::parse("https://api.example.com/").unwrap();
+        store.store_cookies_from_response(&sub, &["ok=1; Domain=example.com".to_string()]);
+        assert_eq!(store.get_all_cookies().len(), 1);
     }
 
     #[test]
