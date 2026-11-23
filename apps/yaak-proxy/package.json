@@ -37,6 +37,6 @@
     "typescript": "^5.8.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@^1.6.0",
     "vite-plugin-wasm": "^3.5.0",
-    "vite-plus": "^1.6.0"
+    "vite-plus": "^1.7.0"
   }
 }

@@ -93,10 +93,10 @@
     "@yaakapp-internal/ui": "^1.0.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "happy-dom": "^21.0.4",
-    "rollup": "^4.68.3",
+    "rollup": "^4.68.7",
     "vite": "npm:@voidzero-dev/vite-plus-core@^1.6.0",
     "vite-plugin-static-copy": "^4.1.1",
     "vite-plugin-wasm": "^3.5.0",
-    "vite-plus": "^1.6.0"
+    "vite-plus": "^1.7.0"
   }
 }
