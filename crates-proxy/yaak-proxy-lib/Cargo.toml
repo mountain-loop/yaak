@@ -72,7 +72,7 @@ objc2-service-management = { version = "0.3.2", default-features = false, featur
 ] }
 plist = "1.7"
 # Told when the system proxy changes underneath the app, as Proxyman or System Settings change it.
-core-foundation = "0.9"
+core-foundation = "0.10"
 system-configuration = "0.7"
 
 [dev-dependencies]
