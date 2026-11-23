@@ -10,6 +10,6 @@
     "test": "vp test --run tests"
   },
   "dependencies": {
-    "shlex": "^3.0.0"
+    "shlex": "^3.0.1"
   }
 }
