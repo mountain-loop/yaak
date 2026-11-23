@@ -141,7 +141,7 @@
     "tar": "^7.5.23",
     "typescript": "^5.8.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@^1.6.0",
-    "vite-plus": "^1.6.0",
+    "vite-plus": "^1.7.0",
     "vitest": "^4.1.12",
     "yauzl": "^3.4.0"
   },
