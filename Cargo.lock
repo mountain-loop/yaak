@@ -11914,7 +11914,7 @@ dependencies = [
  "base64 0.23.1",
  "bytes",
  "chrono",
- "core-foundation 0.9.4",
+ "core-foundation 0.10.1",
  "encoding_rs",
  "flate2",
  "futures-util",
