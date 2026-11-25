@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { Context } from "@yaakapp/api";
 import { getRedirectUrlViaExternalBrowser } from "../callbackServer";
 import type { CustomParams } from "../customParams";
@@ -57,10 +58,7 @@ export async function getImplicit(
   if (state) authorizationUrl.searchParams.set("state", state);
   if (audience) authorizationUrl.searchParams.set("audience", audience);
   if (responseType.includes("id_token")) {
-    authorizationUrl.searchParams.set(
-      "nonce",
-      String(Math.floor(Math.random() * 9999999999999) + 1),
-    );
+    authorizationUrl.searchParams.set("nonce", randomBytes(16).toString("hex"));
   }
 
   // Applied before redirect_uri, which belongs to the callback flow rather than
