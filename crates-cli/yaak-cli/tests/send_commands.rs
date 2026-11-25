@@ -6,6 +6,8 @@ use predicates::str::contains;
 use tempfile::TempDir;
 use yaak_models::models::{GrpcRequest, HttpRequest, WebsocketRequest};
 use yaak_models::util::UpdateSource;
+#[cfg(target_os = "linux")]
+use {assert_cmd::cargo::cargo_bin, std::fs::OpenOptions, std::process::Command};
 
 #[test]
 fn top_level_send_folder_sends_http_requests_and_prints_summary() {
@@ -104,4 +106,37 @@ fn folder_send_skips_grpc_and_websocket_requests() {
         .stdout(contains("Send summary: 1 succeeded, 0 failed, 2 skipped"))
         .stdout(contains("gr_mixed - gRPC Greeter"))
         .stdout(contains("wr_mixed - WebSocket Socket"));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn send_request_fails_when_response_body_cannot_be_written() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    seed_workspace(data_dir, "wk_test");
+
+    let server = TestHttpServer::spawn_ok("unwritable body");
+    let request = HttpRequest {
+        id: "rq_full_stdout".to_string(),
+        workspace_id: "wk_test".to_string(),
+        url: server.url.clone(),
+        ..Default::default()
+    };
+    query_manager(data_dir)
+        .with_tx(|tx| tx.upsert_http_request(&request, &UpdateSource::Sync))
+        .expect("Failed to seed request");
+
+    // Every write to /dev/full fails with ENOSPC
+    let full = OpenOptions::new().write(true).open("/dev/full").expect("Failed to open /dev/full");
+    let output = Command::new(cargo_bin!("yaak"))
+        .arg("--data-dir")
+        .arg(data_dir)
+        .args(["send", "rq_full_stdout"])
+        .stdout(full)
+        .output()
+        .expect("Failed to run yaak");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "stderr: {stderr}");
+    assert!(stderr.contains("Failed to write response body"), "stderr: {stderr}");
 }
